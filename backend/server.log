@@ -1,0 +1,18 @@
+[dotenv@17.2.4] injecting env (6) from .env -- tip: 🗂️ backup and recover secrets: https://dotenvx.com/ops
+🚀 Server running on port 5000
+✅ Connected to MongoDB
+User connected: 698c8ba3d4da4033b3ad0a6d
+[0mGET /api/friends/requests/pending [32m200[0m 12.622 ms - 2[0m
+[0mGET /api/friends [32m200[0m 25.794 ms - 2[0m
+[0mGET /api/friends [36m304[0m 5.683 ms - -[0m
+[0mGET /api/friends/requests/pending [36m304[0m 5.477 ms - -[0m
+[0mGET /api/friends [36m304[0m 7.347 ms - -[0m
+[0mGET /api/friends/requests/pending [36m304[0m 6.319 ms - -[0m
+[0mGET /api/friends [36m304[0m 5.555 ms - -[0m
+[0mGET /api/friends/requests/pending [36m304[0m 4.186 ms - -[0m
+[0mGET /api/friends [36m304[0m 8.952 ms - -[0m
+[0mGET /api/friends/requests/pending [36m304[0m 5.131 ms - -[0m
+[0mGET /api/friends [36m304[0m 5.324 ms - -[0m
+[0mGET /api/friends/requests/pending [36m304[0m 5.030 ms - -[0m
+[0mGET /api/friends [36m304[0m 10.934 ms - -[0m
+[0mGET /api/friends/requests/pending [36m304[0m 4.114 ms - -[0m
