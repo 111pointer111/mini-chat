@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, TextField, List, ListItem, ListItemAvatar, Avatar, ListItemText, Button, Typography, Paper } from '@mui/material';
+import { Box, TextField, List, ListItem, ListItemAvatar, Avatar, ListItemText, Button, Typography } from '@mui/material';
 import api from '../services/api';
 import { useChatStore } from '../store/chatStore';
 

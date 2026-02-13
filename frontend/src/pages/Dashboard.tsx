@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { useSocketStore } from '../store/socketStore';
-import { Box, Container, Paper, Grid, Typography, Chip, Avatar, Button, Divider } from '@mui/material';
+import { Box, Container, Paper, Typography, Chip, Avatar, Button, Divider } from '@mui/material';
 import FriendList from '../components/FriendList';
 import ChatWindow from '../components/ChatWindow';
 import UserSearch from '../components/UserSearch';

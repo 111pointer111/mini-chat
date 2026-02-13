@@ -10,7 +10,7 @@ interface SocketState {
 }
 
 // Ensure matches backend URL/port
-const SOCKET_URL = 'http://localhost:5000';
+const SOCKET_URL = import.meta.env.PROD ? '' : 'http://localhost:5000';
 
 export const useSocketStore = create<SocketState>((set, get) => ({
     socket: null,
