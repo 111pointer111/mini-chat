@@ -31,7 +31,7 @@ const Login: React.FC = () => {
             transition={{ duration: 0.5 }}
         >
             <Typography variant="h4" component="h1" gutterBottom align="center" fontWeight="bold">
-                Welcome Back
+                Welcome
             </Typography>
             <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 3 }}>
                 Sign in to continue to Mini Chat
