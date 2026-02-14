@@ -9,8 +9,8 @@ interface SocketState {
     disconnect: () => void;
 }
 
-// Ensure matches backend URL/port
-const SOCKET_URL = import.meta.env.PROD ? '' : 'http://localhost:5000';
+// Use empty string for relative path, Vite proxy handles dev
+const SOCKET_URL = '';
 
 export const useSocketStore = create<SocketState>((set, get) => ({
     socket: null,

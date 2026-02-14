@@ -87,7 +87,7 @@ const ChatWindow: React.FC = () => {
                             key={index}
                             sx={{
                                 alignSelf: isMe ? 'flex-end' : 'flex-start',
-                                maxWidth: '70%'
+                                maxWidth: { xs: '85%', sm: '70%' }
                             }}
                         >
                             <Paper
