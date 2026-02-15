@@ -48,6 +48,11 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
             cd /opt/minichat
+            # Update Aliyun SMS config in .env.production
+            grep -q "ALIYUN_ACCESS_KEY_ID" .env.production || echo "ALIYUN_ACCESS_KEY_ID=${{ secrets.ALIYUN_ACCESS_KEY_ID }}" >> .env.production
+            grep -q "ALIYUN_ACCESS_KEY_SECRET" .env.production || echo "ALIYUN_ACCESS_KEY_SECRET=${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}" >> .env.production
+            grep -q "ALIYUN_SMS_SIGN_NAME" .env.production || echo "ALIYUN_SMS_SIGN_NAME=${{ secrets.ALIYUN_SMS_SIGN_NAME }}" >> .env.production
+            grep -q "ALIYUN_SMS_TEMPLATE_CODE" .env.production || echo "ALIYUN_SMS_TEMPLATE_CODE=${{ secrets.ALIYUN_SMS_TEMPLATE_CODE }}" >> .env.production
             docker compose -f docker-compose.prod.yml --env-file .env.production pull
             docker compose -f docker-compose.prod.yml --env-file .env.production up -d --remove-orphans
             docker image prune -f
