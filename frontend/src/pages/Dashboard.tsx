@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { useSocketStore } from '../store/socketStore';
-import { Box, Paper, Typography, Chip, Avatar, Button, Divider, Drawer, IconButton, useMediaQuery, useTheme } from '@mui/material';
+import { Box, Paper, Typography, Chip, Avatar, Button, Divider, Drawer, IconButton, useMediaQuery, useTheme, Tooltip } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
+import ScheduleIcon from '@mui/icons-material/Schedule';
+import { useNavigate } from 'react-router-dom';
 import FriendList from '../components/FriendList';
 import ChatWindow from '../components/ChatWindow';
 import UserSearch from '../components/UserSearch';
@@ -13,6 +15,7 @@ const Dashboard: React.FC = () => {
     const { user, logout } = useAuthStore();
     const { connect, disconnect, isConnected } = useSocketStore();
     const [mobileOpen, setMobileOpen] = useState(false);
+    const navigate = useNavigate();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -51,6 +54,11 @@ const Dashboard: React.FC = () => {
                     />
                 </Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 } }}>
+                    <Tooltip title="定时任务">
+                        <IconButton onClick={() => navigate('/scheduled-tasks')} size="small">
+                            <ScheduleIcon />
+                        </IconButton>
+                    </Tooltip>
                     <Avatar src={user?.avatar} sx={{ width: 32, height: 32 }} />
                     <Typography sx={{ display: { xs: 'none', sm: 'block' } }}>{user?.username}</Typography>
                     <Button size="small" color="inherit" onClick={logout}>Logout</Button>

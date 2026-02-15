@@ -10,7 +10,10 @@ import authRoutes from './routes/authRoutes';
 import userRoutes from './routes/userRoutes';
 import friendRoutes from './routes/friendRoutes';
 import messageRoutes from './routes/messageRoutes';
+import scheduledTaskRoutes from './routes/scheduledTaskRoutes';
 import { setupSocket } from './socket/socketHandler';
+import { startTaskScheduler } from './services/taskScheduler';
+import { createTaskWorker } from './services/taskQueue';
 
 dotenv.config();
 
@@ -40,6 +43,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/friends', friendRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/scheduled-tasks', scheduledTaskRoutes);
 
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date() });
@@ -47,6 +51,10 @@ app.get('/health', (req, res) => {
 
 // Setup Socket.io
 setupSocket(io);
+
+// Start task scheduler and worker
+startTaskScheduler();
+createTaskWorker();
 
 const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => {

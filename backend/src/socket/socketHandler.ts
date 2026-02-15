@@ -7,7 +7,17 @@ interface DecodedToken {
     role: string;
 }
 
+let ioInstance: Server | null = null;
+
+export const getIO = (): Server => {
+    if (!ioInstance) {
+        throw new Error('Socket.IO not initialized');
+    }
+    return ioInstance;
+};
+
 export const setupSocket = (io: Server) => {
+    ioInstance = io;
     // Middleware for authentication
     io.use((socket, next) => {
         const token = socket.handshake.auth.token;

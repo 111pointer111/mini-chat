@@ -3,10 +3,19 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.setupSocket = void 0;
+exports.setupSocket = exports.getIO = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const Message_1 = __importDefault(require("../models/Message"));
+let ioInstance = null;
+const getIO = () => {
+    if (!ioInstance) {
+        throw new Error('Socket.IO not initialized');
+    }
+    return ioInstance;
+};
+exports.getIO = getIO;
 const setupSocket = (io) => {
+    ioInstance = io;
     // Middleware for authentication
     io.use((socket, next) => {
         const token = socket.handshake.auth.token;

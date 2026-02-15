@@ -4,6 +4,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
+import ScheduledTasks from './pages/ScheduledTasks';
 import AuthLayout from './layouts/AuthLayout';
 import ProtectedLayout from './layouts/ProtectedLayout';
 
@@ -25,6 +26,7 @@ function App() {
           <Route element={<ProtectedLayout />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/chat/:id" element={<Dashboard />} />
+            <Route path="/scheduled-tasks" element={<ScheduledTasks />} />
           </Route>
 
           {/* Fallback */}

@@ -1,12 +1,26 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Box, Paper, Typography, TextField, IconButton, Avatar } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
+import { GitHub, MenuBook, Translate } from '@mui/icons-material';
+import ReactMarkdown from 'react-markdown';
 import { useChatStore } from '../store/chatStore';
 import { useAuthStore } from '../store/authStore';
 import { useSocketStore } from '../store/socketStore';
 
+const TASK_NAMES: Record<string, string> = {
+    github_trending: 'GitHub 热点',
+    daily_poem: '每日诗句',
+    daily_english: '每日英文',
+};
+
+const TASK_ICONS: Record<string, React.ReactNode> = {
+    github_trending: <GitHub />,
+    daily_poem: <MenuBook />,
+    daily_english: <Translate />,
+};
+
 const ChatWindow: React.FC = () => {
-    const { selectedFriend, messages, addMessage } = useChatStore();
+    const { selectedFriend, selectedTaskType, messages, addMessage } = useChatStore();
     const { user } = useAuthStore();
     const { socket } = useSocketStore();
     const [inputText, setInputText] = useState('');
@@ -60,7 +74,7 @@ const ChatWindow: React.FC = () => {
         setInputText('');
     };
 
-    if (!selectedFriend) {
+    if (!selectedFriend && !selectedTaskType) {
         return (
             <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#f5f5f5' }}>
                 <Typography variant="h6" color="text.secondary">
@@ -70,12 +84,61 @@ const ChatWindow: React.FC = () => {
         );
     }
 
+    // Scheduled task view (read-only)
+    if (selectedTaskType) {
+        return (
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
+                {/* Header */}
+                <Paper square elevation={1} sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Avatar sx={{ bgcolor: 'primary.main' }}>
+                        {TASK_ICONS[selectedTaskType]}
+                    </Avatar>
+                    <Typography variant="h6">{TASK_NAMES[selectedTaskType]}</Typography>
+                </Paper>
+
+                {/* Messages Area */}
+                <Box sx={{ flex: 1, overflowY: 'auto', p: 2, bgcolor: '#f0f2f5', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {messages.length === 0 ? (
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                            <Typography color="text.secondary">
+                                暂无推送消息，请等待定时任务执行
+                            </Typography>
+                        </Box>
+                    ) : (
+                        messages.map((msg, index) => (
+                            <Paper
+                                key={index}
+                                elevation={0}
+                                sx={{
+                                    p: 2,
+                                    bgcolor: 'white',
+                                    borderRadius: 2,
+                                    '& p': { margin: 0 },
+                                    '& ul, & ol': { paddingLeft: 2 },
+                                }}
+                            >
+                                <ReactMarkdown>{msg.content}</ReactMarkdown>
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                                    {new Date(msg.createdAt).toLocaleString()}
+                                </Typography>
+                            </Paper>
+                        ))
+                    )}
+                    <div ref={messagesEndRef} />
+                </Box>
+            </Box>
+        );
+    }
+
+    // At this point, selectedFriend is guaranteed to be non-null
+    const friend = selectedFriend!;
+
     return (
         <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
             {/* Header */}
             <Paper square elevation={1} sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Avatar src={selectedFriend.avatar}>{selectedFriend.username[0]}</Avatar>
-                <Typography variant="h6">{selectedFriend.username}</Typography>
+                <Avatar src={friend.avatar}>{friend.username[0]}</Avatar>
+                <Typography variant="h6">{friend.username}</Typography>
             </Paper>
 
             {/* Messages Area */}

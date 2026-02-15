@@ -22,13 +22,16 @@ interface ChatState {
     friends: User[];
     pendingRequests: any[];
     selectedFriend: User | null;
+    selectedTaskType: string | null;
     messages: Message[];
     isLoading: boolean;
 
     fetchFriends: () => Promise<void>;
     fetchPendingRequests: () => Promise<void>;
     fetchMessages: (friendId: string) => Promise<void>;
+    fetchTaskMessages: (taskType: string) => Promise<void>;
     selectFriend: (friend: User) => void;
+    selectScheduledTask: (taskType: string) => void;
     addMessage: (message: Message) => void;
     sendFriendRequest: (recipientId: string) => Promise<void>;
     acceptFriendRequest: (requestId: string) => Promise<void>;
@@ -38,6 +41,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     friends: [],
     pendingRequests: [],
     selectedFriend: null,
+    selectedTaskType: null,
     messages: [],
     isLoading: false,
 
@@ -73,8 +77,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
     },
 
     selectFriend: (friend) => {
-        set({ selectedFriend: friend });
+        set({ selectedFriend: friend, selectedTaskType: null });
         get().fetchMessages(friend._id || friend.id!);
+    },
+
+    selectScheduledTask: (taskType: string) => {
+        set({ selectedTaskType: taskType, selectedFriend: null });
+        get().fetchTaskMessages(taskType);
+    },
+
+    fetchTaskMessages: async (taskType: string) => {
+        try {
+            set({ isLoading: true, messages: [] });
+            const res = await api.get(`/scheduled-tasks/${taskType}/messages`);
+            set({ messages: res.data.messages || [], isLoading: false });
+        } catch (err) {
+            console.error(err);
+            set({ isLoading: false });
+        }
     },
 
     addMessage: (message) => {

@@ -15,7 +15,10 @@ const authRoutes_1 = __importDefault(require("./routes/authRoutes"));
 const userRoutes_1 = __importDefault(require("./routes/userRoutes"));
 const friendRoutes_1 = __importDefault(require("./routes/friendRoutes"));
 const messageRoutes_1 = __importDefault(require("./routes/messageRoutes"));
+const scheduledTaskRoutes_1 = __importDefault(require("./routes/scheduledTaskRoutes"));
 const socketHandler_1 = require("./socket/socketHandler");
+const taskScheduler_1 = require("./services/taskScheduler");
+const taskQueue_1 = require("./services/taskQueue");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 const httpServer = (0, http_1.createServer)(app);
@@ -40,11 +43,15 @@ app.use('/api/auth', authRoutes_1.default);
 app.use('/api/users', userRoutes_1.default);
 app.use('/api/friends', friendRoutes_1.default);
 app.use('/api/messages', messageRoutes_1.default);
+app.use('/api/scheduled-tasks', scheduledTaskRoutes_1.default);
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date() });
 });
 // Setup Socket.io
 (0, socketHandler_1.setupSocket)(io);
+// Start task scheduler and worker
+(0, taskScheduler_1.startTaskScheduler)();
+(0, taskQueue_1.createTaskWorker)();
 const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
