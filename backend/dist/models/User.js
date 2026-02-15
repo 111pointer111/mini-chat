@@ -40,12 +40,14 @@ const mongoose_1 = __importStar(require("mongoose"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const UserSchema = new mongoose_1.Schema({
     username: { type: String, required: true, unique: true, trim: true },
-    email: { type: String, required: true, unique: true, trim: true, lowercase: true },
+    email: { type: String, sparse: true, unique: true, trim: true, lowercase: true },
+    phone: { type: String, sparse: true, unique: true, trim: true },
     password: { type: String, select: false },
     avatar: { type: String, default: '' },
     role: { type: String, enum: ['user', 'admin'], default: 'user' },
-    provider: { type: String, enum: ['local', 'google'], default: 'local' },
-    googleId: { type: String }
+    provider: { type: String, enum: ['local', 'google', 'phone'], default: 'local' },
+    googleId: { type: String },
+    isPhoneVerified: { type: Boolean, default: false }
 }, {
     timestamps: true
 });

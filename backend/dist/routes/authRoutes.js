@@ -10,4 +10,10 @@ const router = express_1.default.Router();
 router.post('/register', authController_1.register);
 router.post('/login', authController_1.login);
 router.get('/me', authMiddleware_1.protect, authController_1.getMe);
+// Phone authentication routes
+router.post('/send-code', authController_1.sendSmsCode);
+router.post('/register-phone', authController_1.registerByPhone);
+router.post('/login-phone', authController_1.loginByPhone);
+router.post('/bind-phone', authMiddleware_1.protect, authController_1.bindPhone);
+router.post('/reset-password-phone', authController_1.resetPasswordByPhone);
 exports.default = router;

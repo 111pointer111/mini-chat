@@ -3,23 +3,27 @@ import bcrypt from 'bcryptjs';
 
 export interface IUser extends Document {
     username: string;
-    email: string;
+    email?: string;
+    phone?: string;
     password?: string;
     avatar?: string;
     role: 'user' | 'admin';
-    provider: 'local' | 'google';
+    provider: 'local' | 'google' | 'phone';
     googleId?: string;
+    isPhoneVerified: boolean;
     comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
 const UserSchema: Schema = new Schema({
     username: { type: String, required: true, unique: true, trim: true },
-    email: { type: String, required: true, unique: true, trim: true, lowercase: true },
+    email: { type: String, sparse: true, unique: true, trim: true, lowercase: true },
+    phone: { type: String, sparse: true, unique: true, trim: true },
     password: { type: String, select: false },
     avatar: { type: String, default: '' },
     role: { type: String, enum: ['user', 'admin'], default: 'user' },
-    provider: { type: String, enum: ['local', 'google'], default: 'local' },
-    googleId: { type: String }
+    provider: { type: String, enum: ['local', 'google', 'phone'], default: 'local' },
+    googleId: { type: String },
+    isPhoneVerified: { type: Boolean, default: false }
 }, {
     timestamps: true
 });

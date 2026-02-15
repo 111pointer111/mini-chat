@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
 import AuthLayout from './layouts/AuthLayout';
 import ProtectedLayout from './layouts/ProtectedLayout';
@@ -17,6 +18,7 @@ function App() {
           <Route element={<AuthLayout />}>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
           </Route>
 
           {/* Protected Routes */}
