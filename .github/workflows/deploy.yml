@@ -66,11 +66,13 @@ jobs:
             sed -i '/^ALIYUN_ACCESS_KEY_SECRET=/d' .env.production 2>/dev/null || true
             sed -i '/^ALIYUN_SMS_SIGN_NAME=/d' .env.production 2>/dev/null || true
             sed -i '/^ALIYUN_SMS_TEMPLATE_CODE=/d' .env.production 2>/dev/null || true
+            sed -i '/^GEMINI_API_KEY=/d' .env.production 2>/dev/null || true
             echo "DOCKER_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}" >> .env.production
             echo "ALIYUN_ACCESS_KEY_ID=${{ secrets.ALIYUN_ACCESS_KEY_ID }}" >> .env.production
             echo "ALIYUN_ACCESS_KEY_SECRET=${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}" >> .env.production
             echo "ALIYUN_SMS_SIGN_NAME=${{ secrets.ALIYUN_SMS_SIGN_NAME }}" >> .env.production
             echo "ALIYUN_SMS_TEMPLATE_CODE=${{ secrets.ALIYUN_SMS_TEMPLATE_CODE }}" >> .env.production
+            echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env.production
             docker compose -f docker-compose.prod.yml --env-file .env.production pull
             docker compose -f docker-compose.prod.yml --env-file .env.production up -d --force-recreate
             docker image prune -f

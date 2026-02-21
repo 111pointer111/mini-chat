@@ -2,6 +2,27 @@ import cron from 'node-cron';
 import ScheduledTask from '../models/ScheduledTask';
 import { addTaskToQueue } from './taskQueue';
 
+// Get current time in a specific timezone
+const getTimeInTimezone = (timezone: string): string => {
+    try {
+        const now = new Date();
+        const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: timezone,
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+        });
+        const parts = formatter.formatToParts(now);
+        const hour = parts.find(p => p.type === 'hour')?.value || '00';
+        const minute = parts.find(p => p.type === 'minute')?.value || '00';
+        return `${hour}:${minute}`;
+    } catch {
+        // Fallback to UTC if timezone is invalid
+        const now = new Date();
+        return `${String(now.getUTCHours()).padStart(2, '0')}:${String(now.getUTCMinutes()).padStart(2, '0')}`;
+    }
+};
+
 // Check and schedule tasks every minute
 export const startTaskScheduler = () => {
     console.log('Task scheduler started');
@@ -9,15 +30,24 @@ export const startTaskScheduler = () => {
     // Run every minute
     cron.schedule('* * * * *', async () => {
         const now = new Date();
-        const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-
-        console.log(`[Scheduler] Checking tasks at ${currentTime}`);
+        console.log(`[Scheduler] Checking tasks at ${now.toISOString()}`);
 
         try {
-            // Find all enabled tasks that should run at current time
-            const tasksToRun = await ScheduledTask.find({
-                enabled: true,
-                pushTime: currentTime,
+            // Find all enabled tasks
+            const enabledTasks = await ScheduledTask.find({ enabled: true });
+
+            if (enabledTasks.length === 0) {
+                return;
+            }
+
+            // Check each task against its own timezone
+            const tasksToRun = enabledTasks.filter(task => {
+                const userTime = getTimeInTimezone(task.timezone || 'Asia/Shanghai');
+                const shouldRun = userTime === task.pushTime;
+                if (shouldRun) {
+                    console.log(`[Scheduler] Task ${task.taskType} matches: user timezone ${task.timezone} time ${userTime} = pushTime ${task.pushTime}`);
+                }
+                return shouldRun;
             });
 
             if (tasksToRun.length > 0) {

@@ -234,10 +234,16 @@ const ScheduledTasks: React.FC = () => {
         }
     };
 
+    // Get user's timezone
+    const getUserTimezone = () => {
+        return Intl.DateTimeFormat().resolvedOptions().timeZone;
+    };
+
     const handleToggle = async (taskType: string, enabled: boolean) => {
         setUpdating(taskType);
         try {
-            const res = await api.put(`/scheduled-tasks/${taskType}`, { enabled });
+            const timezone = getUserTimezone();
+            const res = await api.put(`/scheduled-tasks/${taskType}`, { enabled, timezone });
             setTasks((prev) =>
                 prev.map((t) => (t.taskType === taskType ? res.data : t))
             );
@@ -251,7 +257,8 @@ const ScheduledTasks: React.FC = () => {
     const handleTimeChange = async (taskType: string, pushTime: string) => {
         setUpdating(taskType);
         try {
-            const res = await api.put(`/scheduled-tasks/${taskType}`, { pushTime });
+            const timezone = getUserTimezone();
+            const res = await api.put(`/scheduled-tasks/${taskType}`, { pushTime, timezone });
             setTasks((prev) =>
                 prev.map((t) => (t.taskType === taskType ? res.data : t))
             );

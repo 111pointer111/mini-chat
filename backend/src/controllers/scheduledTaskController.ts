@@ -43,7 +43,7 @@ export const updateScheduledTask = async (req: Request, res: Response) => {
     try {
         const userId = (req as any).user.id;
         const taskType = req.params.taskType as TaskType;
-        const { enabled, pushTime } = req.body;
+        const { enabled, pushTime, timezone } = req.body;
 
         // Validate taskType
         if (!['github_trending', 'daily_poem', 'daily_english'].includes(taskType)) {
@@ -60,11 +60,13 @@ export const updateScheduledTask = async (req: Request, res: Response) => {
                 taskType,
                 enabled: enabled ?? false,
                 pushTime: pushTime || '09:00',
+                timezone: timezone || 'Asia/Shanghai',
             });
         } else {
             // Update existing task
             if (enabled !== undefined) task.enabled = enabled;
             if (pushTime) task.pushTime = pushTime;
+            if (timezone) task.timezone = timezone;
         }
 
         // If enabling task, create conversation if not exists

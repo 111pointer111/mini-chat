@@ -7,6 +7,7 @@ export interface IScheduledTask extends Document {
     taskType: TaskType;
     enabled: boolean;
     pushTime: string; // "HH:mm" format, e.g., "09:00"
+    timezone: string; // IANA timezone, e.g., "Asia/Shanghai"
     conversationId?: mongoose.Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;
@@ -35,6 +36,10 @@ const scheduledTaskSchema = new Schema<IScheduledTask>(
                 validator: (v: string) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(v),
                 message: 'pushTime must be in HH:mm format',
             },
+        },
+        timezone: {
+            type: String,
+            default: 'Asia/Shanghai',
         },
         conversationId: {
             type: Schema.Types.ObjectId,
