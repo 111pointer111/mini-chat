@@ -90,10 +90,72 @@ export const chat = async (message: string, systemPrompt?: string): Promise<stri
     return generateContent(message, systemPrompt);
 };
 
+export const generateCustomContent = async (userPrompt: string, excludeList: string[] = []): Promise<string> => {
+    const systemInstruction = `你是一个智能助手，负责根据用户的定时任务需求生成相关内容。
+请根据用户的提示词要求，生成高质量、有价值的信息内容。
+内容应该简洁、实用、格式清晰。`;
+
+    const excludeText = excludeList.length > 0
+        ? `\n\n注意：以下内容最近已推送过，请避免重复：\n- ${excludeList.join('\n- ')}`
+        : '';
+
+    const prompt = `${userPrompt}
+
+要求：
+1. 内容要有价值、实用
+2. 格式清晰，使用 Markdown
+3. 用中文回复${excludeText}`;
+
+    return generateContent(prompt, systemInstruction);
+};
+
+export const parseTaskIntent = async (message: string): Promise<{
+    isTaskCreation: boolean;
+    task?: {
+        taskName: string;
+        pushTime: string;
+        prompt: string;
+        summary: string;
+    };
+    reply?: string;
+}> => {
+    const systemInstruction = `你是一个任务解析助手。判断用户是否想创建定时推送任务。
+
+定时任务的关键词包括：创建定时任务、设置定时推送、每天XX点提醒我、定时发送、定时推送等。
+
+如果用户想创建定时任务，请：
+1. 提取任务名称（简短描述）
+2. 提取推送时间（HH:mm格式，如果用户没说就用 09:00）
+3. 生成优化后的提示词（详细、专业，能让AI每次生成高质量内容）
+4. 生成一句话总结
+
+返回 JSON 格式（不要包含 markdown 代码块）：
+{"isTaskCreation": true, "task": {"taskName": "名称", "pushTime": "HH:mm", "prompt": "优化后的完整提示词", "summary": "一句话描述"}}
+
+如果用户不是想创建定时任务，返回：
+{"isTaskCreation": false, "reply": "正常的聊天回复"}`;
+
+    const response = await generateContent(message, systemInstruction);
+    
+    try {
+        // 尝试解析 JSON，处理可能的 markdown 代码块
+        let jsonStr = response.trim();
+        if (jsonStr.startsWith('```')) {
+            jsonStr = jsonStr.replace(/```json?\n?/g, '').replace(/```$/g, '').trim();
+        }
+        return JSON.parse(jsonStr);
+    } catch {
+        // 解析失败，当作普通聊天
+        return { isTaskCreation: false, reply: response };
+    }
+};
+
 export default {
     generateContent,
     generateGitHubTrending,
     generateDailyPoem,
     generateDailyEnglish,
     chat,
+    generateCustomContent,
+    parseTaskIntent,
 };

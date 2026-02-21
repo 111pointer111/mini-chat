@@ -11,18 +11,42 @@ import {
     IconButton,
     Chip,
     alpha,
+    Button,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    Divider,
 } from '@mui/material';
-import { ArrowBack, GitHub, MenuBook, Translate, AccessTime, NotificationsActive } from '@mui/icons-material';
+import { ArrowBack, GitHub, MenuBook, Translate, AccessTime, NotificationsActive, Delete, AutoAwesome } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
-interface ScheduledTask {
+interface PresetTask {
+    _id?: string;
     taskType: string;
-    name: string;
+    taskName: string;
     enabled: boolean;
     pushTime: string;
     conversationId?: string;
+    isCustom: false;
+}
+
+interface CustomTask {
+    _id: string;
+    taskType: 'custom';
+    taskName: string;
+    prompt?: string;
+    enabled: boolean;
+    pushTime: string;
+    conversationId?: string;
+    isCustom: true;
+}
+
+interface TasksResponse {
+    presetTasks: PresetTask[];
+    customTasks: CustomTask[];
 }
 
 const TASK_CONFIG: Record<string, { icon: React.ReactNode; color: string; gradient: string; description: string }> = {
@@ -44,6 +68,12 @@ const TASK_CONFIG: Record<string, { icon: React.ReactNode; color: string; gradie
         gradient: 'linear-gradient(135deg, #1890ff 0%, #69c0ff 100%)',
         description: '英文名言好句，翻译解析助力学习',
     },
+    custom: {
+        icon: <AutoAwesome sx={{ fontSize: 28 }} />,
+        color: '#722ed1',
+        gradient: 'linear-gradient(135deg, #722ed1 0%, #b37feb 100%)',
+        description: '自定义内容推送',
+    },
 };
 
 // Generate time options (every minute for precise testing)
@@ -53,13 +83,16 @@ const TIME_OPTIONS = Array.from({ length: 24 * 60 }, (_, i) => {
     return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 });
 
+type TaskItem = PresetTask | CustomTask;
+
 const TaskCard: React.FC<{
-    task: ScheduledTask;
+    task: TaskItem;
     updating: boolean;
     onToggle: (enabled: boolean) => void;
     onTimeChange: (time: string) => void;
-}> = ({ task, updating, onToggle, onTimeChange }) => {
-    const config = TASK_CONFIG[task.taskType];
+    onDelete?: () => void;
+}> = ({ task, updating, onToggle, onTimeChange, onDelete }) => {
+    const config = TASK_CONFIG[task.taskType] || TASK_CONFIG.custom;
 
     return (
         <motion.div
@@ -117,7 +150,7 @@ const TaskCard: React.FC<{
                                     fontSize: '1.1rem',
                                 }}
                             >
-                                {task.name}
+                                {task.taskName}
                             </Typography>
                             {task.enabled && (
                                 <Chip
@@ -136,25 +169,38 @@ const TaskCard: React.FC<{
                             )}
                         </Box>
                     </Box>
-                    <Switch
-                        checked={task.enabled}
-                        onChange={(e) => onToggle(e.target.checked)}
-                        disabled={updating}
-                        sx={{
-                            '& .MuiSwitch-switchBase.Mui-checked': {
-                                color: 'white',
-                            },
-                            '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
-                                bgcolor: 'rgba(255,255,255,0.5)',
-                            },
-                        }}
-                    />
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        {task.isCustom && onDelete && (
+                            <IconButton
+                                size="small"
+                                onClick={onDelete}
+                                sx={{ color: task.enabled ? 'rgba(255,255,255,0.8)' : 'text.secondary' }}
+                            >
+                                <Delete fontSize="small" />
+                            </IconButton>
+                        )}
+                        <Switch
+                            checked={task.enabled}
+                            onChange={(e) => onToggle(e.target.checked)}
+                            disabled={updating}
+                            sx={{
+                                '& .MuiSwitch-switchBase.Mui-checked': {
+                                    color: 'white',
+                                },
+                                '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                                    bgcolor: 'rgba(255,255,255,0.5)',
+                                },
+                            }}
+                        />
+                    </Box>
                 </Box>
 
                 {/* Content */}
                 <Box sx={{ p: 2 }}>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        {config.description}
+                        {task.isCustom && (task as CustomTask).prompt 
+                            ? (task as CustomTask).prompt!.substring(0, 100) + '...'
+                            : config.description}
                     </Typography>
 
                     <AnimatePresence>
@@ -214,10 +260,13 @@ const TaskCard: React.FC<{
 
 const ScheduledTasks: React.FC = () => {
     const navigate = useNavigate();
-    const [tasks, setTasks] = useState<ScheduledTask[]>([]);
+    const [presetTasks, setPresetTasks] = useState<PresetTask[]>([]);
+    const [customTasks, setCustomTasks] = useState<CustomTask[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [updating, setUpdating] = useState<string | null>(null);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [taskToDelete, setTaskToDelete] = useState<CustomTask | null>(null);
 
     useEffect(() => {
         fetchTasks();
@@ -225,8 +274,9 @@ const ScheduledTasks: React.FC = () => {
 
     const fetchTasks = async () => {
         try {
-            const res = await api.get('/scheduled-tasks');
-            setTasks(res.data);
+            const res = await api.get<TasksResponse>('/scheduled-tasks');
+            setPresetTasks(res.data.presetTasks);
+            setCustomTasks(res.data.customTasks);
         } catch (err) {
             setError('获取任务列表失败');
         } finally {
@@ -234,18 +284,17 @@ const ScheduledTasks: React.FC = () => {
         }
     };
 
-    // Get user's timezone
     const getUserTimezone = () => {
         return Intl.DateTimeFormat().resolvedOptions().timeZone;
     };
 
-    const handleToggle = async (taskType: string, enabled: boolean) => {
+    const handlePresetToggle = async (taskType: string, enabled: boolean) => {
         setUpdating(taskType);
         try {
             const timezone = getUserTimezone();
             const res = await api.put(`/scheduled-tasks/${taskType}`, { enabled, timezone });
-            setTasks((prev) =>
-                prev.map((t) => (t.taskType === taskType ? res.data : t))
+            setPresetTasks((prev) =>
+                prev.map((t) => (t.taskType === taskType ? { ...res.data, isCustom: false as const } : t))
             );
         } catch (err) {
             setError('更新失败');
@@ -254,18 +303,66 @@ const ScheduledTasks: React.FC = () => {
         }
     };
 
-    const handleTimeChange = async (taskType: string, pushTime: string) => {
+    const handlePresetTimeChange = async (taskType: string, pushTime: string) => {
         setUpdating(taskType);
         try {
             const timezone = getUserTimezone();
             const res = await api.put(`/scheduled-tasks/${taskType}`, { pushTime, timezone });
-            setTasks((prev) =>
-                prev.map((t) => (t.taskType === taskType ? res.data : t))
+            setPresetTasks((prev) =>
+                prev.map((t) => (t.taskType === taskType ? { ...res.data, isCustom: false as const } : t))
             );
         } catch (err) {
             setError('更新失败');
         } finally {
             setUpdating(null);
+        }
+    };
+
+    const handleCustomToggle = async (taskId: string, enabled: boolean) => {
+        setUpdating(taskId);
+        try {
+            const timezone = getUserTimezone();
+            const res = await api.put(`/scheduled-tasks/custom/${taskId}`, { enabled, timezone });
+            setCustomTasks((prev) =>
+                prev.map((t) => (t._id === taskId ? { ...res.data, isCustom: true as const } : t))
+            );
+        } catch (err) {
+            setError('更新失败');
+        } finally {
+            setUpdating(null);
+        }
+    };
+
+    const handleCustomTimeChange = async (taskId: string, pushTime: string) => {
+        setUpdating(taskId);
+        try {
+            const timezone = getUserTimezone();
+            const res = await api.put(`/scheduled-tasks/custom/${taskId}`, { pushTime, timezone });
+            setCustomTasks((prev) =>
+                prev.map((t) => (t._id === taskId ? { ...res.data, isCustom: true as const } : t))
+            );
+        } catch (err) {
+            setError('更新失败');
+        } finally {
+            setUpdating(null);
+        }
+    };
+
+    const handleDeleteClick = (task: CustomTask) => {
+        setTaskToDelete(task);
+        setDeleteDialogOpen(true);
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (!taskToDelete) return;
+        
+        try {
+            await api.delete(`/scheduled-tasks/custom/${taskToDelete._id}`);
+            setCustomTasks((prev) => prev.filter((t) => t._id !== taskToDelete._id));
+            setDeleteDialogOpen(false);
+            setTaskToDelete(null);
+        } catch (err) {
+            setError('删除失败');
         }
     };
 
@@ -343,11 +440,17 @@ const ScheduledTasks: React.FC = () => {
                     >
                         <Typography variant="body2" color="text.secondary">
                             💡 启用定时任务后，系统将在指定时间自动推送 AI 生成的内容到对应的聊天窗口。
+                            在 AI 聊天中说「创建定时任务」可以创建个性化任务。
                         </Typography>
                     </Paper>
                 </motion.div>
 
-                {tasks.map((task, index) => (
+                {/* Preset Tasks Section */}
+                <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    📌 通用定时任务
+                </Typography>
+                
+                {presetTasks.map((task, index) => (
                     <motion.div
                         key={task.taskType}
                         initial={{ opacity: 0, y: 20 }}
@@ -357,12 +460,55 @@ const ScheduledTasks: React.FC = () => {
                         <TaskCard
                             task={task}
                             updating={updating === task.taskType}
-                            onToggle={(enabled) => handleToggle(task.taskType, enabled)}
-                            onTimeChange={(time) => handleTimeChange(task.taskType, time)}
+                            onToggle={(enabled) => handlePresetToggle(task.taskType, enabled)}
+                            onTimeChange={(time) => handlePresetTimeChange(task.taskType, time)}
                         />
                     </motion.div>
                 ))}
+
+                {/* Custom Tasks Section */}
+                {customTasks.length > 0 && (
+                    <>
+                        <Divider sx={{ my: 3 }} />
+                        <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                            ✨ 个性化定时任务
+                        </Typography>
+                        
+                        {customTasks.map((task, index) => (
+                            <motion.div
+                                key={task._id}
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.3, delay: index * 0.1 }}
+                            >
+                                <TaskCard
+                                    task={task}
+                                    updating={updating === task._id}
+                                    onToggle={(enabled) => handleCustomToggle(task._id, enabled)}
+                                    onTimeChange={(time) => handleCustomTimeChange(task._id, time)}
+                                    onDelete={() => handleDeleteClick(task)}
+                                />
+                            </motion.div>
+                        ))}
+                    </>
+                )}
             </Box>
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+                <DialogTitle>确认删除</DialogTitle>
+                <DialogContent>
+                    <Typography>
+                        确定要删除定时任务「{taskToDelete?.taskName}」吗？相关的聊天记录也会被删除。
+                    </Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setDeleteDialogOpen(false)}>取消</Button>
+                    <Button onClick={handleDeleteConfirm} color="error" variant="contained">
+                        删除
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };

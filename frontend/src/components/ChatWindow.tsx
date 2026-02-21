@@ -1,13 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Box, Paper, Typography, TextField, IconButton, Avatar } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
-import { GitHub, MenuBook, Translate } from '@mui/icons-material';
+import { GitHub, MenuBook, Translate, AutoAwesome } from '@mui/icons-material';
 import ReactMarkdown from 'react-markdown';
 import { useChatStore } from '../store/chatStore';
 import { useAuthStore } from '../store/authStore';
 import { useSocketStore } from '../store/socketStore';
 
-const TASK_NAMES: Record<string, string> = {
+const PRESET_TASK_NAMES: Record<string, string> = {
     github_trending: 'GitHub 热点',
     daily_poem: '每日诗句',
     daily_english: '每日英文',
@@ -17,10 +17,11 @@ const TASK_ICONS: Record<string, React.ReactNode> = {
     github_trending: <GitHub />,
     daily_poem: <MenuBook />,
     daily_english: <Translate />,
+    custom: <AutoAwesome />,
 };
 
 const ChatWindow: React.FC = () => {
-    const { selectedFriend, selectedTaskType, messages, addMessage } = useChatStore();
+    const { selectedFriend, selectedTaskType, selectedTaskName, messages, addMessage } = useChatStore();
     const { user } = useAuthStore();
     const { socket } = useSocketStore();
     const [inputText, setInputText] = useState('');
@@ -90,10 +91,10 @@ const ChatWindow: React.FC = () => {
             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
                 {/* Header */}
                 <Paper square elevation={1} sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Avatar sx={{ bgcolor: 'primary.main' }}>
-                        {TASK_ICONS[selectedTaskType]}
+                    <Avatar sx={{ bgcolor: TASK_ICONS[selectedTaskType] ? 'primary.main' : 'secondary.main' }}>
+                        {TASK_ICONS[selectedTaskType] || TASK_ICONS.custom}
                     </Avatar>
-                    <Typography variant="h6">{TASK_NAMES[selectedTaskType]}</Typography>
+                    <Typography variant="h6">{selectedTaskName || PRESET_TASK_NAMES[selectedTaskType] || '定时任务'}</Typography>
                 </Paper>
 
                 {/* Messages Area */}

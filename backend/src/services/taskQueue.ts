@@ -25,8 +25,8 @@ export const taskQueue = new Queue('scheduled-tasks', {
     },
 });
 
-// Task type to display name mapping
-const TASK_NAMES: Record<TaskType, string> = {
+// Task type to display name mapping (for preset tasks)
+const PRESET_TASK_NAMES: Record<string, string> = {
     github_trending: 'GitHub 热点',
     daily_poem: '每日诗句',
     daily_english: '每日英文',
@@ -46,7 +46,7 @@ const getExcludeList = async (userId: string, taskType: TaskType): Promise<strin
 };
 
 // Generate content based on task type using geminiService
-const generateTaskContent = async (taskType: TaskType, userId: string): Promise<string> => {
+const generateTaskContent = async (taskType: TaskType, userId: string, customPrompt?: string): Promise<string> => {
     const excludeList = await getExcludeList(userId, taskType);
 
     switch (taskType) {
@@ -56,6 +56,11 @@ const generateTaskContent = async (taskType: TaskType, userId: string): Promise<
             return geminiService.generateDailyPoem(excludeList);
         case 'daily_english':
             return geminiService.generateDailyEnglish(excludeList);
+        case 'custom':
+            if (!customPrompt) {
+                throw new Error('Custom task requires a prompt');
+            }
+            return geminiService.generateCustomContent(customPrompt, excludeList);
         default:
             throw new Error(`Unknown task type: ${taskType}`);
     }
@@ -72,18 +77,29 @@ const processTask = async (job: Job) => {
     console.log(`Processing task: ${taskType} for user ${userId}`);
 
     try {
+        // Get the task to retrieve prompt for custom tasks
+        const scheduledTask = await ScheduledTask.findById(taskId);
+        if (!scheduledTask) {
+            throw new Error(`Task ${taskId} not found`);
+        }
+
         // Get or create conversation for this task
         let conversation = await Conversation.findOne({
             userId: new mongoose.Types.ObjectId(userId),
             type: 'scheduled_task',
             taskType,
+            ...(taskType === 'custom' ? { _id: scheduledTask.conversationId } : {}),
         });
 
         if (!conversation) {
+            const taskName = taskType === 'custom' 
+                ? scheduledTask.taskName 
+                : PRESET_TASK_NAMES[taskType];
+            
             conversation = await Conversation.create({
                 userId: new mongoose.Types.ObjectId(userId),
                 type: 'scheduled_task',
-                name: TASK_NAMES[taskType],
+                name: taskName,
                 taskType,
             });
 
@@ -94,7 +110,8 @@ const processTask = async (job: Job) => {
         }
 
         // Generate AI content using geminiService
-        const content = await generateTaskContent(taskType, userId);
+        const customPrompt = taskType === 'custom' ? scheduledTask.prompt : undefined;
+        const content = await generateTaskContent(taskType, userId, customPrompt);
 
         // Create content hash for deduplication
         const contentHash = createHash('md5').update(content).digest('hex');

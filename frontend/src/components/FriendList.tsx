@@ -1,20 +1,37 @@
 import React, { useEffect, useState } from 'react';
 import { Box, List, ListItem, ListItemButton, ListItemAvatar, Avatar, ListItemText, Typography, Divider, Button, Badge } from '@mui/material';
-import { GitHub, MenuBook, Translate } from '@mui/icons-material';
+import { GitHub, MenuBook, Translate, AutoAwesome } from '@mui/icons-material';
 import { useChatStore } from '../store/chatStore';
 import api from '../services/api';
 
-interface ScheduledTaskConversation {
+interface PresetTask {
+    _id?: string;
     taskType: string;
-    name: string;
+    taskName: string;
     enabled: boolean;
+    pushTime: string;
     conversationId?: string;
+    isCustom: false;
 }
+
+interface CustomTask {
+    _id: string;
+    taskType: 'custom';
+    taskName: string;
+    prompt?: string;
+    enabled: boolean;
+    pushTime: string;
+    conversationId?: string;
+    isCustom: true;
+}
+
+type ScheduledTaskConversation = PresetTask | CustomTask;
 
 const TASK_ICONS: Record<string, React.ReactNode> = {
     github_trending: <GitHub />,
     daily_poem: <MenuBook />,
     daily_english: <Translate />,
+    custom: <AutoAwesome />,
 };
 
 const FriendList: React.FC = () => {
@@ -37,7 +54,12 @@ const FriendList: React.FC = () => {
     const fetchScheduledTasks = async () => {
         try {
             const res = await api.get('/scheduled-tasks');
-            setScheduledTasks(res.data.filter((t: ScheduledTaskConversation) => t.enabled));
+            const { presetTasks, customTasks } = res.data;
+            const allTasks = [
+                ...presetTasks.filter((t: PresetTask) => t.enabled),
+                ...customTasks.filter((t: CustomTask) => t.enabled),
+            ];
+            setScheduledTasks(allTasks);
         } catch (err) {
             console.error('Failed to fetch scheduled tasks:', err);
         }
@@ -75,20 +97,24 @@ const FriendList: React.FC = () => {
                         定时推送
                     </Typography>
                     <List dense>
-                        {scheduledTasks.map((task) => (
-                            <ListItemButton
-                                key={task.taskType}
-                                selected={selectedTaskType === task.taskType}
-                                onClick={() => selectScheduledTask(task.taskType)}
-                            >
-                                <ListItemAvatar>
-                                    <Avatar sx={{ bgcolor: 'primary.main' }}>
-                                        {TASK_ICONS[task.taskType]}
-                                    </Avatar>
-                                </ListItemAvatar>
-                                <ListItemText primary={task.name} />
-                            </ListItemButton>
-                        ))}
+                        {scheduledTasks.map((task) => {
+                            const taskKey = task.isCustom ? task._id : task.taskType;
+                            const taskIcon = TASK_ICONS[task.taskType] || TASK_ICONS.custom;
+                            return (
+                                <ListItemButton
+                                    key={taskKey}
+                                    selected={selectedTaskType === taskKey}
+                                    onClick={() => selectScheduledTask(taskKey, task.taskName)}
+                                >
+                                    <ListItemAvatar>
+                                        <Avatar sx={{ bgcolor: task.isCustom ? 'secondary.main' : 'primary.main' }}>
+                                            {taskIcon}
+                                        </Avatar>
+                                    </ListItemAvatar>
+                                    <ListItemText primary={task.taskName} />
+                                </ListItemButton>
+                            );
+                        })}
                     </List>
                     <Divider />
                 </>

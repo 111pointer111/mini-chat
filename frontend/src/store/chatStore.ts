@@ -23,6 +23,7 @@ interface ChatState {
     pendingRequests: any[];
     selectedFriend: User | null;
     selectedTaskType: string | null;
+    selectedTaskName: string | null;
     messages: Message[];
     isLoading: boolean;
 
@@ -31,7 +32,7 @@ interface ChatState {
     fetchMessages: (friendId: string) => Promise<void>;
     fetchTaskMessages: (taskType: string) => Promise<void>;
     selectFriend: (friend: User) => void;
-    selectScheduledTask: (taskType: string) => void;
+    selectScheduledTask: (taskType: string, taskName?: string) => void;
     addMessage: (message: Message) => void;
     sendFriendRequest: (recipientId: string) => Promise<void>;
     acceptFriendRequest: (requestId: string) => Promise<void>;
@@ -42,6 +43,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     pendingRequests: [],
     selectedFriend: null,
     selectedTaskType: null,
+    selectedTaskName: null,
     messages: [],
     isLoading: false,
 
@@ -81,8 +83,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         get().fetchMessages(friend._id || friend.id!);
     },
 
-    selectScheduledTask: (taskType: string) => {
-        set({ selectedTaskType: taskType, selectedFriend: null });
+    selectScheduledTask: (taskType: string, taskName?: string) => {
+        set({ selectedTaskType: taskType, selectedTaskName: taskName || null, selectedFriend: null });
         get().fetchTaskMessages(taskType);
     },
 

@@ -1,10 +1,12 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
-export type TaskType = 'github_trending' | 'daily_poem' | 'daily_english';
+export type TaskType = 'github_trending' | 'daily_poem' | 'daily_english' | 'custom';
 
 export interface IScheduledTask extends Document {
     userId: mongoose.Types.ObjectId;
     taskType: TaskType;
+    taskName: string; // 任务名称
+    prompt?: string; // 自定义任务的提示词（仅 custom 类型需要）
     enabled: boolean;
     pushTime: string; // "HH:mm" format, e.g., "09:00"
     timezone: string; // IANA timezone, e.g., "Asia/Shanghai"
@@ -22,8 +24,15 @@ const scheduledTaskSchema = new Schema<IScheduledTask>(
         },
         taskType: {
             type: String,
-            enum: ['github_trending', 'daily_poem', 'daily_english'],
+            enum: ['github_trending', 'daily_poem', 'daily_english', 'custom'],
             required: true,
+        },
+        taskName: {
+            type: String,
+            required: true,
+        },
+        prompt: {
+            type: String,
         },
         enabled: {
             type: Boolean,
@@ -51,7 +60,12 @@ const scheduledTaskSchema = new Schema<IScheduledTask>(
     }
 );
 
-// Compound index: one task type per user
-scheduledTaskSchema.index({ userId: 1, taskType: 1 }, { unique: true });
+// Compound index: one task type per user (for preset tasks)
+// Custom tasks can have multiple per user
+scheduledTaskSchema.index({ userId: 1, taskType: 1 }, { 
+    unique: true,
+    partialFilterExpression: { taskType: { $ne: 'custom' } }
+});
+scheduledTaskSchema.index({ userId: 1 });
 
 export default mongoose.model<IScheduledTask>('ScheduledTask', scheduledTaskSchema);

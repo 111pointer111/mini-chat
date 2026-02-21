@@ -18,7 +18,6 @@ const pushHistorySchema = new Schema<IPushHistory>(
         },
         taskType: {
             type: String,
-            enum: ['github_trending', 'daily_poem', 'daily_english'],
             required: true,
         },
         contentHash: {

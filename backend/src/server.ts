@@ -11,6 +11,7 @@ import userRoutes from './routes/userRoutes';
 import friendRoutes from './routes/friendRoutes';
 import messageRoutes from './routes/messageRoutes';
 import scheduledTaskRoutes from './routes/scheduledTaskRoutes';
+import aiChatRoutes from './routes/aiChatRoutes';
 import { setupSocket } from './socket/socketHandler';
 import { startTaskScheduler } from './services/taskScheduler';
 import { createTaskWorker } from './services/taskQueue';
@@ -44,6 +45,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/friends', friendRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/scheduled-tasks', scheduledTaskRoutes);
+app.use('/api/ai-chat', aiChatRoutes);
 
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date() });

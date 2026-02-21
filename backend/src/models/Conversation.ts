@@ -31,7 +31,6 @@ const conversationSchema = new Schema<IConversation>(
         },
         taskType: {
             type: String,
-            enum: ['github_trending', 'daily_poem', 'daily_english'],
         },
         participantId: {
             type: Schema.Types.ObjectId,

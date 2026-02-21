@@ -4,6 +4,7 @@ import { useSocketStore } from '../store/socketStore';
 import { Box, Paper, Typography, Chip, Avatar, Button, Divider, Drawer, IconButton, useMediaQuery, useTheme, Tooltip } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import ScheduleIcon from '@mui/icons-material/Schedule';
+import SmartToyIcon from '@mui/icons-material/SmartToy';
 import { useNavigate } from 'react-router-dom';
 import FriendList from '../components/FriendList';
 import ChatWindow from '../components/ChatWindow';
@@ -54,6 +55,11 @@ const Dashboard: React.FC = () => {
                     />
                 </Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 } }}>
+                    <Tooltip title="AI 助手">
+                        <IconButton onClick={() => navigate('/ai-chat')} size="small" color="primary">
+                            <SmartToyIcon />
+                        </IconButton>
+                    </Tooltip>
                     <Tooltip title="定时任务">
                         <IconButton onClick={() => navigate('/scheduled-tasks')} size="small">
                             <ScheduleIcon />

@@ -16,6 +16,7 @@ const userRoutes_1 = __importDefault(require("./routes/userRoutes"));
 const friendRoutes_1 = __importDefault(require("./routes/friendRoutes"));
 const messageRoutes_1 = __importDefault(require("./routes/messageRoutes"));
 const scheduledTaskRoutes_1 = __importDefault(require("./routes/scheduledTaskRoutes"));
+const aiChatRoutes_1 = __importDefault(require("./routes/aiChatRoutes"));
 const socketHandler_1 = require("./socket/socketHandler");
 const taskScheduler_1 = require("./services/taskScheduler");
 const taskQueue_1 = require("./services/taskQueue");
@@ -44,6 +45,7 @@ app.use('/api/users', userRoutes_1.default);
 app.use('/api/friends', friendRoutes_1.default);
 app.use('/api/messages', messageRoutes_1.default);
 app.use('/api/scheduled-tasks', scheduledTaskRoutes_1.default);
+app.use('/api/ai-chat', aiChatRoutes_1.default);
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date() });
 });
