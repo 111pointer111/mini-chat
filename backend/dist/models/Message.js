@@ -37,6 +37,7 @@ const mongoose_1 = __importStar(require("mongoose"));
 const MessageSchema = new mongoose_1.Schema({
     sender: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true },
     receiver: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true },
+    conversationId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Conversation' },
     content: { type: String, required: true },
     type: { type: String, enum: ['text', 'image', 'system'], default: 'text' },
     read: { type: Boolean, default: false }
@@ -46,4 +47,5 @@ const MessageSchema = new mongoose_1.Schema({
 // Index for faster queries of chat history
 MessageSchema.index({ sender: 1, receiver: 1, createdAt: -1 });
 MessageSchema.index({ receiver: 1, sender: 1, createdAt: -1 });
+MessageSchema.index({ conversationId: 1, createdAt: -1 });
 exports.default = mongoose_1.default.model('Message', MessageSchema);

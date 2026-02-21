@@ -113,21 +113,16 @@ export const getTaskMessages = async (req: Request, res: Response) => {
             return res.json({ messages: [], total: 0 });
         }
 
-        // Get messages for this user from system
-        const systemUserId = new mongoose.Types.ObjectId('000000000000000000000000');
+        // Get messages for this conversation
         const messages = await Message.find({
-            sender: systemUserId,
-            receiver: new mongoose.Types.ObjectId(userId),
-            type: 'system',
+            conversationId: conversation._id,
         })
             .sort({ createdAt: -1 })
             .skip((Number(page) - 1) * Number(limit))
             .limit(Number(limit));
 
         const total = await Message.countDocuments({
-            sender: systemUserId,
-            receiver: new mongoose.Types.ObjectId(userId),
-            type: 'system',
+            conversationId: conversation._id,
         });
 
         res.json({

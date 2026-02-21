@@ -126,6 +126,7 @@ const processTask = async (job: Job) => {
         const message = await Message.create({
             sender: systemUserId,
             receiver: new mongoose.Types.ObjectId(userId),
+            conversationId: conversation._id,
             content,
             type: 'system',
         });
@@ -188,13 +189,18 @@ export const createTaskWorker = () => {
     return worker;
 };
 
-// Add task to queue
+// Add task to queue with retry configuration
 export const addTaskToQueue = async (taskId: string, userId: string, taskType: TaskType) => {
     await taskQueue.add(
         `task-${taskType}-${userId}`,
         { taskId, userId, taskType },
         {
             jobId: `${taskType}-${userId}-${Date.now()}`,
+            attempts: 3,
+            backoff: {
+                type: 'exponential',
+                delay: 60000, // 首次重试等待1分钟，之后指数增长
+            },
         }
     );
 };
