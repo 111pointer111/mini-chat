@@ -17,9 +17,11 @@ const friendRoutes_1 = __importDefault(require("./routes/friendRoutes"));
 const messageRoutes_1 = __importDefault(require("./routes/messageRoutes"));
 const scheduledTaskRoutes_1 = __importDefault(require("./routes/scheduledTaskRoutes"));
 const aiChatRoutes_1 = __importDefault(require("./routes/aiChatRoutes"));
+const aiProviderRoutes_1 = __importDefault(require("./routes/aiProviderRoutes"));
 const socketHandler_1 = require("./socket/socketHandler");
 const taskScheduler_1 = require("./services/taskScheduler");
 const taskQueue_1 = require("./services/taskQueue");
+const initAdmin_1 = require("./scripts/initAdmin");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 const httpServer = (0, http_1.createServer)(app);
@@ -37,7 +39,10 @@ app.use((0, morgan_1.default)('dev'));
 // Database Connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/mini-chat';
 mongoose_1.default.connect(MONGODB_URI)
-    .then(() => console.log('✅ Connected to MongoDB'))
+    .then(async () => {
+    console.log('✅ Connected to MongoDB');
+    await (0, initAdmin_1.initAdmin)();
+})
     .catch((err) => console.error('❌ MongoDB connection error:', err));
 // Routes
 app.use('/api/auth', authRoutes_1.default);
@@ -46,6 +51,7 @@ app.use('/api/friends', friendRoutes_1.default);
 app.use('/api/messages', messageRoutes_1.default);
 app.use('/api/scheduled-tasks', scheduledTaskRoutes_1.default);
 app.use('/api/ai-chat', aiChatRoutes_1.default);
+app.use('/api/ai-providers', aiProviderRoutes_1.default);
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date() });
 });

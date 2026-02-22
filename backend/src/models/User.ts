@@ -11,6 +11,7 @@ export interface IUser extends Document {
     provider: 'local' | 'google' | 'phone';
     googleId?: string;
     isPhoneVerified: boolean;
+    selectedAIProvider?: mongoose.Types.ObjectId;
     comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
@@ -23,7 +24,8 @@ const UserSchema: Schema = new Schema({
     role: { type: String, enum: ['user', 'admin'], default: 'user' },
     provider: { type: String, enum: ['local', 'google', 'phone'], default: 'local' },
     googleId: { type: String },
-    isPhoneVerified: { type: Boolean, default: false }
+    isPhoneVerified: { type: Boolean, default: false },
+    selectedAIProvider: { type: Schema.Types.ObjectId, ref: 'AIProvider' }
 }, {
     timestamps: true
 });

@@ -5,6 +5,7 @@ import { Box, Paper, Typography, Chip, Avatar, Button, Divider, Drawer, IconButt
 import MenuIcon from '@mui/icons-material/Menu';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import { useNavigate } from 'react-router-dom';
 import FriendList from '../components/FriendList';
 import ChatWindow from '../components/ChatWindow';
@@ -65,6 +66,13 @@ const Dashboard: React.FC = () => {
                             <ScheduleIcon />
                         </IconButton>
                     </Tooltip>
+                    {user?.role === 'admin' && (
+                        <Tooltip title="AI 模型管理">
+                            <IconButton onClick={() => navigate('/admin/ai-providers')} size="small" color="secondary">
+                                <AdminPanelSettingsIcon />
+                            </IconButton>
+                        </Tooltip>
+                    )}
                     <Avatar src={user?.avatar} sx={{ width: 32, height: 32 }} />
                     <Typography sx={{ display: { xs: 'none', sm: 'block' } }}>{user?.username}</Typography>
                     <Button size="small" color="inherit" onClick={logout}>Logout</Button>

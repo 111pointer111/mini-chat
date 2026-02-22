@@ -15,6 +15,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import api from '../services/api';
+import AIProviderSelector from '../components/AIProviderSelector';
 
 interface Message {
     id: string;
@@ -24,17 +25,19 @@ interface Message {
     taskCreated?: boolean;
 }
 
+const AI_ASSISTANT_ID = '000000000000000000000001';
+const WELCOME_MESSAGE: Message = {
+    id: '0',
+    role: 'assistant',
+    content: '你好！我是 AI 助手。你可以和我聊天，或者说「**创建定时任务**」来创建个性化的定时推送任务。',
+};
+
 const AIChat: React.FC = () => {
     const navigate = useNavigate();
-    const [messages, setMessages] = useState<Message[]>([
-        {
-            id: '0',
-            role: 'assistant',
-            content: '你好！我是 AI 助手。你可以和我聊天，或者说「**创建定时任务**」来创建个性化的定时推送任务。',
-        },
-    ]);
+    const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
+    const [, setHistoryLoading] = useState(true);
     const [error, setError] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -45,6 +48,28 @@ const AIChat: React.FC = () => {
     useEffect(() => {
         scrollToBottom();
     }, [messages]);
+
+    // Load chat history on mount
+    useEffect(() => {
+        const loadHistory = async () => {
+            try {
+                const res = await api.get('/ai-chat/history');
+                if (res.data.messages && res.data.messages.length > 0) {
+                    const historyMessages: Message[] = res.data.messages.map((msg: any) => ({
+                        id: msg._id,
+                        role: msg.sender === AI_ASSISTANT_ID ? 'assistant' : 'user',
+                        content: msg.content,
+                    }));
+                    setMessages(historyMessages);
+                }
+            } catch (err) {
+                console.error('Failed to load chat history:', err);
+            } finally {
+                setHistoryLoading(false);
+            }
+        };
+        loadHistory();
+    }, []);
 
     const getUserTimezone = () => {
         return Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -143,6 +168,9 @@ const AIChat: React.FC = () => {
                         color="primary"
                         variant="outlined"
                     />
+                    <Box sx={{ ml: 'auto' }}>
+                        <AIProviderSelector />
+                    </Box>
                 </Box>
             </Paper>
 

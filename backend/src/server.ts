@@ -12,9 +12,11 @@ import friendRoutes from './routes/friendRoutes';
 import messageRoutes from './routes/messageRoutes';
 import scheduledTaskRoutes from './routes/scheduledTaskRoutes';
 import aiChatRoutes from './routes/aiChatRoutes';
+import aiProviderRoutes from './routes/aiProviderRoutes';
 import { setupSocket } from './socket/socketHandler';
 import { startTaskScheduler } from './services/taskScheduler';
 import { createTaskWorker } from './services/taskQueue';
+import { initAdmin } from './scripts/initAdmin';
 
 dotenv.config();
 
@@ -36,7 +38,10 @@ app.use(morgan('dev'));
 // Database Connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/mini-chat';
 mongoose.connect(MONGODB_URI)
-    .then(() => console.log('✅ Connected to MongoDB'))
+    .then(async () => {
+        console.log('✅ Connected to MongoDB');
+        await initAdmin();
+    })
     .catch((err) => console.error('❌ MongoDB connection error:', err));
 
 // Routes
@@ -46,6 +51,7 @@ app.use('/api/friends', friendRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/scheduled-tasks', scheduledTaskRoutes);
 app.use('/api/ai-chat', aiChatRoutes);
+app.use('/api/ai-providers', aiProviderRoutes);
 
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date() });

@@ -47,7 +47,8 @@ const UserSchema = new mongoose_1.Schema({
     role: { type: String, enum: ['user', 'admin'], default: 'user' },
     provider: { type: String, enum: ['local', 'google', 'phone'], default: 'local' },
     googleId: { type: String },
-    isPhoneVerified: { type: Boolean, default: false }
+    isPhoneVerified: { type: Boolean, default: false },
+    selectedAIProvider: { type: mongoose_1.Schema.Types.ObjectId, ref: 'AIProvider' }
 }, {
     timestamps: true
 });

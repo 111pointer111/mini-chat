@@ -50,6 +50,37 @@ const ChatWindow: React.FC = () => {
         };
     }, [socket, addMessage]);
 
+    // Listen for scheduled task messages
+    useEffect(() => {
+        if (!socket || !selectedTaskType) return;
+
+        const handleScheduledTaskMessage = (data: { conversationId: string; taskType: string; message: any }) => {
+            // Check if this message is for the currently selected task
+            // For preset tasks, compare taskType; for custom tasks, compare task ID
+            if (data.taskType === selectedTaskType || data.conversationId === selectedTaskType) {
+                // Add message to the list
+                const newMessage = {
+                    _id: data.message._id,
+                    content: data.message.content,
+                    type: data.message.type,
+                    createdAt: data.message.createdAt,
+                    sender: 'system',
+                    receiver: '',
+                };
+                // Directly update messages state
+                useChatStore.setState((state) => ({
+                    messages: [...state.messages, newMessage],
+                }));
+            }
+        };
+
+        socket.on('scheduled_task_message', handleScheduledTaskMessage);
+
+        return () => {
+            socket.off('scheduled_task_message', handleScheduledTaskMessage);
+        };
+    }, [socket, selectedTaskType]);
+
 
     const handleSend = () => {
         if (!inputText.trim() || !selectedFriend || !socket) return;

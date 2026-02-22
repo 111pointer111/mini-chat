@@ -6,7 +6,7 @@ import PushHistory from '../models/PushHistory';
 import Conversation from '../models/Conversation';
 import Message from '../models/Message';
 import { getIO } from '../socket';
-import geminiService from './geminiService';
+import aiService from './aiService';
 
 const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
 const REDIS_PORT = parseInt(process.env.REDIS_PORT || '6379');
@@ -45,22 +45,22 @@ const getExcludeList = async (userId: string, taskType: TaskType): Promise<strin
     return recentHistory.map((h) => h.content.substring(0, 100));
 };
 
-// Generate content based on task type using geminiService
+// Generate content based on task type using aiService
 const generateTaskContent = async (taskType: TaskType, userId: string, customPrompt?: string): Promise<string> => {
     const excludeList = await getExcludeList(userId, taskType);
 
     switch (taskType) {
         case 'github_trending':
-            return geminiService.generateGitHubTrending(excludeList);
+            return aiService.generateGitHubTrending(excludeList, userId);
         case 'daily_poem':
-            return geminiService.generateDailyPoem(excludeList);
+            return aiService.generateDailyPoem(excludeList, userId);
         case 'daily_english':
-            return geminiService.generateDailyEnglish(excludeList);
+            return aiService.generateDailyEnglish(excludeList, userId);
         case 'custom':
             if (!customPrompt) {
                 throw new Error('Custom task requires a prompt');
             }
-            return geminiService.generateCustomContent(customPrompt, excludeList);
+            return aiService.generateCustomContent(customPrompt, excludeList, userId);
         default:
             throw new Error(`Unknown task type: ${taskType}`);
     }
