@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import mongoose from 'mongoose';
-import aiService from '../services/aiService';
+import aiService, { ChatMessage } from '../services/aiService';
 import ScheduledTask from '../models/ScheduledTask';
 import Conversation from '../models/Conversation';
 import Message from '../models/Message';
@@ -55,14 +55,26 @@ export const chat = async (req: Request, res: Response) => {
     try {
         const userId = (req as any).user.id;
         const userObjectId = new mongoose.Types.ObjectId(userId);
-        const { message, timezone } = req.body;
+        const { message, timezone, conversationId } = req.body;
 
         if (!message) {
             return res.status(400).json({ message: 'Message is required' });
         }
 
-        // Get or create AI conversation
-        const aiConversation = await getOrCreateAIConversation(userId);
+        // Get specific conversation or create default one
+        let aiConversation;
+        if (conversationId) {
+            aiConversation = await Conversation.findOne({
+                _id: conversationId,
+                userId: new mongoose.Types.ObjectId(userId),
+                type: 'ai',
+            });
+            if (!aiConversation) {
+                return res.status(404).json({ message: 'Conversation not found' });
+            }
+        } else {
+            aiConversation = await getOrCreateAIConversation(userId);
+        }
 
         // Save user message
         await saveMessage(aiConversation._id as mongoose.Types.ObjectId, userObjectId, AI_ASSISTANT_ID, message);
@@ -130,7 +142,24 @@ export const chat = async (req: Request, res: Response) => {
             pendingTasks.delete(userId);
         }
 
-        // Parse user intent
+        // Get conversation history for context (last 10 messages)
+        const historyMessages = await Message.find({
+            conversationId: aiConversation._id,
+        })
+            .sort({ createdAt: -1 })
+            .limit(10)
+            .lean();
+
+        // Convert to ChatMessage format (reverse to chronological order, exclude current message)
+        const history: ChatMessage[] = historyMessages
+            .reverse()
+            .slice(0, -1) // Exclude the message we just saved
+            .map((msg: any) => ({
+                role: msg.sender.equals(AI_ASSISTANT_ID) ? 'assistant' as const : 'user' as const,
+                content: msg.content,
+            }));
+
+        // Parse user intent with context
         const parseResult = await aiService.parseTaskIntent(message, userId);
 
         if (parseResult.isTaskCreation && parseResult.task) {
@@ -158,8 +187,8 @@ export const chat = async (req: Request, res: Response) => {
             });
         }
 
-        // Normal chat response
-        const normalReply = parseResult.reply || '抱歉，我没有理解你的意思。';
+        // Normal chat response with history context - always use chatWithHistory for context awareness
+        const normalReply = await aiService.chatWithHistory(history, message, userId);
         await saveMessage(aiConversation._id as mongoose.Types.ObjectId, AI_ASSISTANT_ID, userObjectId, normalReply);
 
         return res.json({
@@ -172,19 +201,128 @@ export const chat = async (req: Request, res: Response) => {
     }
 };
 
-// Get AI chat history
-export const getChatHistory = async (req: Request, res: Response) => {
+// Get all AI conversations for user
+export const getConversations = async (req: Request, res: Response) => {
     try {
         const userId = (req as any).user.id;
-        const { page = 1, limit = 50 } = req.query;
+
+        const conversations = await Conversation.find({
+            userId: new mongoose.Types.ObjectId(userId),
+            type: 'ai',
+        })
+            .sort({ lastMessageAt: -1 })
+            .lean();
+
+        res.json(conversations);
+    } catch (error) {
+        console.error('Get conversations error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// Create new AI conversation
+export const createConversation = async (req: Request, res: Response) => {
+    try {
+        const userId = (req as any).user.id;
+        const { name } = req.body;
+
+        const conversation = await Conversation.create({
+            userId: new mongoose.Types.ObjectId(userId),
+            type: 'ai',
+            name: name || `对话 ${new Date().toLocaleDateString('zh-CN')}`,
+        });
+
+        res.json(conversation);
+    } catch (error) {
+        console.error('Create conversation error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// Update AI conversation name
+export const updateConversation = async (req: Request, res: Response) => {
+    try {
+        const userId = (req as any).user.id;
+        const { conversationId } = req.params;
+        const { name } = req.body;
+
+        if (!name || !name.trim()) {
+            return res.status(400).json({ message: 'Name is required' });
+        }
+
+        const conversation = await Conversation.findOneAndUpdate(
+            {
+                _id: conversationId,
+                userId: new mongoose.Types.ObjectId(userId),
+                type: 'ai',
+            },
+            { name: name.trim() },
+            { new: true }
+        );
+
+        if (!conversation) {
+            return res.status(404).json({ message: 'Conversation not found' });
+        }
+
+        res.json(conversation);
+    } catch (error) {
+        console.error('Update conversation error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// Delete AI conversation
+export const deleteConversation = async (req: Request, res: Response) => {
+    try {
+        const userId = (req as any).user.id;
+        const { conversationId } = req.params;
 
         const conversation = await Conversation.findOne({
+            _id: conversationId,
             userId: new mongoose.Types.ObjectId(userId),
             type: 'ai',
         });
 
         if (!conversation) {
-            return res.json({ messages: [], total: 0 });
+            return res.status(404).json({ message: 'Conversation not found' });
+        }
+
+        // Delete all messages in conversation
+        await Message.deleteMany({ conversationId: conversation._id });
+        // Delete conversation
+        await Conversation.findByIdAndDelete(conversationId);
+
+        res.json({ message: 'Conversation deleted' });
+    } catch (error) {
+        console.error('Delete conversation error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// Get AI chat history for specific conversation
+export const getChatHistory = async (req: Request, res: Response) => {
+    try {
+        const userId = (req as any).user.id;
+        const { conversationId } = req.params;
+        const { page = 1, limit = 50 } = req.query;
+
+        // If conversationId provided, use it; otherwise get default conversation
+        let conversation;
+        if (conversationId) {
+            conversation = await Conversation.findOne({
+                _id: conversationId,
+                userId: new mongoose.Types.ObjectId(userId),
+                type: 'ai',
+            });
+        } else {
+            conversation = await Conversation.findOne({
+                userId: new mongoose.Types.ObjectId(userId),
+                type: 'ai',
+            }).sort({ lastMessageAt: -1 });
+        }
+
+        if (!conversation) {
+            return res.json({ messages: [], total: 0, conversationId: null });
         }
 
         const messages = await Message.find({
@@ -203,6 +341,8 @@ export const getChatHistory = async (req: Request, res: Response) => {
             total,
             page: Number(page),
             totalPages: Math.ceil(total / Number(limit)),
+            conversationId: conversation._id,
+            conversationName: conversation.name,
         });
     } catch (error) {
         console.error('Get chat history error:', error);

@@ -9,8 +9,17 @@ import {
     Alert,
     alpha,
     Chip,
+    List,
+    ListItemButton,
+    ListItemText,
+    ListItemIcon,
+    Drawer,
+    Divider,
+    useMediaQuery,
+    useTheme,
+    Tooltip,
 } from '@mui/material';
-import { ArrowBack, Send, SmartToy, Person, AutoAwesome } from '@mui/icons-material';
+import { ArrowBack, Send, SmartToy, Person, AutoAwesome, Add, Delete, Chat, Menu, Edit } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
@@ -25,6 +34,14 @@ interface Message {
     taskCreated?: boolean;
 }
 
+interface Conversation {
+    _id: string;
+    name: string;
+    lastMessageAt: string;
+}
+
+const DRAWER_WIDTH = 280;
+
 const AI_ASSISTANT_ID = '000000000000000000000001';
 const WELCOME_MESSAGE: Message = {
     id: '0',
@@ -34,11 +51,18 @@ const WELCOME_MESSAGE: Message = {
 
 const AIChat: React.FC = () => {
     const navigate = useNavigate();
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+    
     const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
-    const [, setHistoryLoading] = useState(true);
     const [error, setError] = useState('');
+    const [conversations, setConversations] = useState<Conversation[]>([]);
+    const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+    const [drawerOpen, setDrawerOpen] = useState(false);
+    const [editingConvId, setEditingConvId] = useState<string | null>(null);
+    const [editingName, setEditingName] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const scrollToBottom = () => {
@@ -49,30 +73,105 @@ const AIChat: React.FC = () => {
         scrollToBottom();
     }, [messages]);
 
-    // Load chat history on mount
-    useEffect(() => {
-        const loadHistory = async () => {
-            try {
-                const res = await api.get('/ai-chat/history');
-                if (res.data.messages && res.data.messages.length > 0) {
-                    const historyMessages: Message[] = res.data.messages.map((msg: any) => ({
-                        id: msg._id,
-                        role: msg.sender === AI_ASSISTANT_ID ? 'assistant' : 'user',
-                        content: msg.content,
-                    }));
-                    setMessages(historyMessages);
-                }
-            } catch (err) {
-                console.error('Failed to load chat history:', err);
-            } finally {
-                setHistoryLoading(false);
+    // Load conversations and chat history on mount
+    const loadConversations = async () => {
+        try {
+            const res = await api.get('/ai-chat/conversations');
+            setConversations(res.data);
+        } catch (err) {
+            console.error('Failed to load conversations:', err);
+        }
+    };
+
+    const loadHistory = async (convId?: string) => {
+        try {
+            const url = convId ? `/ai-chat/history/${convId}` : '/ai-chat/history';
+            const res = await api.get(url);
+            if (res.data.messages && res.data.messages.length > 0) {
+                const historyMessages: Message[] = res.data.messages.map((msg: any) => ({
+                    id: msg._id,
+                    role: msg.sender === AI_ASSISTANT_ID ? 'assistant' : 'user',
+                    content: msg.content,
+                }));
+                setMessages(historyMessages);
+                setCurrentConversationId(res.data.conversationId);
+            } else {
+                setMessages([WELCOME_MESSAGE]);
+                setCurrentConversationId(res.data.conversationId);
             }
-        };
+        } catch (err) {
+            console.error('Failed to load chat history:', err);
+        }
+    };
+
+    useEffect(() => {
+        loadConversations();
         loadHistory();
     }, []);
 
     const getUserTimezone = () => {
         return Intl.DateTimeFormat().resolvedOptions().timeZone;
+    };
+
+    const handleCreateConversation = async () => {
+        try {
+            const res = await api.post('/ai-chat/conversations', {});
+            setConversations((prev) => [res.data, ...prev]);
+            setCurrentConversationId(res.data._id);
+            setMessages([WELCOME_MESSAGE]);
+            setDrawerOpen(false);
+        } catch (err) {
+            console.error('Failed to create conversation:', err);
+        }
+    };
+
+    const handleSelectConversation = async (convId: string) => {
+        setCurrentConversationId(convId);
+        await loadHistory(convId);
+        setDrawerOpen(false);
+    };
+
+    const handleDeleteConversation = async (convId: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!confirm('确定删除此对话？')) return;
+        try {
+            await api.delete(`/ai-chat/conversations/${convId}`);
+            setConversations((prev) => prev.filter((c) => c._id !== convId));
+            if (currentConversationId === convId) {
+                setCurrentConversationId(null);
+                setMessages([WELCOME_MESSAGE]);
+            }
+        } catch (err) {
+            console.error('Failed to delete conversation:', err);
+        }
+    };
+
+    const handleStartEdit = (conv: Conversation, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setEditingConvId(conv._id);
+        setEditingName(conv.name);
+    };
+
+    const handleSaveEdit = async (convId: string) => {
+        if (!editingName.trim()) {
+            setEditingConvId(null);
+            return;
+        }
+        try {
+            const res = await api.put(`/ai-chat/conversations/${convId}`, { name: editingName.trim() });
+            setConversations((prev) => prev.map((c) => (c._id === convId ? res.data : c)));
+            setEditingConvId(null);
+        } catch (err) {
+            console.error('Failed to update conversation:', err);
+        }
+    };
+
+    const handleEditKeyPress = (e: React.KeyboardEvent, convId: string) => {
+        if (e.key === 'Enter') {
+            handleSaveEdit(convId);
+        } else if (e.key === 'Escape') {
+            setEditingConvId(null);
+        }
     };
 
     const handleSend = async () => {
@@ -93,6 +192,7 @@ const AIChat: React.FC = () => {
             const res = await api.post('/ai-chat', {
                 message: userMessage.content,
                 timezone: getUserTimezone(),
+                conversationId: currentConversationId,
             });
 
             const assistantMessage: Message = {
@@ -132,36 +232,131 @@ const AIChat: React.FC = () => {
         }
     };
 
-    return (
-        <Box
-            sx={{
-                height: '100vh',
-                display: 'flex',
-                flexDirection: 'column',
-                bgcolor: '#f8f9fa',
-            }}
-        >
-            {/* Header */}
-            <Paper
-                elevation={0}
-                sx={{
-                    p: 2,
-                    borderRadius: 0,
-                    borderBottom: '1px solid',
-                    borderColor: 'divider',
-                    bgcolor: 'white',
-                }}
-            >
-                <Box sx={{ maxWidth: 800, mx: 'auto', display: 'flex', alignItems: 'center' }}>
-                    <IconButton onClick={() => navigate(-1)} sx={{ mr: 1 }}>
-                        <ArrowBack />
-                    </IconButton>
-                    <SmartToy sx={{ mr: 1, color: 'primary.main' }} />
-                    <Typography variant="h6" fontWeight={600}>
-                        AI 助手
+    const drawerContent = (
+        <Box sx={{ width: DRAWER_WIDTH, height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+                <Typography variant="h6" fontWeight={600}>对话列表</Typography>
+            </Box>
+            <Box sx={{ p: 1 }}>
+                <ListItemButton
+                    onClick={handleCreateConversation}
+                    sx={{ borderRadius: 1, bgcolor: 'primary.main', color: 'white', '&:hover': { bgcolor: 'primary.dark' } }}
+                >
+                    <ListItemIcon sx={{ minWidth: 36, color: 'white' }}>
+                        <Add />
+                    </ListItemIcon>
+                    <ListItemText primary="新建对话" />
+                </ListItemButton>
+            </Box>
+            <Divider />
+            <List sx={{ flex: 1, overflow: 'auto', p: 1 }}>
+                {conversations.map((conv) => (
+                    <ListItemButton
+                        key={conv._id}
+                        selected={conv._id === currentConversationId}
+                        onClick={() => editingConvId !== conv._id && handleSelectConversation(conv._id)}
+                        sx={{ borderRadius: 1, mb: 0.5 }}
+                    >
+                        <ListItemIcon sx={{ minWidth: 36 }}>
+                            <Chat fontSize="small" />
+                        </ListItemIcon>
+                        {editingConvId === conv._id ? (
+                            <TextField
+                                size="small"
+                                value={editingName}
+                                onChange={(e) => setEditingName(e.target.value)}
+                                onKeyDown={(e) => handleEditKeyPress(e, conv._id)}
+                                onBlur={() => handleSaveEdit(conv._id)}
+                                autoFocus
+                                fullWidth
+                                sx={{ mr: 1 }}
+                            />
+                        ) : (
+                            <ListItemText
+                                primary={conv.name}
+                                secondary={conv.lastMessageAt ? new Date(conv.lastMessageAt).toLocaleDateString('zh-CN') : ''}
+                                primaryTypographyProps={{ noWrap: true }}
+                            />
+                        )}
+                        {editingConvId !== conv._id && (
+                            <>
+                                <Tooltip title="重命名">
+                                    <IconButton
+                                        size="small"
+                                        onClick={(e) => handleStartEdit(conv, e)}
+                                        sx={{ opacity: 0.5, '&:hover': { opacity: 1 } }}
+                                    >
+                                        <Edit fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                                <Tooltip title="删除">
+                                    <IconButton
+                                        size="small"
+                                        onClick={(e) => handleDeleteConversation(conv._id, e)}
+                                        sx={{ opacity: 0.5, '&:hover': { opacity: 1, color: 'error.main' } }}
+                                    >
+                                        <Delete fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                            </>
+                        )}
+                    </ListItemButton>
+                ))}
+                {conversations.length === 0 && (
+                    <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: 'center' }}>
+                        暂无对话
                     </Typography>
-                    <Chip
-                        icon={<AutoAwesome sx={{ fontSize: 14 }} />}
+                )}
+            </List>
+        </Box>
+    );
+
+    return (
+        <Box sx={{ height: '100vh', display: 'flex' }}>
+            {/* Sidebar Drawer */}
+            {isMobile ? (
+                <Drawer
+                    variant="temporary"
+                    open={drawerOpen}
+                    onClose={() => setDrawerOpen(false)}
+                    ModalProps={{ keepMounted: true }}
+                >
+                    {drawerContent}
+                </Drawer>
+            ) : (
+                <Drawer variant="permanent" sx={{ width: DRAWER_WIDTH, flexShrink: 0, '& .MuiDrawer-paper': { width: DRAWER_WIDTH, position: 'relative' } }}>
+                    {drawerContent}
+                </Drawer>
+            )}
+
+            {/* Main Content */}
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', bgcolor: '#f8f9fa' }}>
+                {/* Header */}
+                <Paper
+                    elevation={0}
+                    sx={{
+                        p: 2,
+                        borderRadius: 0,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                        bgcolor: 'white',
+                    }}
+                >
+                    <Box sx={{ maxWidth: 800, mx: 'auto', display: 'flex', alignItems: 'center' }}>
+                        {isMobile && (
+                            <IconButton onClick={() => setDrawerOpen(true)} sx={{ mr: 1 }}>
+                                <Menu />
+                            </IconButton>
+                        )}
+                        <IconButton onClick={() => navigate(-1)} sx={{ mr: 1 }}>
+                            <ArrowBack />
+                        </IconButton>
+                        <SmartToy sx={{ mr: 1, color: 'primary.main' }} />
+                        <Typography variant="h6" fontWeight={600}>
+                            AI 助手
+                        </Typography>
+                        <Chip
+                            icon={<AutoAwesome sx={{ fontSize: 14 }} />}
                         label="可创建定时任务"
                         size="small"
                         sx={{ ml: 2 }}
@@ -365,6 +560,7 @@ const AIChat: React.FC = () => {
                     </IconButton>
                 </Box>
             </Paper>
+            </Box>
         </Box>
     );
 };

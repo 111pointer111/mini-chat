@@ -1,5 +1,5 @@
 import express from 'express';
-import { chat, getChatHistory } from '../controllers/aiChatController';
+import { chat, getChatHistory, getConversations, createConversation, updateConversation, deleteConversation } from '../controllers/aiChatController';
 import { protect } from '../middleware/authMiddleware';
 
 const router = express.Router();
@@ -7,6 +7,11 @@ const router = express.Router();
 router.use(protect);
 
 router.post('/', chat);
+router.get('/conversations', getConversations);
+router.post('/conversations', createConversation);
+router.put('/conversations/:conversationId', updateConversation);
+router.delete('/conversations/:conversationId', deleteConversation);
 router.get('/history', getChatHistory);
+router.get('/history/:conversationId', getChatHistory);
 
 export default router;

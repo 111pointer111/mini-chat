@@ -152,6 +152,54 @@ export const chat = async (message: string, systemPrompt?: string): Promise<stri
     return generateContent(message, systemPrompt);
 };
 
+// 带历史记录的聊天
+export interface ChatMessage {
+    role: 'user' | 'assistant';
+    content: string;
+}
+
+export const chatWithHistory = async (
+    history: ChatMessage[],
+    newMessage: string,
+    userId?: string,
+    systemPrompt?: string
+): Promise<string> => {
+    const config = await getUserAIConfig(userId);
+    const client = getClient(config);
+
+    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [];
+
+    // 添加系统提示
+    const defaultSystemPrompt = `你是一个友好、专业的 AI 助手。你可以帮助用户：
+1. 回答各种问题
+2. 创建定时推送任务（当用户说"每天XX点推送/提醒我..."时）
+3. 进行日常对话
+
+请用中文回复，保持友好和专业。`;
+
+    messages.push({ role: 'system', content: systemPrompt || defaultSystemPrompt });
+
+    // 添加历史消息
+    for (const msg of history) {
+        messages.push({ role: msg.role, content: msg.content });
+    }
+
+    // 添加新消息
+    messages.push({ role: 'user', content: newMessage });
+
+    const response = await client.chat.completions.create({
+        model: config.model,
+        messages,
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+        throw new Error('No response content from AI');
+    }
+
+    return content;
+};
+
 // 自定义任务内容生成
 export const generateCustomContent = async (userPrompt: string, excludeList: string[] = [], userId?: string): Promise<string> => {
     const systemInstruction = `你是一个智能助手，负责根据用户的定时任务需求生成相关内容。
@@ -225,6 +273,7 @@ export default {
     generateDailyPoem,
     generateDailyEnglish,
     chat,
+    chatWithHistory,
     generateCustomContent,
     parseTaskIntent,
 };
