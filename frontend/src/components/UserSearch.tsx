@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Box, TextField, List, ListItem, ListItemAvatar, Avatar, ListItemText, Button, Typography } from '@mui/material';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Box, TextField, List, ListItem, ListItemAvatar, Avatar, ListItemText, Button, Typography, InputAdornment, CircularProgress } from '@mui/material';
+import { Search as SearchIcon } from '@mui/icons-material';
 import api from '../services/api';
 import { useChatStore } from '../store/chatStore';
 
@@ -8,49 +9,79 @@ const UserSearch: React.FC = () => {
     const [results, setResults] = useState<any[]>([]);
     const { sendFriendRequest } = useChatStore();
     const [loading, setLoading] = useState(false);
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const handleSearch = async () => {
-        if (!query.trim()) return;
+    const doSearch = useCallback(async (searchQuery: string) => {
+        if (!searchQuery.trim()) {
+            setResults([]);
+            return;
+        }
         setLoading(true);
         try {
-            const res = await api.get(`/users/search?query=${query}`);
+            const res = await api.get(`/users/search?query=${searchQuery}`);
             setResults(res.data);
         } catch (err) {
             console.error(err);
         } finally {
             setLoading(false);
         }
+    }, []);
+
+    // Debounced search on query change
+    useEffect(() => {
+        if (debounceRef.current) {
+            clearTimeout(debounceRef.current);
+        }
+        debounceRef.current = setTimeout(() => {
+            doSearch(query);
+        }, 300);
+        return () => {
+            if (debounceRef.current) {
+                clearTimeout(debounceRef.current);
+            }
+        };
+    }, [query, doSearch]);
+
+    const handleSearch = () => {
+        doSearch(query);
     };
 
     const handleAdd = async (userId: string) => {
         try {
             await sendFriendRequest(userId);
-            alert('Friend request sent!');
+            alert('好友请求已发送!');
         } catch (err: any) {
-            alert(err.response?.data?.message || 'Failed to send request');
+            alert(err.response?.data?.message || '发送请求失败');
         }
     };
 
     return (
         <Box sx={{ p: 2 }}>
-            <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-                <TextField
-                    fullWidth
-                    size="small"
-                    placeholder="Search by username or email"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                />
-                <Button variant="contained" onClick={handleSearch} disabled={loading}>
-                    Search
-                </Button>
-            </Box>
+            <TextField
+                fullWidth
+                size="small"
+                placeholder="搜索用户名或邮箱"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                InputProps={{
+                    startAdornment: (
+                        <InputAdornment position="start">
+                            <SearchIcon color="action" fontSize="small" />
+                        </InputAdornment>
+                    ),
+                    endAdornment: loading ? (
+                        <InputAdornment position="end">
+                            <CircularProgress size={18} />
+                        </InputAdornment>
+                    ) : null,
+                }}
+            />
 
             <List dense>
                 {results.map((user) => (
                     <ListItem key={user._id} secondaryAction={
-                        <Button size="small" onClick={() => handleAdd(user._id)}>Add</Button>
+                        <Button size="small" onClick={() => handleAdd(user._id)}>添加</Button>
                     }>
                         <ListItemAvatar>
                             <Avatar src={user.avatar}>{user.username[0].toUpperCase()}</Avatar>
@@ -60,7 +91,7 @@ const UserSearch: React.FC = () => {
                 ))}
                 {results.length === 0 && query && !loading && (
                     <Typography variant="body2" color="text.secondary" align="center">
-                        No users found
+                        未找到用户
                     </Typography>
                 )}
             </List>

@@ -88,6 +88,10 @@ export const updateScheduledTask = async (req: Request, res: Response) => {
             if (enabled !== undefined) task.enabled = enabled;
             if (pushTime) task.pushTime = pushTime;
             if (timezone) task.timezone = timezone;
+            // Ensure taskName is set for legacy tasks
+            if (!task.taskName) {
+                task.taskName = PRESET_TASK_NAMES[taskType];
+            }
         }
 
         // If enabling task, create conversation if not exists

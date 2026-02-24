@@ -71,7 +71,7 @@ const FriendList: React.FC = () => {
             {pendingRequests.length > 0 && (
                 <Box>
                     <Typography variant="subtitle2" sx={{ p: 2, bgcolor: 'action.hover' }}>
-                        Friend Requests
+                        好友请求
                     </Typography>
                     <List dense>
                         {pendingRequests.map((req: any) => (
@@ -81,7 +81,7 @@ const FriendList: React.FC = () => {
                                 </ListItemAvatar>
                                 <ListItemText primary={req.requester.username} />
                                 <Button size="small" variant="outlined" onClick={() => acceptFriendRequest(req._id)}>
-                                    Accept
+                                    接受
                                 </Button>
                             </ListItem>
                         ))}
@@ -121,7 +121,7 @@ const FriendList: React.FC = () => {
             )}
 
             <Typography variant="subtitle2" sx={{ p: 2, bgcolor: 'action.hover' }}>
-                Friends
+                好友列表
             </Typography>
             <List sx={{ flex: 1, overflowY: 'auto' }}>
                 {friends.map((friend) => (

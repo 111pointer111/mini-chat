@@ -18,6 +18,11 @@ import {
     useMediaQuery,
     useTheme,
     Tooltip,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    Button,
 } from '@mui/material';
 import { ArrowBack, Send, SmartToy, Person, AutoAwesome, Add, Delete, Chat, Menu, Edit } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -32,6 +37,7 @@ interface Message {
     content: string;
     pendingTask?: boolean;
     taskCreated?: boolean;
+    createdAt?: string;
 }
 
 interface Conversation {
@@ -63,6 +69,8 @@ const AIChat: React.FC = () => {
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [editingConvId, setEditingConvId] = useState<string | null>(null);
     const [editingName, setEditingName] = useState('');
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [convToDelete, setConvToDelete] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const scrollToBottom = () => {
@@ -92,6 +100,7 @@ const AIChat: React.FC = () => {
                     id: msg._id,
                     role: msg.sender === AI_ASSISTANT_ID ? 'assistant' : 'user',
                     content: msg.content,
+                    createdAt: msg.createdAt,
                 }));
                 setMessages(historyMessages);
                 setCurrentConversationId(res.data.conversationId);
@@ -131,18 +140,26 @@ const AIChat: React.FC = () => {
         setDrawerOpen(false);
     };
 
-    const handleDeleteConversation = async (convId: string, e: React.MouseEvent) => {
+    const handleDeleteClick = (convId: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (!confirm('确定删除此对话？')) return;
+        setConvToDelete(convId);
+        setDeleteDialogOpen(true);
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (!convToDelete) return;
         try {
-            await api.delete(`/ai-chat/conversations/${convId}`);
-            setConversations((prev) => prev.filter((c) => c._id !== convId));
-            if (currentConversationId === convId) {
+            await api.delete(`/ai-chat/conversations/${convToDelete}`);
+            setConversations((prev) => prev.filter((c) => c._id !== convToDelete));
+            if (currentConversationId === convToDelete) {
                 setCurrentConversationId(null);
                 setMessages([WELCOME_MESSAGE]);
             }
         } catch (err) {
             console.error('Failed to delete conversation:', err);
+        } finally {
+            setDeleteDialogOpen(false);
+            setConvToDelete(null);
         }
     };
 
@@ -181,6 +198,7 @@ const AIChat: React.FC = () => {
             id: Date.now().toString(),
             role: 'user',
             content: input.trim(),
+            createdAt: new Date().toISOString(),
         };
 
         setMessages((prev) => [...prev, userMessage]);
@@ -201,6 +219,7 @@ const AIChat: React.FC = () => {
                 content: res.data.reply,
                 pendingTask: res.data.pendingTask,
                 taskCreated: res.data.taskCreated,
+                createdAt: new Date().toISOString(),
             };
 
             setMessages((prev) => [...prev, assistantMessage]);
@@ -255,7 +274,12 @@ const AIChat: React.FC = () => {
                         key={conv._id}
                         selected={conv._id === currentConversationId}
                         onClick={() => editingConvId !== conv._id && handleSelectConversation(conv._id)}
-                        sx={{ borderRadius: 1, mb: 0.5 }}
+                        sx={{ 
+                            borderRadius: 1, 
+                            mb: 0.5,
+                            '& .action-buttons': { opacity: 0, transition: 'opacity 0.2s' },
+                            '&:hover .action-buttons': { opacity: 1 },
+                        }}
                     >
                         <ListItemIcon sx={{ minWidth: 36 }}>
                             <Chat fontSize="small" />
@@ -279,12 +303,11 @@ const AIChat: React.FC = () => {
                             />
                         )}
                         {editingConvId !== conv._id && (
-                            <>
+                            <Box className="action-buttons" sx={{ display: 'flex' }}>
                                 <Tooltip title="重命名">
                                     <IconButton
                                         size="small"
                                         onClick={(e) => handleStartEdit(conv, e)}
-                                        sx={{ opacity: 0.5, '&:hover': { opacity: 1 } }}
                                     >
                                         <Edit fontSize="small" />
                                     </IconButton>
@@ -292,13 +315,13 @@ const AIChat: React.FC = () => {
                                 <Tooltip title="删除">
                                     <IconButton
                                         size="small"
-                                        onClick={(e) => handleDeleteConversation(conv._id, e)}
-                                        sx={{ opacity: 0.5, '&:hover': { opacity: 1, color: 'error.main' } }}
+                                        onClick={(e) => handleDeleteClick(conv._id, e)}
+                                        sx={{ '&:hover': { color: 'error.main' } }}
                                     >
                                         <Delete fontSize="small" />
                                     </IconButton>
                                 </Tooltip>
-                            </>
+                            </Box>
                         )}
                     </ListItemButton>
                 ))}
@@ -308,7 +331,7 @@ const AIChat: React.FC = () => {
                     </Typography>
                 )}
             </List>
-        </Box>
+            </Box>
     );
 
     return (
@@ -363,10 +386,7 @@ const AIChat: React.FC = () => {
                         color="primary"
                         variant="outlined"
                     />
-                    <Box sx={{ ml: 'auto' }}>
-                        <AIProviderSelector />
                     </Box>
-                </Box>
             </Paper>
 
             {/* Messages */}
@@ -461,6 +481,19 @@ const AIChat: React.FC = () => {
                                             />
                                         )}
                                         <ReactMarkdown>{message.content}</ReactMarkdown>
+                                        {message.createdAt && (
+                                            <Typography 
+                                                variant="caption" 
+                                                sx={{ 
+                                                    display: 'block', 
+                                                    mt: 0.5, 
+                                                    opacity: 0.6,
+                                                    fontSize: '0.7rem',
+                                                }}
+                                            >
+                                                {new Date(message.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                                            </Typography>
+                                        )}
                                     </Paper>
                                     {message.role === 'user' && (
                                         <Box
@@ -529,7 +562,7 @@ const AIChat: React.FC = () => {
                     bgcolor: 'white',
                 }}
             >
-                <Box sx={{ maxWidth: 800, mx: 'auto', display: 'flex', gap: 1 }}>
+                <Box sx={{ maxWidth: 800, mx: 'auto', display: 'flex', gap: 1, alignItems: 'flex-end' }}>
                     <TextField
                         fullWidth
                         placeholder="输入消息... (说「创建定时任务」可以创建个性化任务)"
@@ -545,11 +578,15 @@ const AIChat: React.FC = () => {
                             },
                         }}
                     />
+                    <Box sx={{ flexShrink: 0 }}>
+                        <AIProviderSelector />
+                    </Box>
                     <IconButton
                         color="primary"
                         onClick={handleSend}
                         disabled={!input.trim() || loading}
                         sx={{
+                            flexShrink: 0,
                             bgcolor: 'primary.main',
                             color: 'white',
                             '&:hover': { bgcolor: 'primary.dark' },
@@ -561,6 +598,20 @@ const AIChat: React.FC = () => {
                 </Box>
             </Paper>
             </Box>
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+                <DialogTitle>确认删除</DialogTitle>
+                <DialogContent>
+                    <Typography>确定要删除此对话吗？删除后无法恢复。</Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setDeleteDialogOpen(false)}>取消</Button>
+                    <Button onClick={handleDeleteConfirm} color="error" variant="contained">
+                        删除
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };

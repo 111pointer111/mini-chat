@@ -24,7 +24,7 @@ const Login: React.FC = () => {
             login(response.data.user, response.data.token);
             navigate('/');
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Invalid credentials');
+            setError(err.response?.data?.message || '登录失败，请检查账号密码');
         }
     };
 
@@ -54,10 +54,10 @@ const Login: React.FC = () => {
             transition={{ duration: 0.5 }}
         >
             <Typography variant="h4" component="h1" gutterBottom align="center" fontWeight="bold">
-                Welcome
+                欢迎回来
             </Typography>
             <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 2 }}>
-                Sign in to continue to Mini Chat
+                登录以继续使用 Mini Chat
             </Typography>
 
             <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)} centered sx={{ mb: 2 }}>
@@ -71,18 +71,18 @@ const Login: React.FC = () => {
                 <form onSubmit={handleSubmit(onSubmit)}>
                     <TextField
                         fullWidth
-                        label="Email Address"
+                        label="邮箱地址"
                         margin="normal"
-                        {...register('email', { required: 'Email is required' })}
+                        {...register('email', { required: '请输入邮箱' })}
                         error={!!errors.email}
                         helperText={errors.email?.message as string}
                     />
                     <TextField
                         fullWidth
-                        label="Password"
+                        label="密码"
                         type="password"
                         margin="normal"
-                        {...register('password', { required: 'Password is required' })}
+                        {...register('password', { required: '请输入密码' })}
                         error={!!errors.password}
                         helperText={errors.password?.message as string}
                     />
@@ -94,7 +94,7 @@ const Login: React.FC = () => {
                         size="large"
                         sx={{ mt: 3, mb: 2, height: 48 }}
                     >
-                        Sign In
+                        登录
                     </Button>
                 </form>
             ) : (
@@ -121,9 +121,9 @@ const Login: React.FC = () => {
 
             <Box sx={{ textAlign: 'center', mt: 2 }}>
                 <Typography variant="body2">
-                    Don't have an account?{' '}
+                    还没有账号？{' '}
                     <Link component={RouterLink} to="/register" underline="hover">
-                        Sign up
+                        立即注册
                     </Link>
                 </Typography>
                 <Typography variant="body2" sx={{ mt: 1 }}>

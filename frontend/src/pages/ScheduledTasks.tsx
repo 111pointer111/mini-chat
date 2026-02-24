@@ -1,10 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
     Box,
     Typography,
     Switch,
-    Select,
-    MenuItem,
+    TextField,
     Paper,
     CircularProgress,
     Alert,
@@ -76,12 +75,8 @@ const TASK_CONFIG: Record<string, { icon: React.ReactNode; color: string; gradie
     },
 };
 
-// Generate time options (every minute for precise testing)
-const TIME_OPTIONS = Array.from({ length: 24 * 60 }, (_, i) => {
-    const hour = Math.floor(i / 60);
-    const minute = i % 60;
-    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-});
+// Default time for new tasks
+const DEFAULT_TIME = '09:00';
 
 type TaskItem = PresetTask | CustomTask;
 
@@ -93,6 +88,27 @@ const TaskCard: React.FC<{
     onDelete?: () => void;
 }> = ({ task, updating, onToggle, onTimeChange, onDelete }) => {
     const config = TASK_CONFIG[task.taskType] || TASK_CONFIG.custom;
+    const [localTime, setLocalTime] = useState(task.pushTime || DEFAULT_TIME);
+    const timeRef = useRef(task.pushTime || DEFAULT_TIME);
+
+    // Sync local time when task.pushTime changes from server
+    useEffect(() => {
+        setLocalTime(task.pushTime || DEFAULT_TIME);
+        timeRef.current = task.pushTime || DEFAULT_TIME;
+    }, [task.pushTime]);
+
+    const handleTimeBlur = () => {
+        if (localTime !== timeRef.current) {
+            timeRef.current = localTime;
+            onTimeChange(localTime);
+        }
+    };
+
+    const handleTimeKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            (e.target as HTMLInputElement).blur();
+        }
+    };
 
     return (
         <motion.div
@@ -225,28 +241,31 @@ const TaskCard: React.FC<{
                                     <Typography variant="body2" sx={{ fontWeight: 500 }}>
                                         每日推送时间
                                     </Typography>
-                                    <Select
+                                    <TextField
                                         size="small"
-                                        value={task.pushTime}
-                                        onChange={(e) => onTimeChange(e.target.value)}
+                                        type="time"
+                                        value={localTime}
+                                        onChange={(e) => setLocalTime(e.target.value)}
+                                        onBlur={handleTimeBlur}
+                                        onKeyDown={handleTimeKeyDown}
                                         disabled={updating}
                                         sx={{
                                             ml: 'auto',
-                                            minWidth: 90,
+                                            width: 110,
                                             '& .MuiOutlinedInput-notchedOutline': {
                                                 borderColor: alpha(config.color, 0.3),
                                             },
                                             '&:hover .MuiOutlinedInput-notchedOutline': {
                                                 borderColor: config.color,
                                             },
+                                            '& input': {
+                                                py: 0.75,
+                                            },
                                         }}
-                                    >
-                                        {TIME_OPTIONS.map((time) => (
-                                            <MenuItem key={time} value={time}>
-                                                {time}
-                                            </MenuItem>
-                                        ))}
-                                    </Select>
+                                        inputProps={{
+                                            step: 60,
+                                        }}
+                                    />
                                     {updating && <CircularProgress size={20} />}
                                 </Box>
                             </motion.div>

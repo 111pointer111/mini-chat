@@ -1,5 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ThemeProvider, CssBaseline } from '@mui/material';
+import theme from './theme';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ResetPassword from './pages/ResetPassword';
@@ -15,7 +17,9 @@ const queryClient = new QueryClient();
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <Router>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <Router>
         <Routes>
           {/* Public Routes */}
           <Route element={<AuthLayout />}>
@@ -36,7 +40,8 @@ function App() {
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </Router>
+        </Router>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

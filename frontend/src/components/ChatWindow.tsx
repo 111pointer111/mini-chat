@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Box, Paper, Typography, TextField, IconButton, Avatar } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
-import { GitHub, MenuBook, Translate, AutoAwesome } from '@mui/icons-material';
+import { GitHub, MenuBook, Translate, AutoAwesome, ChatBubbleOutline } from '@mui/icons-material';
 import ReactMarkdown from 'react-markdown';
 import { useChatStore } from '../store/chatStore';
 import { useAuthStore } from '../store/authStore';
@@ -108,9 +108,30 @@ const ChatWindow: React.FC = () => {
 
     if (!selectedFriend && !selectedTaskType) {
         return (
-            <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#f5f5f5' }}>
-                <Typography variant="h6" color="text.secondary">
-                    Select a friend to start chatting
+            <Box sx={{ 
+                flex: 1, 
+                display: 'flex', 
+                flexDirection: 'column',
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                gap: 2,
+            }}>
+                <Box sx={{
+                    width: 80,
+                    height: 80,
+                    borderRadius: '50%',
+                    bgcolor: 'rgba(99, 102, 241, 0.1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                }}>
+                    <ChatBubbleOutline sx={{ fontSize: 40, color: 'primary.main' }} />
+                </Box>
+                <Typography variant="h6" color="text.secondary" fontWeight={500}>
+                    选择一个好友开始聊天
+                </Typography>
+                <Typography variant="body2" color="text.disabled">
+                    从左侧列表选择好友或定时任务
                 </Typography>
             </Box>
         );
@@ -129,7 +150,7 @@ const ChatWindow: React.FC = () => {
                 </Paper>
 
                 {/* Messages Area */}
-                <Box sx={{ flex: 1, overflowY: 'auto', p: 2, bgcolor: '#f0f2f5', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <Box sx={{ flex: 1, overflowY: 'auto', p: 2, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
                     {messages.length === 0 ? (
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
                             <Typography color="text.secondary">
@@ -142,16 +163,63 @@ const ChatWindow: React.FC = () => {
                                 key={index}
                                 elevation={0}
                                 sx={{
-                                    p: 2,
+                                    p: 2.5,
+                                    width: '100%',
+                                    maxWidth: 680,
                                     bgcolor: 'white',
                                     borderRadius: 2,
-                                    '& p': { margin: 0 },
-                                    '& ul, & ol': { paddingLeft: 2 },
+                                    border: '1px solid',
+                                    borderColor: 'divider',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease',
+                                    '&:hover': {
+                                        borderColor: 'primary.main',
+                                        boxShadow: '0 4px 12px rgba(37, 99, 235, 0.1)',
+                                    },
+                                    '& p': { margin: 0, lineHeight: 1.7, color: '#1E293B' },
+                                    '& ul, & ol': { pl: 2.5, my: 1 },
+                                    '& li': { mb: 0.5 },
+                                    '& h1, & h2, & h3': { 
+                                        color: '#1E293B',
+                                        fontWeight: 600,
+                                        mt: 1.5,
+                                        mb: 0.75,
+                                    },
+                                    '& h1': { fontSize: '1.25rem' },
+                                    '& h2': { fontSize: '1.1rem' },
+                                    '& h3': { fontSize: '1rem' },
+                                    '& blockquote': {
+                                        borderLeft: '3px solid #2563EB',
+                                        pl: 1.5,
+                                        ml: 0,
+                                        color: '#475569',
+                                    },
+                                    '& code': {
+                                        bgcolor: '#F1F5F9',
+                                        px: 0.5,
+                                        py: 0.25,
+                                        borderRadius: 0.5,
+                                        fontSize: '0.875em',
+                                        fontFamily: 'monospace',
+                                    },
+                                    '& a': {
+                                        color: '#2563EB',
+                                        textDecoration: 'none',
+                                        '&:hover': { textDecoration: 'underline' },
+                                    },
                                 }}
                             >
                                 <ReactMarkdown>{msg.content}</ReactMarkdown>
-                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                                    {new Date(msg.createdAt).toLocaleString()}
+                                <Typography 
+                                    variant="caption" 
+                                    sx={{ 
+                                        display: 'block', 
+                                        mt: 1.5, 
+                                        color: '#94A3B8',
+                                        fontSize: '0.75rem',
+                                    }}
+                                >
+                                    {new Date(msg.createdAt).toLocaleString('zh-CN')}
                                 </Typography>
                             </Paper>
                         ))
@@ -212,7 +280,7 @@ const ChatWindow: React.FC = () => {
                 <Box sx={{ display: 'flex', gap: 1 }}>
                     <TextField
                         fullWidth
-                        placeholder="Type a message..."
+                        placeholder="输入消息..."
                         value={inputText}
                         onChange={(e) => setInputText(e.target.value)}
                         onKeyPress={(e) => e.key === 'Enter' && handleSend()}

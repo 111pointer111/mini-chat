@@ -39,7 +39,7 @@ const Dashboard: React.FC = () => {
     );
 
     return (
-        <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: '#e0e0e0' }}>
+        <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
             {/* Top Bar */}
             <Paper elevation={1} sx={{ p: 1, px: { xs: 1, sm: 3 }, display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 10 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 } }}>
@@ -50,7 +50,7 @@ const Dashboard: React.FC = () => {
                     )}
                     <Typography variant="h6" fontWeight="bold" color="primary" sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>MiniChat</Typography>
                     <Chip
-                        label={isConnected ? "Online" : "Connecting..."}
+                        label={isConnected ? "在线" : "连接中..."}
                         color={isConnected ? "success" : "warning"}
                         size="small"
                     />
@@ -75,7 +75,7 @@ const Dashboard: React.FC = () => {
                     )}
                     <Avatar src={user?.avatar} sx={{ width: 32, height: 32 }} />
                     <Typography sx={{ display: { xs: 'none', sm: 'block' } }}>{user?.username}</Typography>
-                    <Button size="small" color="inherit" onClick={logout}>Logout</Button>
+                    <Button size="small" color="inherit" onClick={logout}>退出</Button>
                 </Box>
             </Paper>
 
