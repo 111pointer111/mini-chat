@@ -261,8 +261,16 @@ export const parseTaskIntent = async (message: string, userId?: string): Promise
         if (jsonStr.startsWith('```')) {
             jsonStr = jsonStr.replace(/```json?\n?/g, '').replace(/```$/g, '').trim();
         }
-        return JSON.parse(jsonStr);
-    } catch {
+        const parsed = JSON.parse(jsonStr);
+
+        // Validate structure
+        if (typeof parsed.isTaskCreation !== 'boolean') {
+            throw new Error('Invalid JSON structure: isTaskCreation must be boolean');
+        }
+
+        return parsed;
+    } catch (err) {
+        console.error('Failed to parse AI intent response as JSON:', err, 'Raw response:', response.substring(0, 200));
         return { isTaskCreation: false, reply: response };
     }
 };
