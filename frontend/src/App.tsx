@@ -11,38 +11,41 @@ import AIChat from './pages/AIChat';
 import AdminAIProviders from './pages/AdminAIProviders';
 import AuthLayout from './layouts/AuthLayout';
 import ProtectedLayout from './layouts/ProtectedLayout';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 const queryClient = new QueryClient();
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <Router>
-        <Routes>
-          {/* Public Routes */}
-          <Route element={<AuthLayout />}>
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-          </Route>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider theme={theme}>
+          <CssBaseline />
+          <Router>
+          <Routes>
+            {/* Public Routes */}
+            <Route element={<AuthLayout />}>
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+            </Route>
 
-          {/* Protected Routes */}
-          <Route element={<ProtectedLayout />}>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/chat/:id" element={<Dashboard />} />
-            <Route path="/scheduled-tasks" element={<ScheduledTasks />} />
-            <Route path="/ai-chat" element={<AIChat />} />
-            <Route path="/admin/ai-providers" element={<AdminAIProviders />} />
-          </Route>
+            {/* Protected Routes */}
+            <Route element={<ProtectedLayout />}>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/chat/:id" element={<Dashboard />} />
+              <Route path="/scheduled-tasks" element={<ScheduledTasks />} />
+              <Route path="/ai-chat" element={<AIChat />} />
+              <Route path="/admin/ai-providers" element={<AdminAIProviders />} />
+            </Route>
 
-          {/* Fallback */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-        </Router>
-      </ThemeProvider>
-    </QueryClientProvider>
+            {/* Fallback */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+          </Router>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 
