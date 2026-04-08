@@ -15,6 +15,19 @@ export const register = async (req: Request, res: Response) => {
     try {
         const { username, email, password } = req.body;
 
+        // Validate required fields
+        if (!username || !email || !password) {
+            return res.status(400).json({ message: 'Username, email, and password are required' });
+        }
+
+        // Validate lengths
+        if (username.length < 2 || username.length > 30) {
+            return res.status(400).json({ message: 'Username must be between 2 and 30 characters' });
+        }
+        if (password.length < 6 || password.length > 100) {
+            return res.status(400).json({ message: 'Password must be between 6 and 100 characters' });
+        }
+
         // Check if user exists
         const existingUser = await User.findOne({ $or: [{ email }, { username }] });
         if (existingUser) {
@@ -52,6 +65,10 @@ export const register = async (req: Request, res: Response) => {
 export const login = async (req: Request, res: Response) => {
     try {
         const { email, password } = req.body;
+
+        if (!email || !password) {
+            return res.status(400).json({ message: 'Email and password are required' });
+        }
 
         // Find user (select password as it's excluded by default)
         const user = await User.findOne({ email }).select('+password');
@@ -164,6 +181,10 @@ export const registerByPhone = async (req: Request, res: Response) => {
 
         if (!phone || !code || !username) {
             return res.status(400).json({ message: '手机号、验证码和用户名不能为空' });
+        }
+
+        if (username.length < 2 || username.length > 30) {
+            return res.status(400).json({ message: '用户名长度需要在2-30个字符之间' });
         }
 
         // Verify code
