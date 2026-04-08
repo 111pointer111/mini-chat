@@ -7,6 +7,7 @@ import Conversation from '../models/Conversation';
 import Message from '../models/Message';
 import { getIO } from '../socket';
 import aiService from './aiService';
+import { SYSTEM_USER_ID } from '../scripts/initAdmin';
 
 const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
 const REDIS_PORT = parseInt(process.env.REDIS_PORT || '6379');
@@ -136,12 +137,9 @@ const processTask = async (job: Job) => {
             content: content.substring(0, 500), // Store truncated for history
         });
 
-        // Create message in conversation
-        // Use a system user ID for scheduled task messages
-        const systemUserId = new mongoose.Types.ObjectId('000000000000000000000000');
-        
+        // Create message in conversation using the system user
         const message = await Message.create({
-            sender: systemUserId,
+            sender: SYSTEM_USER_ID,
             receiver: new mongoose.Types.ObjectId(userId),
             conversationId: conversation._id,
             content,

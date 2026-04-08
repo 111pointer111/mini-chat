@@ -7,6 +7,25 @@ const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@minichat.com';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
+// Predefined IDs for system users
+export const AI_ASSISTANT_ID = new mongoose.Types.ObjectId('000000000000000000000001');
+export const SYSTEM_USER_ID = new mongoose.Types.ObjectId('000000000000000000000002');
+
+const initSystemUsers = async () => {
+    const systemUsers = [
+        { _id: AI_ASSISTANT_ID, username: 'ai_assistant', role: 'user', provider: 'local' as const },
+        { _id: SYSTEM_USER_ID, username: 'system', role: 'user', provider: 'local' as const },
+    ];
+
+    for (const userData of systemUsers) {
+        const existing = await User.findById(userData._id);
+        if (!existing) {
+            await User.create(userData);
+            console.log(`✅ Created system user: ${userData.username}`);
+        }
+    }
+};
+
 export const initAdmin = async () => {
     // In production, require explicit env vars — no default credentials
     if (isProduction && !process.env.ADMIN_USERNAME && !process.env.ADMIN_PASSWORD) {
@@ -15,6 +34,9 @@ export const initAdmin = async () => {
     }
 
     try {
+        // Always initialize system users first
+        await initSystemUsers();
+
         const existingAdmin = await User.findOne({ role: 'admin' });
         if (existingAdmin) {
             console.log(`✅ Admin user exists: ${existingAdmin.username}`);

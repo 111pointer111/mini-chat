@@ -5,10 +5,9 @@ import ScheduledTask from '../models/ScheduledTask';
 import Conversation from '../models/Conversation';
 import Message from '../models/Message';
 import redis from '../utils/redis';
+import { AI_ASSISTANT_ID } from '../scripts/initAdmin';
 
 const PENDING_TASK_TTL = 300; // 5 minutes in seconds
-
-const AI_ASSISTANT_ID = new mongoose.Types.ObjectId('000000000000000000000001');
 
 interface PendingTask {
     taskName: string;
