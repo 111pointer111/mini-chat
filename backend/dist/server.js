@@ -23,6 +23,15 @@ const taskScheduler_1 = require("./services/taskScheduler");
 const taskQueue_1 = require("./services/taskQueue");
 const initAdmin_1 = require("./scripts/initAdmin");
 dotenv_1.default.config();
+// Validate required environment variables
+if (!process.env.JWT_SECRET) {
+    if (process.env.NODE_ENV === 'production') {
+        console.error('❌ JWT_SECRET environment variable is required in production');
+        process.exit(1);
+    }
+    console.warn('⚠️  JWT_SECRET not set, using insecure default (dev mode only)');
+    process.env.JWT_SECRET = 'dev_secret_key_do_not_use_in_production';
+}
 const app = (0, express_1.default)();
 const httpServer = (0, http_1.createServer)(app);
 const io = new socket_io_1.Server(httpServer, {

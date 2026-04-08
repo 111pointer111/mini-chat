@@ -4,17 +4,38 @@ import aiService, { ChatMessage } from '../services/aiService';
 import ScheduledTask from '../models/ScheduledTask';
 import Conversation from '../models/Conversation';
 import Message from '../models/Message';
+import redis from '../utils/redis';
+
+const PENDING_TASK_TTL = 300; // 5 minutes in seconds
+
+const AI_ASSISTANT_ID = new mongoose.Types.ObjectId('000000000000000000000001');
 
 interface PendingTask {
     taskName: string;
     pushTime: string;
     prompt: string;
     summary: string;
-    expiresAt: number;
 }
 
-const pendingTasks = new Map<string, PendingTask>();
-const AI_ASSISTANT_ID = new mongoose.Types.ObjectId('000000000000000000000001');
+const pendingTaskKey = (userId: string) => `pending_task:${userId}`;
+
+const getPendingTask = async (userId: string): Promise<PendingTask | null> => {
+    const data = await redis.get(pendingTaskKey(userId));
+    if (!data) return null;
+    try {
+        return JSON.parse(data);
+    } catch {
+        return null;
+    }
+};
+
+const setPendingTask = async (userId: string, task: PendingTask): Promise<void> => {
+    await redis.setex(pendingTaskKey(userId), PENDING_TASK_TTL, JSON.stringify(task));
+};
+
+const clearPendingTask = async (userId: string): Promise<void> => {
+    await redis.del(pendingTaskKey(userId));
+};
 
 // Helper: Get or create AI conversation for user
 const getOrCreateAIConversation = async (userId: string) => {
@@ -53,7 +74,7 @@ const saveMessage = async (conversationId: mongoose.Types.ObjectId, senderId: mo
 
 export const chat = async (req: Request, res: Response) => {
     try {
-        const userId = (req as any).user.id;
+        const userId = req.user!.id;
         const userObjectId = new mongoose.Types.ObjectId(userId);
         const { message, timezone, conversationId } = req.body;
 
@@ -80,10 +101,10 @@ export const chat = async (req: Request, res: Response) => {
         await saveMessage(aiConversation._id as mongoose.Types.ObjectId, userObjectId, AI_ASSISTANT_ID, message);
 
         // Check if user is confirming a pending task
-        const pendingTask = pendingTasks.get(userId);
-        if (pendingTask && pendingTask.expiresAt > Date.now()) {
+        const pendingTask = await getPendingTask(userId);
+        if (pendingTask) {
             const lowerMessage = message.toLowerCase().trim();
-            
+
             if (lowerMessage === '确认' || lowerMessage === '确定' || lowerMessage === 'yes' || lowerMessage === 'ok') {
                 // Create the task
                 const conversation = await Conversation.create({
@@ -105,7 +126,7 @@ export const chat = async (req: Request, res: Response) => {
                 });
 
                 await task.save();
-                pendingTasks.delete(userId);
+                await clearPendingTask(userId);
 
                 const replyContent = `✅ 定时任务创建成功！
 
@@ -129,7 +150,7 @@ export const chat = async (req: Request, res: Response) => {
                     },
                 });
             } else if (lowerMessage === '取消' || lowerMessage === 'cancel' || lowerMessage === 'no') {
-                pendingTasks.delete(userId);
+                await clearPendingTask(userId);
                 const cancelReply = '好的，已取消创建定时任务。有其他需要帮助的吗？';
                 await saveMessage(aiConversation._id as mongoose.Types.ObjectId, AI_ASSISTANT_ID, userObjectId, cancelReply);
                 return res.json({
@@ -139,7 +160,7 @@ export const chat = async (req: Request, res: Response) => {
             }
             // If not confirming/canceling, continue to process as normal message
             // but clear the pending task
-            pendingTasks.delete(userId);
+            await clearPendingTask(userId);
         }
 
         // Get conversation history for context (last 10 messages)
@@ -163,11 +184,8 @@ export const chat = async (req: Request, res: Response) => {
         const parseResult = await aiService.parseTaskIntent(message, userId);
 
         if (parseResult.isTaskCreation && parseResult.task) {
-            // Store pending task for confirmation
-            pendingTasks.set(userId, {
-                ...parseResult.task,
-                expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes expiry
-            });
+            // Store pending task for confirmation (TTL handled by Redis)
+            await setPendingTask(userId, parseResult.task);
 
             const confirmReply = `我理解你想创建以下定时任务：
 
@@ -204,7 +222,7 @@ export const chat = async (req: Request, res: Response) => {
 // Get all AI conversations for user
 export const getConversations = async (req: Request, res: Response) => {
     try {
-        const userId = (req as any).user.id;
+        const userId = req.user!.id;
 
         const conversations = await Conversation.find({
             userId: new mongoose.Types.ObjectId(userId),
@@ -223,7 +241,7 @@ export const getConversations = async (req: Request, res: Response) => {
 // Create new AI conversation
 export const createConversation = async (req: Request, res: Response) => {
     try {
-        const userId = (req as any).user.id;
+        const userId = req.user!.id;
         const { name } = req.body;
 
         const conversation = await Conversation.create({
@@ -242,7 +260,7 @@ export const createConversation = async (req: Request, res: Response) => {
 // Update AI conversation name
 export const updateConversation = async (req: Request, res: Response) => {
     try {
-        const userId = (req as any).user.id;
+        const userId = req.user!.id;
         const { conversationId } = req.params;
         const { name } = req.body;
 
@@ -274,7 +292,7 @@ export const updateConversation = async (req: Request, res: Response) => {
 // Delete AI conversation
 export const deleteConversation = async (req: Request, res: Response) => {
     try {
-        const userId = (req as any).user.id;
+        const userId = req.user!.id;
         const { conversationId } = req.params;
 
         const conversation = await Conversation.findOne({
@@ -302,7 +320,7 @@ export const deleteConversation = async (req: Request, res: Response) => {
 // Get AI chat history for specific conversation
 export const getChatHistory = async (req: Request, res: Response) => {
     try {
-        const userId = (req as any).user.id;
+        const userId = req.user!.id;
         const { conversationId } = req.params;
         const { page = 1, limit = 50 } = req.query;
 

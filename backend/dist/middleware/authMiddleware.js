@@ -14,7 +14,6 @@ const protect = (req, res, next) => {
             // Verify token
             const decoded = jsonwebtoken_1.default.verify(token, process.env.JWT_SECRET);
             // Add user to request object
-            // @ts-ignore
             req.user = decoded;
             return next();
         }
