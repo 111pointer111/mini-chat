@@ -41,5 +41,6 @@ const pushHistorySchema = new Schema<IPushHistory>(
 // Index for efficient querying
 pushHistorySchema.index({ userId: 1, taskType: 1 });
 pushHistorySchema.index({ userId: 1, taskType: 1, contentHash: 1 });
+pushHistorySchema.index({ pushedAt: -1 }); // For sorting by most recent
 
 export default mongoose.model<IPushHistory>('PushHistory', pushHistorySchema);
