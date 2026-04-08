@@ -4,6 +4,14 @@ import { GitHub, MenuBook, Translate, AutoAwesome } from '@mui/icons-material';
 import { useChatStore } from '../store/chatStore';
 import api from '../services/api';
 
+interface FriendRequestItem {
+    _id: string;
+    requester: { _id: string; username: string; avatar: string };
+    recipient: { _id: string; username: string; avatar: string };
+    status: string;
+    createdAt: string;
+}
+
 interface PresetTask {
     _id?: string;
     taskType: string;
@@ -74,7 +82,7 @@ const FriendList: React.FC = () => {
                         好友请求
                     </Typography>
                     <List dense>
-                        {pendingRequests.map((req: any) => (
+                        {pendingRequests.map((req: FriendRequestItem) => (
                             <ListItem key={req._id}>
                                 <ListItemAvatar>
                                     <Avatar>{req.requester.username[0]}</Avatar>

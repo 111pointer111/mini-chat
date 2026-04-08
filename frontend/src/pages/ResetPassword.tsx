@@ -39,8 +39,9 @@ const ResetPassword: React.FC = () => {
             await api.post('/auth/reset-password-phone', { phone, code, newPassword });
             setSuccess('密码重置成功，即将跳转到登录页面...');
             setTimeout(() => navigate('/login'), 2000);
-        } catch (err: any) {
-            setError(err.response?.data?.message || '重置失败');
+        } catch (err: unknown) {
+            const axiosErr = err as { response?: { data?: { message?: string } } };
+            setError(axiosErr.response?.data?.message || '重置失败');
         } finally {
             setLoading(false);
         }

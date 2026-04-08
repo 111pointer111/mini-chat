@@ -49,8 +49,9 @@ const PhoneCodeInput: React.FC<PhoneCodeInputProps> = ({
         try {
             await api.post('/auth/send-code', { phone, type });
             setCountdown(60);
-        } catch (err: any) {
-            setSendError(err.response?.data?.message || '发送失败');
+        } catch (err: unknown) {
+            const axiosErr = err as { response?: { data?: { message?: string } } };
+            setSendError(axiosErr.response?.data?.message || '发送失败');
         } finally {
             setSending(false);
         }

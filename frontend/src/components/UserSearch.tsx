@@ -4,9 +4,16 @@ import { Search as SearchIcon } from '@mui/icons-material';
 import api from '../services/api';
 import { useChatStore } from '../store/chatStore';
 
+interface SearchResultUser {
+    _id: string;
+    username: string;
+    email: string;
+    avatar: string;
+}
+
 const UserSearch: React.FC = () => {
     const [query, setQuery] = useState('');
-    const [results, setResults] = useState<any[]>([]);
+    const [results, setResults] = useState<SearchResultUser[]>([]);
     const { sendFriendRequest } = useChatStore();
     const [loading, setLoading] = useState(false);
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -50,8 +57,9 @@ const UserSearch: React.FC = () => {
         try {
             await sendFriendRequest(userId);
             alert('好友请求已发送!');
-        } catch (err: any) {
-            alert(err.response?.data?.message || '发送请求失败');
+        } catch (err: unknown) {
+            const axiosErr = err as { response?: { data?: { message?: string } } };
+            alert(axiosErr.response?.data?.message || '发送请求失败');
         }
     };
 

@@ -4,8 +4,15 @@ import SendIcon from '@mui/icons-material/Send';
 import { GitHub, MenuBook, Translate, AutoAwesome, ChatBubbleOutline } from '@mui/icons-material';
 import ReactMarkdown from 'react-markdown';
 import { useChatStore } from '../store/chatStore';
+import type { Message } from '../store/chatStore';
 import { useAuthStore } from '../store/authStore';
 import { useSocketStore } from '../store/socketStore';
+
+interface ScheduledTaskMessageData {
+    conversationId: string;
+    taskType: string;
+    message: Pick<Message, '_id' | 'content' | 'type' | 'createdAt'>;
+}
 
 const PRESET_TASK_NAMES: Record<string, string> = {
     github_trending: 'GitHub 热点',
@@ -39,7 +46,7 @@ const ChatWindow: React.FC = () => {
     useEffect(() => {
         if (!socket) return;
 
-        const handleReceiveMessage = (newMessage: any) => {
+        const handleReceiveMessage = (newMessage: Message) => {
             addMessage(newMessage); // Update store
         };
 
@@ -54,7 +61,7 @@ const ChatWindow: React.FC = () => {
     useEffect(() => {
         if (!socket || !selectedTaskType) return;
 
-        const handleScheduledTaskMessage = (data: { conversationId: string; taskType: string; message: any }) => {
+        const handleScheduledTaskMessage = (data: ScheduledTaskMessageData) => {
             // Check if this message is for the currently selected task
             // For preset tasks, compare taskType; for custom tasks, compare task ID
             if (data.taskType === selectedTaskType || data.conversationId === selectedTaskType) {

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
+import type { FieldValues } from 'react-hook-form';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { TextField, Button, Typography, Link, Box, Alert, Tabs, Tab } from '@mui/material';
 import { motion } from 'framer-motion';
@@ -20,14 +21,15 @@ const Register: React.FC = () => {
     const [phoneLoading, setPhoneLoading] = useState(false);
     const login = useAuthStore((state) => state.login);
 
-    const onSubmit = async (data: any) => {
+    const onSubmit = async (data: FieldValues) => {
         try {
             setError('');
             const response = await api.post('/auth/register', data);
             login(response.data.user, response.data.token);
             navigate('/');
-        } catch (err: any) {
-            setError(err.response?.data?.message || 'Registration failed. Please try again.');
+        } catch (err: unknown) {
+            const axiosErr = err as { response?: { data?: { message?: string } } };
+            setError(axiosErr.response?.data?.message || 'Registration failed. Please try again.');
         }
     };
 
@@ -42,8 +44,9 @@ const Register: React.FC = () => {
             const response = await api.post('/auth/register-phone', { phone, code, username, email, password });
             login(response.data.user, response.data.token);
             navigate('/');
-        } catch (err: any) {
-            setError(err.response?.data?.message || '注册失败');
+        } catch (err: unknown) {
+            const axiosErr = err as { response?: { data?: { message?: string } } };
+            setError(axiosErr.response?.data?.message || '注册失败');
         } finally {
             setPhoneLoading(false);
         }

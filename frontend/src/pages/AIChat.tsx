@@ -40,6 +40,13 @@ interface Message {
     createdAt?: string;
 }
 
+interface BackendMessage {
+    _id: string;
+    sender: string;
+    content: string;
+    createdAt: string;
+}
+
 interface Conversation {
     _id: string;
     name: string;
@@ -96,7 +103,7 @@ const AIChat: React.FC = () => {
             const url = convId ? `/ai-chat/history/${convId}` : '/ai-chat/history';
             const res = await api.get(url);
             if (res.data.messages && res.data.messages.length > 0) {
-                const historyMessages: Message[] = res.data.messages.map((msg: any) => ({
+                const historyMessages: Message[] = res.data.messages.map((msg: BackendMessage) => ({
                     id: msg._id,
                     role: msg.sender === AI_ASSISTANT_ID ? 'assistant' : 'user',
                     content: msg.content,

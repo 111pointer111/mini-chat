@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
+import type { FieldValues } from 'react-hook-form';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { TextField, Button, Typography, Link, Box, Alert, Tabs, Tab } from '@mui/material';
 import { motion } from 'framer-motion';
@@ -17,14 +18,15 @@ const Login: React.FC = () => {
     const [phoneLoading, setPhoneLoading] = useState(false);
     const login = useAuthStore((state) => state.login);
 
-    const onSubmit = async (data: any) => {
+    const onSubmit = async (data: FieldValues) => {
         try {
             setError('');
             const response = await api.post('/auth/login', data);
             login(response.data.user, response.data.token);
             navigate('/');
-        } catch (err: any) {
-            setError(err.response?.data?.message || '登录失败，请检查账号密码');
+        } catch (err: unknown) {
+            const axiosErr = err as { response?: { data?: { message?: string } } };
+            setError(axiosErr.response?.data?.message || '登录失败，请检查账号密码');
         }
     };
 
@@ -39,8 +41,9 @@ const Login: React.FC = () => {
             const response = await api.post('/auth/login-phone', { phone, code });
             login(response.data.user, response.data.token);
             navigate('/');
-        } catch (err: any) {
-            setError(err.response?.data?.message || '登录失败');
+        } catch (err: unknown) {
+            const axiosErr = err as { response?: { data?: { message?: string } } };
+            setError(axiosErr.response?.data?.message || '登录失败');
         } finally {
             setPhoneLoading(false);
         }

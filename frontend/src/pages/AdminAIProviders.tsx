@@ -76,8 +76,9 @@ const AdminAIProviders: React.FC = () => {
             const res = await api.get('/ai-providers/admin');
             setProviders(res.data);
             setError('');
-        } catch (err: any) {
-            if (err.response?.status === 403) {
+        } catch (err: unknown) {
+            const axiosErr = err as { response?: { status?: number } };
+            if (axiosErr.response?.status === 403) {
                 setError('需要管理员权限');
             } else {
                 setError('获取数据失败');
@@ -128,9 +129,9 @@ const AdminAIProviders: React.FC = () => {
         setSaving(true);
         try {
             if (editingId) {
-                const updateData = { ...form };
+                const updateData: Partial<ProviderForm> & { _id?: string } = { ...form };
                 if (!updateData.apiKey) {
-                    delete (updateData as any).apiKey;
+                    delete updateData.apiKey;
                 }
                 await api.put(`/ai-providers/admin/${editingId}`, updateData);
             } else {
@@ -139,8 +140,9 @@ const AdminAIProviders: React.FC = () => {
             handleCloseDialog();
             fetchProviders();
             setError('');
-        } catch (err: any) {
-            setError(err.response?.data?.message || '保存失败');
+        } catch (err: unknown) {
+            const axiosErr = err as { response?: { data?: { message?: string } } };
+            setError(axiosErr.response?.data?.message || '保存失败');
         } finally {
             setSaving(false);
         }
@@ -151,7 +153,8 @@ const AdminAIProviders: React.FC = () => {
         try {
             await api.delete(`/ai-providers/admin/${id}`);
             fetchProviders();
-        } catch {
+        } catch (err: unknown) {
+            console.error('Delete provider error:', err);
             setError('删除失败');
         }
     };
