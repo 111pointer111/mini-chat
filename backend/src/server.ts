@@ -20,6 +20,16 @@ import { initAdmin } from './scripts/initAdmin';
 
 dotenv.config();
 
+// Validate required environment variables
+if (!process.env.JWT_SECRET) {
+    if (process.env.NODE_ENV === 'production') {
+        console.error('❌ JWT_SECRET environment variable is required in production');
+        process.exit(1);
+    }
+    console.warn('⚠️  JWT_SECRET not set, using insecure default (dev mode only)');
+    process.env.JWT_SECRET = 'dev_secret_key_do_not_use_in_production';
+}
+
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {

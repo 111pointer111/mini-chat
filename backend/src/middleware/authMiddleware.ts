@@ -26,10 +26,9 @@ export const protect = (req: Request, res: Response, next: NextFunction) => {
             token = req.headers.authorization.split(' ')[1];
 
             // Verify token
-            const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as DecodedToken;
+            const decoded = jwt.verify(token, process.env.JWT_SECRET!) as DecodedToken;
 
             // Add user to request object
-            // @ts-ignore
             req.user = decoded;
             return next();
         } catch (error) {

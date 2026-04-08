@@ -26,7 +26,7 @@ export const setupSocket = (io: Server) => {
         }
 
         try {
-            const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as DecodedToken;
+            const decoded = jwt.verify(token, process.env.JWT_SECRET!) as DecodedToken;
             socket.data.user = decoded;
             next();
         } catch (err) {
