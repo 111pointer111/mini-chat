@@ -15,7 +15,7 @@ const PRESET_TASK_TYPES = ['github_trending', 'daily_poem', 'daily_english'] as 
 // Get all scheduled tasks for current user
 export const getScheduledTasks = async (req: Request, res: Response) => {
     try {
-        const userId = (req as any).user.id;
+        const userId = req.user!.id;
 
         // Get existing tasks
         const tasks = await ScheduledTask.find({ userId });
@@ -61,7 +61,7 @@ export const getScheduledTasks = async (req: Request, res: Response) => {
 // Update a preset scheduled task
 export const updateScheduledTask = async (req: Request, res: Response) => {
     try {
-        const userId = (req as any).user.id;
+        const userId = req.user!.id;
         const taskType = req.params.taskType as TaskType;
         const { enabled, pushTime, timezone } = req.body;
 
@@ -125,7 +125,7 @@ export const updateScheduledTask = async (req: Request, res: Response) => {
 // Create a custom scheduled task
 export const createCustomTask = async (req: Request, res: Response) => {
     try {
-        const userId = (req as any).user.id;
+        const userId = req.user!.id;
         const { taskName, prompt, pushTime, timezone } = req.body;
 
         if (!taskName || !prompt) {
@@ -173,7 +173,7 @@ export const createCustomTask = async (req: Request, res: Response) => {
 // Update a custom scheduled task
 export const updateCustomTask = async (req: Request, res: Response) => {
     try {
-        const userId = (req as any).user.id;
+        const userId = req.user!.id;
         const taskId = req.params.taskId;
         const { enabled, pushTime, timezone } = req.body;
 
@@ -212,7 +212,7 @@ export const updateCustomTask = async (req: Request, res: Response) => {
 // Delete a custom scheduled task
 export const deleteCustomTask = async (req: Request, res: Response) => {
     try {
-        const userId = (req as any).user.id;
+        const userId = req.user!.id;
         const taskId = req.params.taskId;
 
         const task = await ScheduledTask.findOne({ 
@@ -243,7 +243,7 @@ export const deleteCustomTask = async (req: Request, res: Response) => {
 // Get messages for a scheduled task conversation
 export const getTaskMessages = async (req: Request, res: Response) => {
     try {
-        const userId = (req as any).user.id;
+        const userId = req.user!.id;
         const { taskType } = req.params;
         const { page = 1, limit = 20 } = req.query;
 
@@ -301,7 +301,7 @@ export const getTaskMessages = async (req: Request, res: Response) => {
 // Get all conversations for current user (including scheduled tasks)
 export const getConversations = async (req: Request, res: Response) => {
     try {
-        const userId = (req as any).user.id;
+        const userId = req.user!.id;
 
         const conversations = await Conversation.find({ userId })
             .sort({ lastMessageAt: -1, createdAt: -1 });

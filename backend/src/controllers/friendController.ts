@@ -6,7 +6,7 @@ import User from '../models/User';
 export const sendFriendRequest = async (req: Request, res: Response) => {
     try {
         const { recipientId } = req.body;
-        const requesterId = (req as any).user.id;
+        const requesterId = req.user!.id;
 
         if (requesterId === recipientId) {
             return res.status(400).json({ message: 'Cannot send friend request to yourself' });
@@ -45,7 +45,7 @@ export const sendFriendRequest = async (req: Request, res: Response) => {
 export const acceptFriendRequest = async (req: Request, res: Response) => {
     try {
         const { requestId } = req.params;
-        const userId = (req as any).user.id;
+        const userId = req.user!.id;
 
         const friendship = await Friendship.findById(requestId);
 
@@ -70,7 +70,7 @@ export const acceptFriendRequest = async (req: Request, res: Response) => {
 
 export const getFriends = async (req: Request, res: Response) => {
     try {
-        const userId = (req as any).user.id;
+        const userId = req.user!.id;
 
         const friendships = await Friendship.find({
             $or: [
@@ -98,7 +98,7 @@ export const getFriends = async (req: Request, res: Response) => {
 
 export const getPendingRequests = async (req: Request, res: Response) => {
     try {
-        const userId = (req as any).user.id;
+        const userId = req.user!.id;
 
         // Incoming requests
         const requests = await Friendship.find({

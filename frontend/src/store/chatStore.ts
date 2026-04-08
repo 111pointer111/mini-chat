@@ -2,8 +2,7 @@ import { create } from 'zustand';
 import api from '../services/api';
 
 export interface User {
-    _id: string; // MongoDB ID usually _id, but our User model response might map it or we use raw
-    id?: string; // in case we mapped it
+    _id: string;
     username: string;
     email: string;
     avatar: string;
@@ -18,9 +17,17 @@ export interface Message {
     createdAt: string;
 }
 
+interface FriendRequest {
+    _id: string;
+    requester: User;
+    recipient: User;
+    status: 'pending' | 'accepted' | 'rejected';
+    createdAt: string;
+}
+
 interface ChatState {
     friends: User[];
-    pendingRequests: any[];
+    pendingRequests: FriendRequest[];
     selectedFriend: User | null;
     selectedTaskType: string | null;
     selectedTaskName: string | null;
@@ -67,9 +74,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     fetchMessages: async (friendId: string) => {
         try {
-            set({ isLoading: true, messages: [] }); // Clear prev messages
-            // We assume the friend object passed has the correct ID usually mapped to _id
-            // But verify if your API returns _id or id
+            set({ isLoading: true, messages: [] });
             const res = await api.get(`/messages/${friendId}`);
             set({ messages: res.data, isLoading: false });
         } catch (err) {
@@ -80,7 +85,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     selectFriend: (friend) => {
         set({ selectedFriend: friend, selectedTaskType: null });
-        get().fetchMessages(friend._id || friend.id!);
+        get().fetchMessages(friend._id);
     },
 
     selectScheduledTask: (taskType: string, taskName?: string) => {
@@ -100,13 +105,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
     },
 
     addMessage: (message) => {
-        // Only add if it belongs to current chat
         const { selectedFriend } = get();
         if (!selectedFriend) return;
 
-        // Check if message is related to current selected friend (sender or receiver)
-        // IDs might be string or object, careful comparison needed
-        const friendId = selectedFriend._id || selectedFriend.id;
+        const friendId = selectedFriend._id;
         if (message.sender === friendId || message.receiver === friendId) {
             set((state) => ({ messages: [...state.messages, message] }));
         }

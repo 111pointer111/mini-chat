@@ -90,7 +90,7 @@ const ChatWindow: React.FC = () => {
         // socket.emit is void, so we rely on receive_message or we just append it locally if we trust connection
 
         // Let's emit
-        const friendId = selectedFriend._id || selectedFriend.id;
+        const friendId = selectedFriend._id;
         socket.emit('send_message', {
             receiverId: friendId,
             content: inputText,
@@ -244,7 +244,7 @@ const ChatWindow: React.FC = () => {
             {/* Messages Area */}
             <Box sx={{ flex: 1, overflowY: 'auto', p: 2, bgcolor: '#f0f2f5', display: 'flex', flexDirection: 'column', gap: 1 }}>
                 {messages.map((msg, index) => {
-                    const isMe = msg.sender === (user?.id || user?._id);
+                    const isMe = msg.sender === user?._id;
                     return (
                         <Box
                             key={index}

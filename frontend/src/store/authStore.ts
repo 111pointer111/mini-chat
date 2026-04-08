@@ -1,8 +1,7 @@
 import { create } from 'zustand';
 
 interface User {
-    id: string;
-    _id?: string; // Add optional _id for MongoDB compatibility
+    _id: string;
     username: string;
     email: string;
     avatar: string;

@@ -4,7 +4,7 @@ import Message from '../models/Message';
 export const getMessages = async (req: Request, res: Response) => {
     try {
         const { userId: otherUserId } = req.params;
-        const myId = (req as any).user.id;
+        const myId = req.user!.id;
 
         const messages = await Message.find({
             $or: [

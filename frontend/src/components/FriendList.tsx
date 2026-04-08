@@ -126,8 +126,8 @@ const FriendList: React.FC = () => {
             <List sx={{ flex: 1, overflowY: 'auto' }}>
                 {friends.map((friend) => (
                     <ListItemButton
-                        key={friend._id || friend.id}
-                        selected={selectedFriend?._id === friend._id || selectedFriend?.id === friend.id}
+                        key={friend._id}
+                        selected={selectedFriend?._id === friend._id}
                         onClick={() => selectFriend(friend)}
                     >
                         <ListItemAvatar>

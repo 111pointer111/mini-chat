@@ -19,7 +19,7 @@ export const getProviders = async (req: Request, res: Response) => {
 // Get user's selected provider
 export const getUserProvider = async (req: Request, res: Response) => {
     try {
-        const userId = (req as any).user.id;
+        const userId = req.user!.id;
         const user = await User.findById(userId).populate('selectedAIProvider', 'name modelName');
 
         if (!user) {
@@ -43,7 +43,7 @@ export const getUserProvider = async (req: Request, res: Response) => {
 // Set user's selected provider
 export const setUserProvider = async (req: Request, res: Response) => {
     try {
-        const userId = (req as any).user.id;
+        const userId = req.user!.id;
         const { providerId } = req.body;
 
         // Verify provider exists and is enabled

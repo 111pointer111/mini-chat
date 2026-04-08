@@ -36,7 +36,7 @@ export const register = async (req: Request, res: Response) => {
             message: 'User registered successfully',
             token,
             user: {
-                id: user._id,
+                _id: user._id.toString(),
                 username: user.username,
                 email: user.email,
                 role: user.role,
@@ -72,7 +72,7 @@ export const login = async (req: Request, res: Response) => {
             message: 'Login successful',
             token,
             user: {
-                id: user._id,
+                _id: user._id.toString(),
                 username: user.username,
                 email: user.email,
                 role: user.role,
@@ -88,14 +88,14 @@ export const login = async (req: Request, res: Response) => {
 export const getMe = async (req: Request, res: Response) => {
     try {
         // req.user is set by auth middleware
-        const user = await User.findById((req as any).user.id);
+        const user = await User.findById(req.user!.id);
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
 
         res.json({
             user: {
-                id: user._id,
+                _id: user._id.toString(),
                 username: user.username,
                 email: user.email,
                 phone: user.phone,
@@ -202,7 +202,7 @@ export const registerByPhone = async (req: Request, res: Response) => {
             message: '注册成功',
             token,
             user: {
-                id: user._id,
+                _id: user._id.toString(),
                 username: user.username,
                 phone: user.phone,
                 role: user.role,
@@ -242,7 +242,7 @@ export const loginByPhone = async (req: Request, res: Response) => {
             message: '登录成功',
             token,
             user: {
-                id: user._id,
+                _id: user._id.toString(),
                 username: user.username,
                 phone: user.phone,
                 role: user.role,
@@ -259,7 +259,7 @@ export const loginByPhone = async (req: Request, res: Response) => {
 export const bindPhone = async (req: Request, res: Response) => {
     try {
         const { phone, code } = req.body;
-        const userId = (req as any).user.id;
+        const userId = req.user!.id;
 
         if (!phone || !code) {
             return res.status(400).json({ message: '手机号和验证码不能为空' });
@@ -287,7 +287,7 @@ export const bindPhone = async (req: Request, res: Response) => {
         res.json({
             message: '绑定成功',
             user: {
-                id: user?._id,
+                _id: user?._id?.toString(),
                 username: user?.username,
                 phone: user?.phone,
                 role: user?.role,
