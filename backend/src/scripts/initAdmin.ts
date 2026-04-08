@@ -5,7 +5,15 @@ const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@minichat.com';
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 export const initAdmin = async () => {
+    // In production, require explicit env vars — no default credentials
+    if (isProduction && !process.env.ADMIN_USERNAME && !process.env.ADMIN_PASSWORD) {
+        console.error('❌ ADMIN_USERNAME and ADMIN_PASSWORD environment variables are required in production');
+        return;
+    }
+
     try {
         const existingAdmin = await User.findOne({ role: 'admin' });
         if (existingAdmin) {
@@ -28,7 +36,7 @@ export const initAdmin = async () => {
             provider: 'local',
         });
         await admin.save();
-        console.log(`✅ Created admin user: ${ADMIN_USERNAME} / ${ADMIN_PASSWORD}`);
+        console.log(`✅ Created admin user: ${ADMIN_USERNAME}`);
     } catch (error) {
         console.error('❌ Failed to init admin:', error);
     }
