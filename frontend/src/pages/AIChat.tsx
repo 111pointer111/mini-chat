@@ -23,8 +23,9 @@ import {
     DialogContent,
     DialogActions,
     Button,
+    Collapse,
 } from '@mui/material';
-import { ArrowBack, Send, SmartToy, Person, AutoAwesome, Add, Delete, Chat, Menu, Edit } from '@mui/icons-material';
+import { ArrowBack, Send, SmartToy, Person, AutoAwesome, Add, Delete, Chat, Menu, Edit, ExpandMore, ExpandLess } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
@@ -35,6 +36,7 @@ interface Message {
     id: string;
     role: 'user' | 'assistant';
     content: string;
+    thinking?: string;
     pendingTask?: boolean;
     taskCreated?: boolean;
     createdAt?: string;
@@ -54,6 +56,17 @@ interface Conversation {
 }
 
 const DRAWER_WIDTH = 280;
+
+// Strip <think>...</think> tags and extract thinking content
+const parseAIResponse = (content: string): { main: string; thinking?: string } => {
+    const thinkMatch = content.match(/<think>([\s\S]*?)<\/think>/);
+    if (thinkMatch) {
+        const thinking = thinkMatch[1].trim();
+        const main = content.replace(/<think>[\s\S]*?<\/think>/, '').trim();
+        return { main, thinking };
+    }
+    return { main: content };
+};
 
 const AI_ASSISTANT_ID = '000000000000000000000001';
 const WELCOME_MESSAGE: Message = {
@@ -78,6 +91,7 @@ const AIChat: React.FC = () => {
     const [editingName, setEditingName] = useState('');
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [convToDelete, setConvToDelete] = useState<string | null>(null);
+    const [expandedThink, setExpandedThink] = useState<Record<string, boolean>>({});
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const scrollToBottom = () => {
@@ -103,12 +117,16 @@ const AIChat: React.FC = () => {
             const url = convId ? `/ai-chat/history/${convId}` : '/ai-chat/history';
             const res = await api.get(url);
             if (res.data.messages && res.data.messages.length > 0) {
-                const historyMessages: Message[] = res.data.messages.map((msg: BackendMessage) => ({
-                    id: msg._id,
-                    role: msg.sender === AI_ASSISTANT_ID ? 'assistant' : 'user',
-                    content: msg.content,
-                    createdAt: msg.createdAt,
-                }));
+                const historyMessages: Message[] = res.data.messages.map((msg: BackendMessage) => {
+                    const { main, thinking } = parseAIResponse(msg.content);
+                    return {
+                        id: msg._id,
+                        role: msg.sender === AI_ASSISTANT_ID ? 'assistant' : 'user',
+                        content: main,
+                        thinking,
+                        createdAt: msg.createdAt,
+                    };
+                });
                 setMessages(historyMessages);
                 setCurrentConversationId(res.data.conversationId);
             } else {
@@ -488,6 +506,57 @@ const AIChat: React.FC = () => {
                                             />
                                         )}
                                         <ReactMarkdown>{message.content}</ReactMarkdown>
+                                        {message.thinking && (
+                                            <Box sx={{ mt: 1 }}>
+                                                <Box
+                                                    sx={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: 0.5,
+                                                        cursor: 'pointer',
+                                                        color: 'text.secondary',
+                                                        '&:hover': { color: 'primary.main' },
+                                                    }}
+                                                    onClick={() =>
+                                                        setExpandedThink((prev) => ({
+                                                            ...prev,
+                                                            [message.id]: !prev[message.id],
+                                                        }))
+                                                    }
+                                                >
+                                                    {expandedThink[message.id] ? (
+                                                        <ExpandLess fontSize="small" />
+                                                    ) : (
+                                                        <ExpandMore fontSize="small" />
+                                                    )}
+                                                    <Typography variant="caption">
+                                                        {expandedThink[message.id] ? '隐藏思考过程' : '查看思考过程'}
+                                                    </Typography>
+                                                </Box>
+                                                <Collapse in={expandedThink[message.id]}>
+                                                    <Box
+                                                        sx={{
+                                                            mt: 1,
+                                                            p: 1.5,
+                                                            bgcolor: alpha(theme.palette.primary.main, 0.05),
+                                                            border: '1px solid',
+                                                            borderColor: alpha(theme.palette.primary.main, 0.15),
+                                                            borderRadius: 1,
+                                                        }}
+                                                    >
+                                                        <Typography
+                                                            variant="caption"
+                                                            sx={{ fontWeight: 600, color: 'primary.main', mb: 0.5, display: 'block', fontSize: '0.75rem' }}
+                                                        >
+                                                            💭 思考过程
+                                                        </Typography>
+                                                        <Typography variant="caption" sx={{ color: 'text.secondary', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: '0.75rem' }}>
+                                                            {message.thinking}
+                                                        </Typography>
+                                                    </Box>
+                                                </Collapse>
+                                            </Box>
+                                        )}
                                         {message.createdAt && (
                                             <Typography 
                                                 variant="caption" 
