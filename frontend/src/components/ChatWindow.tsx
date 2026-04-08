@@ -90,27 +90,46 @@ const ChatWindow: React.FC = () => {
 
 
     const handleSend = () => {
-        if (!inputText.trim() || !selectedFriend || !socket) return;
+        if (!inputText.trim() || !selectedFriend || !socket || !user) return;
 
-        // Optimistic UI update (optional, but good for UX)
-        // Actually, we'll wait for server ack or just emit and assume success for now
-        // socket.emit is void, so we rely on receive_message or we just append it locally if we trust connection
-
-        // Let's emit
         const friendId = selectedFriend._id;
+        const tempId = `temp-${Date.now()}`;
+        const optimisticMessage: Message = {
+            _id: tempId,
+            sender: user!._id,
+            receiver: friendId,
+            content: inputText,
+            type: 'text',
+            createdAt: new Date().toISOString(),
+        };
+
+        // Optimistic UI: append immediately
+        useChatStore.setState((state) => ({
+            messages: [...state.messages, optimisticMessage],
+        }));
+        setInputText('');
+
+        // Send with ack callback
         socket.emit('send_message', {
             receiverId: friendId,
             content: inputText,
             type: 'text'
+        }, (ack: { success: boolean; error?: string; messageId?: string }) => {
+            if (!ack?.success) {
+                // Remove optimistic message on failure
+                useChatStore.setState((state) => ({
+                    messages: state.messages.filter((m) => m._id !== tempId),
+                }));
+                console.error('Failed to send message:', ack?.error);
+            } else if (ack?.messageId) {
+                // Replace optimistic message with real one
+                useChatStore.setState((state) => ({
+                    messages: state.messages.map((m) =>
+                        m._id === tempId ? { ...m, _id: ack.messageId! } : m
+                    ),
+                }));
+            }
         });
-
-        // In a real app, we might want to append locally immediately
-        // But since our server broadcasts back to sender too (based on room logic), we might get duplicate
-        // Let's see our backend implementation: io.to(roomId).emit
-        // roomId includes both users. So sender WILL receive it. 
-        // So we DON'T append locally here to avoid duplicate.
-
-        setInputText('');
     };
 
     if (!selectedFriend && !selectedTaskType) {

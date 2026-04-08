@@ -48,8 +48,15 @@ export const setupSocket = (io: Server) => {
         });
 
         // Handle sending messages
-        socket.on('send_message', async (data) => {
+        socket.on('send_message', async (data, callback) => {
             const { receiverId, content, type = 'text' } = data;
+
+            if (!receiverId || !content) {
+                if (typeof callback === 'function') {
+                    callback({ success: false, error: 'Invalid message data' });
+                }
+                return;
+            }
 
             try {
                 // Save to database
@@ -63,12 +70,16 @@ export const setupSocket = (io: Server) => {
                 // Emit to receiver's personal room
                 io.to(receiverId).emit('receive_message', newMessage);
 
-                // Emit to sender's personal room (so they see it too via socket, or we can rely on optimistic UI)
-                // Ideally sender should get ack, but emitting back is fine for consistency
-                io.to(userId).emit('receive_message', newMessage);
+                // Acknowledge to sender with the real message ID
+                if (typeof callback === 'function') {
+                    callback({ success: true, messageId: newMessage._id.toString() });
+                }
 
             } catch (error) {
                 console.error('Socket message error:', error);
+                if (typeof callback === 'function') {
+                    callback({ success: false, error: 'Failed to send message' });
+                }
             }
         });
 
