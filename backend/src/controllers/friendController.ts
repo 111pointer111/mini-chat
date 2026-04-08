@@ -72,24 +72,52 @@ export const getFriends = async (req: Request, res: Response) => {
     try {
         const userId = req.user!.id;
 
-        const friendships = await Friendship.find({
-            $or: [
-                { requester: userId, status: 'accepted' },
-                { recipient: userId, status: 'accepted' }
-            ]
-        }).populate('requester', 'username email avatar')
-            .populate('recipient', 'username email avatar');
-
-        // Format the response to return a list of friend users
-        const friends = friendships.map(f => {
-            if (f.requester._id.toString() === userId) {
-                return f.recipient;
-            } else {
-                return f.requester;
+        // Use aggregation pipeline to avoid N+1 populate overhead
+        const friendships = await Friendship.aggregate([
+            {
+                $match: {
+                    $or: [
+                        { requester: new mongoose.Types.ObjectId(userId), status: 'accepted' },
+                        { recipient: new mongoose.Types.ObjectId(userId), status: 'accepted' }
+                    ]
+                }
+            },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'requester',
+                    foreignField: '_id',
+                    as: 'requesterData'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'recipient',
+                    foreignField: '_id',
+                    as: 'recipientData'
+                }
+            },
+            {
+                $project: {
+                    friend: {
+                        $cond: {
+                            if: { $eq: [{ $arrayElemAt: ['$requesterData._id', 0] }, new mongoose.Types.ObjectId(userId)] },
+                            then: { $arrayElemAt: ['$recipientData', 0] },
+                            else: { $arrayElemAt: ['$requesterData', 0] }
+                        }
+                    }
+                }
+            },
+            {
+                $replaceRoot: { newRoot: '$friend' }
+            },
+            {
+                $project: { password: 0 }
             }
-        });
+        ]);
 
-        res.json(friends);
+        res.json(friendships);
     } catch (error) {
         console.error('Get friends error:', error);
         res.status(500).json({ message: 'Server error' });
@@ -100,11 +128,40 @@ export const getPendingRequests = async (req: Request, res: Response) => {
     try {
         const userId = req.user!.id;
 
-        // Incoming requests
-        const requests = await Friendship.find({
-            recipient: userId,
-            status: 'pending'
-        }).populate('requester', 'username email avatar');
+        // Use aggregation pipeline for consistency
+        const requests = await Friendship.aggregate([
+            {
+                $match: {
+                    recipient: new mongoose.Types.ObjectId(userId),
+                    status: 'pending'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'requester',
+                    foreignField: '_id',
+                    as: 'requesterData'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'recipient',
+                    foreignField: '_id',
+                    as: 'recipientData'
+                }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    requester: { $arrayElemAt: ['$requesterData', 0] },
+                    recipient: { $arrayElemAt: ['$recipientData', 0] },
+                    status: 1,
+                    createdAt: 1
+                }
+            }
+        ]);
 
         res.json(requests);
     } catch (error) {
