@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { io } from 'socket.io-client';
 import {
     Box,
     Typography,
@@ -31,6 +32,7 @@ import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import api from '../services/api';
 import AIProviderSelector from '../components/AIProviderSelector';
+import { useSocketStore } from '../store/socketStore';
 
 interface Message {
     id: string;
@@ -92,7 +94,12 @@ const AIChat: React.FC = () => {
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [convToDelete, setConvToDelete] = useState<string | null>(null);
     const [expandedThink, setExpandedThink] = useState<Record<string, boolean>>({});
+    const [isStreaming, setIsStreaming] = useState(false);
+    const [streamingStatus, setStreamingStatus] = useState<string>('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const socketRef = useRef<ReturnType<typeof io> | null>(null);
+    const streamingMessageIdRef = useRef<string | null>(null);
+    const isStreamingRef = useRef(false);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -141,6 +148,79 @@ const AIChat: React.FC = () => {
     useEffect(() => {
         loadConversations();
         loadHistory();
+    }, []);
+
+    // Socket 初始化和 AI 流式监听
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const { socket: authSocket } = useSocketStore.getState();
+        let socket = authSocket;
+        if (!socket) {
+            socket = io('', { auth: { token }, reconnection: true });
+            socketRef.current = socket;
+        } else {
+            socketRef.current = socket;
+        }
+
+        socket.on('ai_stream_status', (data: { status: string }) => {
+            setStreamingStatus(data.status);
+        });
+
+        socket.on('ai_stream', (data: { content: string; done: boolean }) => {
+            if (data.done) {
+                setMessages((prev) => {
+                    if (!streamingMessageIdRef.current) return prev;
+                    return prev.map((msg) => {
+                        if (msg.id === streamingMessageIdRef.current) {
+                            const { main, thinking } = parseAIResponse(msg.content);
+                            return { ...msg, content: main, thinking };
+                        }
+                        return msg;
+                    });
+                });
+                isStreamingRef.current = false;
+                setIsStreaming(false);
+                
+                streamingMessageIdRef.current = null;
+                setStreamingStatus('');
+            } else {
+                setMessages((prev) => {
+                    if (!streamingMessageIdRef.current) return prev;
+                    return prev.map((msg) =>
+                        msg.id === streamingMessageIdRef.current
+                            ? { ...msg, content: msg.content + data.content }
+                            : msg
+                    );
+                });
+            }
+        });
+
+        socket.on('ai_stream_error', (data: { error: string }) => {
+            setMessages((prev) => {
+                const withoutStreaming = prev.filter((m) => m.id !== streamingMessageIdRef.current);
+                return [
+                    ...withoutStreaming,
+                    {
+                        id: (Date.now() + 1).toString(),
+                        role: 'assistant' as const,
+                        content: data.error,
+                    },
+                ];
+            });
+            isStreamingRef.current = false;
+            setIsStreaming(false);
+            
+            streamingMessageIdRef.current = null;
+            setStreamingStatus('');
+        });
+
+        return () => {
+            socket!.off('ai_stream_status');
+            socket!.off('ai_stream');
+            socket!.off('ai_stream_error');
+        };
     }, []);
 
     const getUserTimezone = () => {
@@ -226,46 +306,93 @@ const AIChat: React.FC = () => {
             createdAt: new Date().toISOString(),
         };
 
-        setMessages((prev) => [...prev, userMessage]);
+        const streamId = (Date.now() + 1).toString();
+        const assistantMessage: Message = {
+            id: streamId,
+            role: 'assistant',
+            content: '',
+            createdAt: new Date().toISOString(),
+        };
+
+        setMessages((prev) => [...prev, userMessage, assistantMessage]);
         setInput('');
         setLoading(true);
+        setIsStreaming(true);
+        
+        streamingMessageIdRef.current = streamId;
+        isStreamingRef.current = true;
+        setStreamingStatus('thinking');
         setError('');
 
-        try {
-            const res = await api.post('/ai-chat', {
+        // 通过 Socket.IO 流式发送
+        const socket = socketRef.current || useSocketStore.getState().socket;
+        if (socket) {
+            socket.emit('ai_chat_stream', {
                 message: userMessage.content,
                 timezone: getUserTimezone(),
                 conversationId: currentConversationId,
+            }, (response: { success: boolean; conversationId?: string; error?: string }) => {
+                if (!response.success) {
+                    setMessages((prev) => {
+                        const filtered = prev.filter((m) => m.id !== streamId);
+                        return [
+                            ...filtered,
+                            { id: (Date.now() + 1).toString(), role: 'assistant' as const, content: response.error || '发送失败' },
+                        ];
+                    });
+                    isStreamingRef.current = false;
+                    setIsStreaming(false);
+                    
+                    streamingMessageIdRef.current = null;
+                    setStreamingStatus('');
+                } else if (response.conversationId && !currentConversationId) {
+                    setCurrentConversationId(response.conversationId);
+                }
             });
-
-            const assistantMessage: Message = {
-                id: (Date.now() + 1).toString(),
-                role: 'assistant',
-                content: res.data.reply,
-                pendingTask: res.data.pendingTask,
-                taskCreated: res.data.taskCreated,
-                createdAt: new Date().toISOString(),
-            };
-
-            setMessages((prev) => [...prev, assistantMessage]);
-
-            if (res.data.taskCreated) {
-                // Task was created, show success notification
-                setTimeout(() => {
-                    setMessages((prev) => [
-                        ...prev,
+        } else {
+            // fallback 到 REST API
+            try {
+                const res = await api.post('/ai-chat', {
+                    message: userMessage.content,
+                    timezone: getUserTimezone(),
+                    conversationId: currentConversationId,
+                });
+                const { main, thinking } = parseAIResponse(res.data.reply);
+                setMessages((prev) => {
+                    const filtered = prev.filter((m) => m.id === streamId);
+                    return [
+                        ...filtered,
                         {
-                            id: (Date.now() + 2).toString(),
+                            id: streamId,
                             role: 'assistant',
-                            content: '💡 你可以在「定时任务设置」页面查看和管理所有任务。',
+                            content: main,
+                            thinking,
+                            pendingTask: res.data.pendingTask,
+                            taskCreated: res.data.taskCreated,
+                            createdAt: new Date().toISOString(),
                         },
-                    ]);
-                }, 1000);
+                    ];
+                });
+                if (res.data.taskCreated) {
+                    setTimeout(() => {
+                        setMessages((prev) => [
+                            ...prev,
+                            { id: (Date.now() + 2).toString(), role: 'assistant' as const, content: '💡 你可以在「定时任务设置」页面查看和管理所有任务。' },
+                        ]);
+                    }, 1000);
+                }
+            } catch {
+                setMessages((prev) => {
+                    const filtered = prev.filter((m) => m.id === streamId);
+                    return [...filtered, { id: (Date.now() + 1).toString(), role: 'assistant' as const, content: '发送失败，请重试' }];
+                });
+            } finally {
+                isStreamingRef.current = false;
+                setIsStreaming(false);
+                
+                streamingMessageIdRef.current = null;
+                setStreamingStatus('');
             }
-        } catch (err) {
-            setError('发送失败，请重试');
-        } finally {
-            setLoading(false);
         }
     };
 
@@ -505,9 +632,8 @@ const AIChat: React.FC = () => {
                                                 sx={{ mb: 1, bgcolor: alpha('#52c41a', 0.1), color: '#52c41a' }}
                                             />
                                         )}
-                                        <ReactMarkdown>{message.content}</ReactMarkdown>
                                         {message.thinking && (
-                                            <Box sx={{ mt: 1 }}>
+                                            <Box sx={{ mb: message.content ? 1 : 0 }}>
                                                 <Box
                                                     sx={{
                                                         display: 'flex',
@@ -550,12 +676,27 @@ const AIChat: React.FC = () => {
                                                         >
                                                             💭 思考过程
                                                         </Typography>
-                                                        <Typography variant="caption" sx={{ color: 'text.secondary', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: '0.75rem' }}>
+                                                        <Typography
+                                                            variant="caption"
+                                                            sx={{
+                                                                color: 'text.secondary',
+                                                                whiteSpace: 'pre-wrap',
+                                                                wordBreak: 'break-word',
+                                                                fontSize: '0.75rem',
+                                                            }}
+                                                        >
                                                             {message.thinking}
                                                         </Typography>
                                                     </Box>
                                                 </Collapse>
                                             </Box>
+                                        )}
+                                        {message.content ? (
+                                            <ReactMarkdown>{message.content}</ReactMarkdown>
+                                        ) : (
+                                            <Typography sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
+                                                ...
+                                            </Typography>
                                         )}
                                         {message.createdAt && (
                                             <Typography 
@@ -593,7 +734,7 @@ const AIChat: React.FC = () => {
                         ))}
                     </AnimatePresence>
 
-                    {loading && (
+                    {(loading || isStreaming) && (
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
                             <Box
                                 sx={{
@@ -618,7 +759,17 @@ const AIChat: React.FC = () => {
                                     borderColor: 'divider',
                                 }}
                             >
-                                <CircularProgress size={20} />
+                                {isStreaming ? (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <SmartToy sx={{ color: 'primary.main', fontSize: 18 }} />
+                                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                            AI 正在输入
+                                            {streamingStatus === 'thinking' ? ' ···' : ''}
+                                        </Typography>
+                                    </Box>
+                                ) : (
+                                    <CircularProgress size={20} />
+                                )}
                             </Paper>
                         </Box>
                     )}
@@ -645,7 +796,7 @@ const AIChat: React.FC = () => {
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyPress={handleKeyPress}
-                        disabled={loading}
+                        disabled={loading || isStreaming}
                         multiline
                         maxRows={4}
                         sx={{
@@ -660,7 +811,7 @@ const AIChat: React.FC = () => {
                     <IconButton
                         color="primary"
                         onClick={handleSend}
-                        disabled={!input.trim() || loading}
+                        disabled={!input.trim() || loading || isStreaming}
                         sx={{
                             flexShrink: 0,
                             bgcolor: 'primary.main',

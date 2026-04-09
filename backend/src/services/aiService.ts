@@ -147,6 +147,51 @@ export const generateDailyEnglish = async (excludeList: string[] = [], userId?: 
     return generateContent(prompt, systemInstruction, userId);
 };
 
+// 带历史记录的聊天（流式）
+export const chatWithHistoryStream = async function* (
+    history: ChatMessage[],
+    newMessage: string,
+    userId?: string,
+    systemPrompt?: string
+): AsyncGenerator<string, string, void> {
+    const config = await getUserAIConfig(userId);
+    const client = getClient(config);
+
+    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [];
+
+    const defaultSystemPrompt = `你是一个友好、专业的 AI 助手。你可以帮助用户：
+1. 回答各种问题
+2. 创建定时推送任务（当用户说"每天XX点推送/提醒我..."时）
+3. 进行日常对话
+
+请用中文回复，保持友好和专业。`;
+
+    messages.push({ role: 'system', content: systemPrompt || defaultSystemPrompt });
+
+    for (const msg of history) {
+        messages.push({ role: msg.role, content: msg.content });
+    }
+
+    messages.push({ role: 'user', content: newMessage });
+
+    const stream = await client.chat.completions.create({
+        model: config.model,
+        messages,
+        stream: true,
+    });
+
+    let fullContent = '';
+    for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content;
+        if (content) {
+            fullContent += content;
+            yield content;
+        }
+    }
+
+    return fullContent;
+};
+
 // 普通聊天
 export const chat = async (message: string, systemPrompt?: string): Promise<string> => {
     return generateContent(message, systemPrompt);
@@ -282,6 +327,7 @@ export default {
     generateDailyEnglish,
     chat,
     chatWithHistory,
+    chatWithHistoryStream,
     generateCustomContent,
     parseTaskIntent,
 };
