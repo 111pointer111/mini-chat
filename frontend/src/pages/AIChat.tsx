@@ -100,6 +100,7 @@ const AIChat: React.FC = () => {
     const socketRef = useRef<ReturnType<typeof io> | null>(null);
     const streamingMessageIdRef = useRef<string | null>(null);
     const isStreamingRef = useRef(false);
+    const streamingRawRef = useRef<string>(''); // 追踪流式接收的原始内容（含 <think> 标签）
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -170,11 +171,24 @@ const AIChat: React.FC = () => {
 
         socket.on('ai_stream', (data: { content: string; done: boolean }) => {
             if (data.done) {
+                // 流式结束：用完整原始内容更新 message（包含 thinking），确保思考过程正确显示
+                if (streamingMessageIdRef.current && streamingRawRef.current) {
+                    const { main, thinking } = parseAIResponse(streamingRawRef.current);
+                    setMessages((prev) =>
+                        prev.map((msg) => {
+                            if (msg.id !== streamingMessageIdRef.current) return msg;
+                            return { ...msg, content: main, thinking };
+                        })
+                    );
+                }
+                streamingRawRef.current = '';
                 isStreamingRef.current = false;
                 setIsStreaming(false);
                 streamingMessageIdRef.current = null;
                 setStreamingStatus('');
             } else {
+                // 累积原始内容（含 <think> 标签）
+                streamingRawRef.current += data.content;
                 setMessages((prev) => {
                     if (!streamingMessageIdRef.current) return prev;
                     return prev.map((msg) => {
@@ -332,12 +346,14 @@ const AIChat: React.FC = () => {
                     });
                     isStreamingRef.current = false;
                     setIsStreaming(false);
-                    
+
                     streamingMessageIdRef.current = null;
                     setStreamingStatus('');
                 } else if (response.conversationId && !currentConversationId) {
                     setCurrentConversationId(response.conversationId);
                 }
+                // 注意：socket 路径的 reply 通过 ai_stream 事件和 done: true 来更新消息
+                // 这里只处理 conversationId 状态，消息内容由 done: true 处理
             });
         } else {
             // fallback 到 REST API
