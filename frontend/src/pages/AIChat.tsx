@@ -101,6 +101,7 @@ const AIChat: React.FC = () => {
     const streamingMessageIdRef = useRef<string | null>(null);
     const isStreamingRef = useRef(false);
     const streamingRawRef = useRef<string>(''); // 追踪流式接收的原始内容（含 <think> 标签）
+    const pendingThinkingRef = useRef<string>(''); // 追踪尚未闭合的 thinking 内容
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -171,7 +172,7 @@ const AIChat: React.FC = () => {
 
         socket.on('ai_stream', (data: { content: string; done: boolean }) => {
             if (data.done) {
-                // 流式结束：用完整原始内容更新 message（包含 thinking），确保思考过程正确显示
+                // 流式结束：用完整原始内容更新 message，确保 thinking 正确解析
                 if (streamingMessageIdRef.current && streamingRawRef.current) {
                     const { main, thinking } = parseAIResponse(streamingRawRef.current);
                     setMessages((prev) =>
@@ -182,20 +183,41 @@ const AIChat: React.FC = () => {
                     );
                 }
                 streamingRawRef.current = '';
+                pendingThinkingRef.current = '';
                 isStreamingRef.current = false;
                 setIsStreaming(false);
                 streamingMessageIdRef.current = null;
                 setStreamingStatus('');
             } else {
-                // 累积原始内容（含 <think> 标签）
+                // 累积原始内容
                 streamingRawRef.current += data.content;
+
+                // 追加到 pending thinking（如果处于 thinking 块中）
+                pendingThinkingRef.current += data.content;
+
                 setMessages((prev) => {
                     if (!streamingMessageIdRef.current) return prev;
                     return prev.map((msg) => {
                         if (msg.id !== streamingMessageIdRef.current) return msg;
+
                         const newRaw = msg.content + data.content;
                         const { main, thinking } = parseAIResponse(newRaw);
-                        return { ...msg, content: main, thinking };
+
+                        // 如果当前没有 thinking，检查 pending 中是否已找到完整的 <think>...</think>
+                        let finalThinking = thinking;
+                        if (!finalThinking && pendingThinkingRef.current) {
+                            const completeMatch = pendingThinkingRef.current.match(/<think>([\s\S]*?)<\/think>/);
+                            if (completeMatch) {
+                                finalThinking = completeMatch[1].trim();
+                            }
+                        }
+
+                        // 如果本 chunk 包含 </think>，清空 pending
+                        if (data.content.includes('</think>')) {
+                            pendingThinkingRef.current = '';
+                        }
+
+                        return { ...msg, content: main, thinking: finalThinking };
                     });
                 });
             }
