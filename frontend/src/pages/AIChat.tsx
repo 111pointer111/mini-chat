@@ -170,29 +170,19 @@ const AIChat: React.FC = () => {
 
         socket.on('ai_stream', (data: { content: string; done: boolean }) => {
             if (data.done) {
-                setMessages((prev) => {
-                    if (!streamingMessageIdRef.current) return prev;
-                    return prev.map((msg) => {
-                        if (msg.id === streamingMessageIdRef.current) {
-                            const { main, thinking } = parseAIResponse(msg.content);
-                            return { ...msg, content: main, thinking };
-                        }
-                        return msg;
-                    });
-                });
                 isStreamingRef.current = false;
                 setIsStreaming(false);
-                
                 streamingMessageIdRef.current = null;
                 setStreamingStatus('');
             } else {
                 setMessages((prev) => {
                     if (!streamingMessageIdRef.current) return prev;
-                    return prev.map((msg) =>
-                        msg.id === streamingMessageIdRef.current
-                            ? { ...msg, content: msg.content + data.content }
-                            : msg
-                    );
+                    return prev.map((msg) => {
+                        if (msg.id !== streamingMessageIdRef.current) return msg;
+                        const newRaw = msg.content + data.content;
+                        const { main, thinking } = parseAIResponse(newRaw);
+                        return { ...msg, content: main, thinking };
+                    });
                 });
             }
         });
