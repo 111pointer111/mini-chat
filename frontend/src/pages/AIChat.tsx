@@ -186,6 +186,7 @@ const AIChat: React.FC = () => {
                 pendingThinkingRef.current = '';
                 isStreamingRef.current = false;
                 setIsStreaming(false);
+                setLoading(false);
                 streamingMessageIdRef.current = null;
                 setStreamingStatus('');
             } else {
@@ -237,7 +238,8 @@ const AIChat: React.FC = () => {
             });
             isStreamingRef.current = false;
             setIsStreaming(false);
-            
+            setLoading(false);
+
             streamingMessageIdRef.current = null;
             setStreamingStatus('');
         });
@@ -376,6 +378,7 @@ const AIChat: React.FC = () => {
                 }
                 // 注意：socket 路径的 reply 通过 ai_stream 事件和 done: true 来更新消息
                 // 这里只处理 conversationId 状态，消息内容由 done: true 处理
+                // setLoading(false) 也由 done: true 处理
             });
         } else {
             // fallback 到 REST API
@@ -417,7 +420,8 @@ const AIChat: React.FC = () => {
             } finally {
                 isStreamingRef.current = false;
                 setIsStreaming(false);
-                
+                setLoading(false);
+
                 streamingMessageIdRef.current = null;
                 setStreamingStatus('');
             }
