@@ -352,11 +352,11 @@ const AIChat: React.FC = () => {
         let uploadedImageUrls: string[] = [];
         if (pendingImages.length > 0) {
             try {
-                const uploadRes = await api.post('/upload/images', {
-                    images: pendingImages.map((f) => f),
-                }, {
-                    headers: { 'Content-Type': 'multipart/form-data' },
+                const formData = new FormData();
+                pendingImages.forEach((file) => {
+                    formData.append('images', file);
                 });
+                const uploadRes = await api.post('/upload/images', formData);
                 uploadedImageUrls = uploadRes.data.images.map((img: { url: string }) => img.url);
             } catch {
                 setError('图片上传失败');
