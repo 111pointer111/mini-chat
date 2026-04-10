@@ -2,7 +2,8 @@ import { Server, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import Message from '../models/Message';
 import mongoose from 'mongoose';
-import aiService, { ChatMessage } from '../services/aiService';
+import { ChatMessage } from '../services/aiService';
+import { runAgentStream } from '../services/agentService';
 import { AI_ASSISTANT_ID } from '../scripts/initAdmin';
 
 interface DecodedToken {
@@ -183,19 +184,24 @@ export const setupSocket = (io: Server) => {
                 // 发送 "思考中" 状态
                 socket.emit('ai_stream_status', { status: 'thinking' });
 
-                // 流式发送 AI 回复
+                // 使用 Agent 运行（支持工具调用）
                 let fullContent = '';
-                const stream = aiService.chatWithHistoryStream(history, message, userId);
-                for await (const chunk of stream) {
-                    fullContent += chunk;
-                    socket.emit('ai_stream', { content: chunk, done: false });
-                }
-                socket.emit('ai_stream', { content: '', done: true });
-
-                // 保存完整回复到数据库
-                if (fullContent) {
-                    await saveStreamMessage(userId, aiConversation._id as mongoose.Types.ObjectId, fullContent);
-                }
+                await runAgentStream(history, message, {
+                    userId,
+                    onChunk: (chunk) => {
+                        fullContent += chunk;
+                        socket.emit('ai_stream', { content: chunk, done: false });
+                    },
+                    onDone: async () => {
+                        socket.emit('ai_stream', { content: '', done: true });
+                        if (fullContent) {
+                            await saveStreamMessage(userId, aiConversation._id as mongoose.Types.ObjectId, fullContent);
+                        }
+                    },
+                    onError: (err) => {
+                        socket.emit('ai_stream_error', { error: err });
+                    },
+                });
 
             } catch (error) {
                 console.error('AI stream error:', error);

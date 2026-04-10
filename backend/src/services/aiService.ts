@@ -3,14 +3,14 @@ import AIProvider, { IAIProvider } from '../models/AIProvider';
 import User from '../models/User';
 
 // 支持的 AI 提供商配置
-interface AIConfig {
+export interface AIConfig {
     baseURL: string;
     apiKey: string;
     model: string;
 }
 
 // 获取用户的 AI 配置
-const getUserAIConfig = async (userId?: string): Promise<AIConfig> => {
+export const getUserAIConfig = async (userId?: string): Promise<AIConfig> => {
     // 如果有 userId，尝试获取用户选择的 provider
     if (userId) {
         const user = await User.findById(userId).populate('selectedAIProvider');
@@ -49,7 +49,7 @@ const getUserAIConfig = async (userId?: string): Promise<AIConfig> => {
 };
 
 // 创建 OpenAI 兼容客户端
-const getClient = (config: AIConfig) => {
+export const getClient = (config: AIConfig) => {
     return new OpenAI({
         baseURL: config.baseURL,
         apiKey: config.apiKey,
