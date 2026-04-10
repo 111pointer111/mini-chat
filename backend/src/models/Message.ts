@@ -6,6 +6,7 @@ export interface IMessage extends Document {
     conversationId?: mongoose.Types.ObjectId;
     content: string;
     type: 'text' | 'image' | 'system';
+    images?: string[]; // AI 对话中的图片 URL 列表
     read: boolean;
     createdAt: Date;
 }
@@ -16,6 +17,7 @@ const MessageSchema: Schema = new Schema({
     conversationId: { type: Schema.Types.ObjectId, ref: 'Conversation' },
     content: { type: String, required: true },
     type: { type: String, enum: ['text', 'image', 'system'], default: 'text' },
+    images: { type: [String], default: [] }, // AI 对话中的图片列表
     read: { type: Boolean, default: false }
 }, {
     timestamps: true

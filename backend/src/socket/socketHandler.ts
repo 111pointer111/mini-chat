@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import Message from '../models/Message';
 import mongoose from 'mongoose';
 import { ChatMessage } from '../services/aiService';
-import { runAgentStream } from '../services/agentService';
+import { runAgentStream, UserMessageInput } from '../services/agentService';
 import { AI_ASSISTANT_ID } from '../scripts/initAdmin';
 
 interface DecodedToken {
@@ -121,7 +121,7 @@ export const setupSocket = (io: Server) => {
 
         // AI 流式对话
         socket.on('ai_chat_stream', async (data, callback) => {
-            const { message, timezone, conversationId } = data;
+            const { message, images, timezone, conversationId } = data;
 
             if (!message) {
                 if (typeof callback === 'function') {
@@ -148,7 +148,7 @@ export const setupSocket = (io: Server) => {
                     aiConversation = await getOrCreateAIConversation(userId);
                 }
 
-                // 保存用户消息
+                // 保存用户消息（支持图片）
                 const userObjectId = new mongoose.Types.ObjectId(userId);
                 await Message.create({
                     sender: userObjectId,
@@ -156,6 +156,7 @@ export const setupSocket = (io: Server) => {
                     conversationId: aiConversation._id,
                     content: message,
                     type: 'text',
+                    images: images || [],
                 });
                 await Conversation.findByIdAndUpdate(aiConversation._id, { lastMessageAt: new Date() });
 
@@ -174,6 +175,7 @@ export const setupSocket = (io: Server) => {
                     .map((msg: any) => ({
                         role: msg.sender.toString() === AI_ASSISTANT_ID.toString() ? 'assistant' as const : 'user' as const,
                         content: msg.content,
+                        images: msg.images,
                     }));
 
                 // 先发送会话信息
@@ -184,9 +186,12 @@ export const setupSocket = (io: Server) => {
                 // 发送 "思考中" 状态
                 socket.emit('ai_stream_status', { status: 'thinking' });
 
-                // 使用 Agent 运行（支持工具调用）
+                // 构建消息输入（文本 + 可选图片）
+                const userInput: UserMessageInput = { text: message, images: images || [] };
+
+                // 使用 Agent 运行（支持工具调用 + 图片理解）
                 let fullContent = '';
-                await runAgentStream(history, message, {
+                await runAgentStream(history, userInput, {
                     userId,
                     onChunk: (chunk) => {
                         fullContent += chunk;

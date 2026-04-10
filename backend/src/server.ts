@@ -14,6 +14,8 @@ import messageRoutes from './routes/messageRoutes';
 import scheduledTaskRoutes from './routes/scheduledTaskRoutes';
 import aiChatRoutes from './routes/aiChatRoutes';
 import aiProviderRoutes from './routes/aiProviderRoutes';
+import uploadRoutes from './routes/uploadRoutes';
+import path from 'path';
 import { setupSocket } from './socket/socketHandler';
 import { startTaskScheduler } from './services/taskScheduler';
 import { createTaskWorker } from './services/taskQueue';
@@ -45,6 +47,9 @@ app.use(express.json());
 app.use(cors({ origin: ["http://localhost:5173", "http://localhost:5174", "http://localhost:5175"] }));
 app.use(helmet());
 app.use(morgan('dev'));
+
+// 静态文件服务（上传的图片）
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Rate limiting for auth endpoints (especially SMS)
 const authLimiter = rateLimit({
@@ -85,6 +90,7 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/scheduled-tasks', scheduledTaskRoutes);
 app.use('/api/ai-chat', aiChatRoutes);
 app.use('/api/ai-providers', aiProviderRoutes);
+app.use('/api/upload', uploadRoutes);
 
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date() });

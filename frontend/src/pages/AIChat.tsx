@@ -26,7 +26,7 @@ import {
     Button,
     Collapse,
 } from '@mui/material';
-import { ArrowBack, Send, SmartToy, Person, AutoAwesome, Add, Delete, Chat, Menu, Edit, ExpandMore, ExpandLess } from '@mui/icons-material';
+import { ArrowBack, Send, SmartToy, Person, AutoAwesome, Add, Delete, Chat, Menu, Edit, ExpandMore, ExpandLess, Image as ImageIcon, Close } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
@@ -38,6 +38,7 @@ interface Message {
     id: string;
     role: 'user' | 'assistant';
     content: string;
+    images?: string[];
     thinking?: string;
     pendingTask?: boolean;
     taskCreated?: boolean;
@@ -48,6 +49,7 @@ interface BackendMessage {
     _id: string;
     sender: string;
     content: string;
+    images?: string[];
     createdAt: string;
 }
 
@@ -96,7 +98,9 @@ const AIChat: React.FC = () => {
     const [expandedThink, setExpandedThink] = useState<Record<string, boolean>>({});
     const [isStreaming, setIsStreaming] = useState(false);
     const [streamingStatus, setStreamingStatus] = useState<string>('');
+    const [pendingImages, setPendingImages] = useState<File[]>([]); // 待发送的图片
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const imageInputRef = useRef<HTMLInputElement>(null);
     const socketRef = useRef<ReturnType<typeof io> | null>(null);
     const streamingMessageIdRef = useRef<string | null>(null);
     const isStreamingRef = useRef(false);
@@ -133,6 +137,7 @@ const AIChat: React.FC = () => {
                         role: msg.sender === AI_ASSISTANT_ID ? 'assistant' : 'user',
                         content: main,
                         thinking,
+                        images: msg.images || [],
                         createdAt: msg.createdAt,
                     };
                 });
@@ -325,7 +330,7 @@ const AIChat: React.FC = () => {
     };
 
     const handleSend = async () => {
-        if (!input.trim() || loading) return;
+        if (!input.trim() || loading || isStreaming) return;
 
         const userMessage: Message = {
             id: Date.now().toString(),
@@ -339,10 +344,44 @@ const AIChat: React.FC = () => {
             id: streamId,
             role: 'assistant',
             content: '',
+            images: [],
             createdAt: new Date().toISOString(),
         };
 
-        setMessages((prev) => [...prev, userMessage, assistantMessage]);
+        // 如果有图片，先上传
+        let uploadedImageUrls: string[] = [];
+        if (pendingImages.length > 0) {
+            try {
+                const uploadRes = await api.post('/upload/images', {
+                    images: pendingImages.map((f) => f),
+                }, {
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                });
+                uploadedImageUrls = uploadRes.data.images.map((img: { url: string }) => img.url);
+            } catch {
+                setError('图片上传失败');
+                isStreamingRef.current = false;
+                setIsStreaming(false);
+                setLoading(false);
+                return;
+            }
+        }
+
+        // 更新用户消息为带图片版本
+        const finalUserMessage: Message = {
+            id: userMessage.id + '-full',
+            role: 'user',
+            content: input.trim(),
+            images: uploadedImageUrls,
+            createdAt: userMessage.createdAt,
+        };
+
+        setMessages((prev) => {
+            // 替换占位消息为完整消息
+            const filtered = prev.filter((m) => m.id !== userMessage.id);
+            return [...filtered, finalUserMessage, assistantMessage];
+        });
+        setPendingImages([]);
         setInput('');
         setLoading(true);
         setIsStreaming(true);
@@ -356,7 +395,8 @@ const AIChat: React.FC = () => {
         const socket = socketRef.current || useSocketStore.getState().socket;
         if (socket) {
             socket.emit('ai_chat_stream', {
-                message: userMessage.content,
+                message: input.trim(),
+                images: uploadedImageUrls,
                 timezone: getUserTimezone(),
                 conversationId: currentConversationId,
             }, (response: { success: boolean; conversationId?: string; error?: string }) => {
@@ -433,6 +473,19 @@ const AIChat: React.FC = () => {
             e.preventDefault();
             handleSend();
         }
+    };
+
+    const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files) return;
+        const newFiles = Array.from(files).filter((f) => f.type.startsWith('image/'));
+        setPendingImages((prev) => [...prev, ...newFiles]);
+        // Reset input so same file can be selected again
+        e.target.value = '';
+    };
+
+    const removePendingImage = (index: number) => {
+        setPendingImages((prev) => prev.filter((_, i) => i !== index));
     };
 
     const drawerContent = (
@@ -730,6 +783,27 @@ const AIChat: React.FC = () => {
                                                 ...
                                             </Typography>
                                         )}
+                                        {/* Render images in user messages */}
+                                        {message.role === 'user' && message.images && message.images.length > 0 && (
+                                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
+                                                {message.images.map((imgUrl, idx) => (
+                                                    <Box
+                                                        key={idx}
+                                                        component="img"
+                                                        src={imgUrl}
+                                                        alt=""
+                                                        sx={{
+                                                            width: 120,
+                                                            height: 120,
+                                                            objectFit: 'cover',
+                                                            borderRadius: 1,
+                                                            cursor: 'pointer',
+                                                        }}
+                                                        onClick={() => window.open(imgUrl, '_blank')}
+                                                    />
+                                                ))}
+                                            </Box>
+                                        )}
                                         {message.createdAt && (
                                             <Typography 
                                                 variant="caption" 
@@ -821,39 +895,98 @@ const AIChat: React.FC = () => {
                     bgcolor: 'white',
                 }}
             >
-                <Box sx={{ maxWidth: 800, mx: 'auto', display: 'flex', gap: 1, alignItems: 'flex-end' }}>
-                    <TextField
-                        fullWidth
-                        placeholder="输入消息... (说「创建定时任务」可以创建个性化任务)"
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        onKeyPress={handleKeyPress}
-                        disabled={loading || isStreaming}
-                        multiline
-                        maxRows={4}
-                        sx={{
-                            '& .MuiOutlinedInput-root': {
-                                borderRadius: 2,
-                            },
-                        }}
-                    />
-                    <Box sx={{ flexShrink: 0 }}>
-                        <AIProviderSelector />
+                {/* Hidden file input */}
+                <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    ref={imageInputRef}
+                    onChange={handleImageSelect}
+                    style={{ display: 'none' }}
+                />
+                <Box sx={{ maxWidth: 800, mx: 'auto' }}>
+                    {/* Image preview chips */}
+                    {pendingImages.length > 0 && (
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1 }}>
+                            {pendingImages.map((file, idx) => (
+                                <Box
+                                    key={idx}
+                                    sx={{
+                                        position: 'relative',
+                                        width: 64,
+                                        height: 64,
+                                        borderRadius: 1,
+                                        overflow: 'hidden',
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                    }}
+                                >
+                                    <img
+                                        src={URL.createObjectURL(file)}
+                                        alt=""
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                    />
+                                    <IconButton
+                                        size="small"
+                                        onClick={() => removePendingImage(idx)}
+                                        sx={{
+                                            position: 'absolute',
+                                            top: 2,
+                                            right: 2,
+                                            bgcolor: 'rgba(0,0,0,0.5)',
+                                            color: 'white',
+                                            p: 0.25,
+                                            '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' },
+                                        }}
+                                    >
+                                        <Close sx={{ fontSize: 14 }} />
+                                    </IconButton>
+                                </Box>
+                            ))}
+                        </Box>
+                    )}
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-end' }}>
+                        {/* Image upload button */}
+                        <IconButton
+                            onClick={() => imageInputRef.current?.click()}
+                            disabled={loading || isStreaming}
+                            sx={{ flexShrink: 0 }}
+                        >
+                            <ImageIcon />
+                        </IconButton>
+                        <TextField
+                            fullWidth
+                            placeholder="输入消息... (说「创建定时任务」可以创建个性化任务)"
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            onKeyPress={handleKeyPress}
+                            disabled={loading || isStreaming}
+                            multiline
+                            maxRows={4}
+                            sx={{
+                                '& .MuiOutlinedInput-root': {
+                                    borderRadius: 2,
+                                },
+                            }}
+                        />
+                        <Box sx={{ flexShrink: 0 }}>
+                            <AIProviderSelector />
+                        </Box>
+                        <IconButton
+                            color="primary"
+                            onClick={handleSend}
+                            disabled={!input.trim() || loading || isStreaming}
+                            sx={{
+                                flexShrink: 0,
+                                bgcolor: 'primary.main',
+                                color: 'white',
+                                '&:hover': { bgcolor: 'primary.dark' },
+                                '&.Mui-disabled': { bgcolor: 'grey.300', color: 'grey.500' },
+                            }}
+                        >
+                            <Send />
+                        </IconButton>
                     </Box>
-                    <IconButton
-                        color="primary"
-                        onClick={handleSend}
-                        disabled={!input.trim() || loading || isStreaming}
-                        sx={{
-                            flexShrink: 0,
-                            bgcolor: 'primary.main',
-                            color: 'white',
-                            '&:hover': { bgcolor: 'primary.dark' },
-                            '&.Mui-disabled': { bgcolor: 'grey.300', color: 'grey.500' },
-                        }}
-                    >
-                        <Send />
-                    </IconButton>
                 </Box>
             </Paper>
             </Box>

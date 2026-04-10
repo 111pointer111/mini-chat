@@ -1,7 +1,7 @@
 /**
  * Agent 服务
  * 管理工具注册表，执行 ReAct 循环
- * 策略：先非流式跑通工具调用，再流式输出最终回复
+ * 支持图片消息
  */
 
 import { getWeather, weatherToolDefinition } from './getWeather';
@@ -9,6 +9,50 @@ import { ChatMessage, getUserAIConfig, getClient } from './aiService';
 import OpenAI from 'openai';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// 用户消息输入：支持纯文本或文本+多张图片
+export interface UserMessageInput {
+    text: string;
+    images?: string[]; // 图片 URL 列表
+}
+
+// 将用户消息转为 OpenAI 消息格式
+function buildUserMessage(input: UserMessageInput): OpenAI.Chat.ChatCompletionUserMessageParam {
+    if (!input.images || input.images.length === 0) {
+        return { role: 'user', content: input.text };
+    }
+
+    // 文本 + 图片的消息格式
+    const content: OpenAI.Chat.ChatCompletionContentPart[] = [
+        { type: 'text', text: input.text },
+    ];
+
+    for (const imageUrl of input.images) {
+        content.push({
+            type: 'image_url',
+            image_url: { url: imageUrl, detail: 'auto' },
+        });
+    }
+
+    return { role: 'user', content };
+}
+
+// 将历史消息转为 OpenAI 格式（支持图片）
+function buildHistoryMessages(history: ChatMessage[]): OpenAI.Chat.ChatCompletionMessageParam[] {
+    return history.map((msg) => {
+        if (msg.role === 'user' && 'images' in msg && Array.isArray(msg.images)) {
+            // 带图片的历史消息
+            const content: OpenAI.Chat.ChatCompletionContentPart[] = [
+                { type: 'text', text: msg.content },
+            ];
+            for (const imageUrl of msg.images as string[]) {
+                content.push({ type: 'image_url', image_url: { url: imageUrl } });
+            }
+            return { role: 'user' as const, content };
+        }
+        return { role: msg.role, content: msg.content } as OpenAI.Chat.ChatCompletionMessageParam;
+    });
+}
 
 export interface Tool {
     definition: {
@@ -60,14 +104,15 @@ interface RunAgentOptions {
 const MAX_ITERATIONS = 10;
 
 const SYSTEM_PROMPT = `你是一个友好、专业的 AI 助手。你可以帮助用户：
-1. 回答各种问题
+1. 回答各种问题，包括图片内容理解和分析
 2. 查询天气（当用户询问天气时，必须使用 get_weather 工具获取真实数据，不要编造天气信息）
 3. 创建定时推送任务（当用户说"每天XX点推送/提醒我..."时）
 4. 进行日常对话
 
 请用中文回复，保持友好和专业。
 重要提醒：当用户询问任何地点的天气时，必须调用 get_weather 工具获取实时数据。
-重要提醒：工具调用后会返回结果，请根据结果如实回答用户，不要添加虚假信息。`;
+重要提醒：工具调用后会返回结果，请根据结果如实回答用户，不要添加虚假信息。
+重要提醒：如果用户发送了图片，请仔细分析图片内容并给出准确的回答。`;
 
 /**
  * 运行 Agent
@@ -75,7 +120,7 @@ const SYSTEM_PROMPT = `你是一个友好、专业的 AI 助手。你可以帮�
  */
 export async function runAgent(
     history: ChatMessage[],
-    newMessage: string,
+    newMessage: UserMessageInput | string,
     options: RunAgentOptions = {}
 ): Promise<string> {
     const { userId } = options;
@@ -86,11 +131,14 @@ export async function runAgent(
         { role: 'system', content: SYSTEM_PROMPT },
     ];
 
-    for (const msg of history) {
-        messages.push({ role: msg.role, content: msg.content });
-    }
+    messages.push(...buildHistoryMessages(history));
 
-    messages.push({ role: 'user', content: newMessage });
+    // 处理新消息：可能是纯文本或文本+图片
+    if (typeof newMessage === 'string') {
+        messages.push({ role: 'user', content: newMessage });
+    } else {
+        messages.push(buildUserMessage(newMessage));
+    }
 
     let iterations = 0;
 
@@ -147,7 +195,7 @@ export async function runAgent(
  */
 export async function runAgentStream(
     history: ChatMessage[],
-    newMessage: string,
+    newMessage: UserMessageInput | string,
     options: RunAgentOptions & {
         onChunk?: (chunk: string) => void;
         onDone?: () => void;
@@ -164,11 +212,13 @@ export async function runAgentStream(
             { role: 'system', content: SYSTEM_PROMPT },
         ];
 
-        for (const msg of history) {
-            messages.push({ role: msg.role, content: msg.content });
-        }
+        messages.push(...buildHistoryMessages(history));
 
-        messages.push({ role: 'user', content: newMessage });
+        if (typeof newMessage === 'string') {
+            messages.push({ role: 'user', content: newMessage });
+        } else {
+            messages.push(buildUserMessage(newMessage));
+        }
 
         let iterations = 0;
 
