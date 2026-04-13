@@ -3,7 +3,7 @@
  */
 
 import { Router } from 'express';
-import { upload, getFileUrl } from '../services/fileService';
+import { upload, getFileUrl, getFileBase64 } from '../services/fileService';
 import { protect } from '../middleware/authMiddleware';
 
 const router = Router();
@@ -17,8 +17,10 @@ router.post('/image', protect, upload.single('image'), (req, res) => {
         }
 
         const url = getFileUrl(req.file.filename);
+        const base64 = getFileBase64(req.file.filename);
         res.json({
             url,
+            base64,
             filename: req.file.filename,
             originalName: req.file.originalname,
             size: req.file.size,
@@ -40,6 +42,7 @@ router.post('/images', protect, upload.array('images', 9), (req, res) => {
 
         const urls = files.map((file) => ({
             url: getFileUrl(file.filename),
+            base64: getFileBase64(file.filename),
             filename: file.filename,
             originalName: file.originalname,
             size: file.size,

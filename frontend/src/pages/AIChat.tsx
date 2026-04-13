@@ -350,6 +350,7 @@ const AIChat: React.FC = () => {
 
         // 如果有图片，先上传
         let uploadedImageUrls: string[] = [];
+        let uploadedImageBase64s: string[] = [];
         if (pendingImages.length > 0) {
             try {
                 const formData = new FormData();
@@ -358,6 +359,7 @@ const AIChat: React.FC = () => {
                 });
                 const uploadRes = await api.post('/upload/images', formData);
                 uploadedImageUrls = uploadRes.data.images.map((img: { url: string }) => img.url);
+                uploadedImageBase64s = uploadRes.data.images.map((img: { base64: string }) => img.base64);
             } catch {
                 setError('图片上传失败');
                 isStreamingRef.current = false;
@@ -396,7 +398,7 @@ const AIChat: React.FC = () => {
         if (socket) {
             socket.emit('ai_chat_stream', {
                 message: input.trim(),
-                images: uploadedImageUrls,
+                images: uploadedImageBase64s,
                 timezone: getUserTimezone(),
                 conversationId: currentConversationId,
             }, (response: { success: boolean; conversationId?: string; error?: string }) => {

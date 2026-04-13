@@ -39,13 +39,17 @@ docker compose -f docker-compose.prod.yml --env-file .env.production up  # Full 
 
 **Socket.IO** (`socket/`): Singleton pattern — `socket/index.ts` exports `getIO()` which returns the initialized io instance. Socket auth uses JWT from `socket.handshake.auth.token`. Key events: `join_room`, `send_message` (friend chat only). WebSocket pushes are used for scheduled task results.
 
-**AI Service** (`services/aiService.ts`): OpenAI-compatible client. Config resolution order:
-1. User's `selectedAIProvider` (from `AIProvider` collection)
+**AI Service** (`services/aiService.ts`): OpenAI-compatible client with streaming support. Config resolution order:
+1. User's `selectedAIProvider` (from `AIProvider` collection, field: `modelName`)
 2. Default `AIProvider` (marked `isDefault: true`)
 3. Environment variables (`AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL`)
-Supports any OpenAI-compatible API (OpenAI, Claude via Anthropic proxy, DeepSeek, etc.).
+Supports any OpenAI-compatible API. Includes Agent ReAct loop with tool calling (e.g., weather queries) and image upload support.
 
-**Scheduled Tasks**: `taskScheduler.ts` uses `node-cron` (every minute) to check enabled tasks against user timezone. `taskQueue.ts` uses BullMQ with Redis for job processing. AI content is generated via `aiService`, results pushed via WebSocket.
+**Agent Service** (`services/agentService.ts`): Implements the AI agent loop with tool registration and execution.
+
+**File Service** (`services/fileService.ts`): Handles file uploads (used for AI image understanding).
+
+**Scheduled Tasks**: `taskScheduler.ts` uses `node-cron` (every minute) to check enabled tasks against user timezone. `taskQueue.ts` uses BullMQ with Redis for job processing. Task plugins are registered via a `TaskRegistry` pattern. AI content is generated via `aiService`, results pushed via WebSocket.
 
 **Key Models**: `User`, `Message`, `Conversation`, `Friendship`, `ScheduledTask`, `AIProvider`, `PushHistory`
 

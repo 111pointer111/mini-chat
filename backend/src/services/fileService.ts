@@ -59,3 +59,22 @@ export function getFileUrl(filename: string, baseUrl?: string): string {
     }
     return `/uploads/${filename}`;
 }
+
+// 将上传的文件转为 base64（用于发送给 AI API）
+export function getFileBase64(filename: string): string | null {
+    const filePath = path.join(UPLOAD_DIR, filename);
+    if (!fs.existsSync(filePath)) {
+        return null;
+    }
+    const buffer = fs.readFileSync(filePath);
+    const ext = path.extname(filename).toLowerCase().slice(1);
+    const mimeMap: Record<string, string> = {
+        jpg: 'image/jpeg',
+        jpeg: 'image/jpeg',
+        png: 'image/png',
+        gif: 'image/gif',
+        webp: 'image/webp',
+    };
+    const mime = mimeMap[ext] || 'image/jpeg';
+    return `data:${mime};base64,${buffer.toString('base64')}`;
+}
