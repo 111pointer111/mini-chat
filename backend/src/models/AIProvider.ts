@@ -5,6 +5,9 @@ export interface IAIProvider extends Document {
     baseURL: string;
     apiKey: string;
     modelName: string;
+    embeddingModel?: string;    // Embedding 模型名（如 embo-01，默认用 text-embedding-ada-002）
+    embeddingBaseURL?: string;  // Embedding 专用接口（如 Minimax 用不同地址）
+    groupId?: string;           // 部分 provider 需要额外参数（如 Minimax）
     enabled: boolean;
     isDefault: boolean;
     createdAt: Date;
@@ -29,6 +32,18 @@ const aiProviderSchema = new Schema<IAIProvider>(
         modelName: {
             type: String,
             required: true,
+        },
+        embeddingBaseURL: {
+            type: String,
+            required: false,
+        },
+        embeddingModel: {
+            type: String,
+            required: false,
+        },
+        groupId: {
+            type: String,
+            required: false,
         },
         enabled: {
             type: Boolean,

@@ -9,6 +9,7 @@ import Dashboard from './pages/Dashboard';
 import ScheduledTasks from './pages/ScheduledTasks';
 import AIChat from './pages/AIChat';
 import AdminAIProviders from './pages/AdminAIProviders';
+import KnowledgeBase from './pages/KnowledgeBase';
 import AuthLayout from './layouts/AuthLayout';
 import ProtectedLayout from './layouts/ProtectedLayout';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -36,6 +37,7 @@ function App() {
               <Route path="/chat/:id" element={<Dashboard />} />
               <Route path="/scheduled-tasks" element={<ScheduledTasks />} />
               <Route path="/ai-chat" element={<AIChat />} />
+              <Route path="/knowledge-base" element={<KnowledgeBase />} />
               <Route path="/admin/ai-providers" element={<AdminAIProviders />} />
             </Route>
 

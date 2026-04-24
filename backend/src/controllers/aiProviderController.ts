@@ -64,7 +64,7 @@ export const setUserProvider = async (req: Request, res: Response) => {
 // Admin: Create provider
 export const createProvider = async (req: Request, res: Response) => {
     try {
-        const { name, baseURL, apiKey, modelName, enabled, isDefault } = req.body;
+        const { name, baseURL, apiKey, modelName, embeddingModel, embeddingBaseURL, groupId, enabled, isDefault } = req.body;
 
         // If setting as default, unset other defaults
         if (isDefault) {
@@ -76,6 +76,9 @@ export const createProvider = async (req: Request, res: Response) => {
             baseURL,
             apiKey,
             modelName,
+            embeddingModel,
+            embeddingBaseURL,
+            groupId,
             enabled: enabled !== false,
             isDefault: isDefault || false,
         });
@@ -94,16 +97,32 @@ export const createProvider = async (req: Request, res: Response) => {
 export const updateProvider = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const { name, baseURL, apiKey, modelName, enabled, isDefault } = req.body;
+        const { name, baseURL, apiKey, modelName, embeddingModel, embeddingBaseURL, groupId, enabled, isDefault } = req.body;
 
         // If setting as default, unset other defaults
         if (isDefault) {
             await AIProvider.updateMany({ _id: { $ne: id } } as any, { isDefault: false });
         }
 
+        const updateData: Record<string, unknown> = {
+            name,
+            baseURL,
+            modelName,
+            embeddingModel,
+            embeddingBaseURL,
+            groupId,
+            enabled,
+            isDefault,
+        };
+
+        // 只在提供了新 API Key 时才更新
+        if (apiKey) {
+            updateData.apiKey = apiKey;
+        }
+
         const provider = await AIProvider.findByIdAndUpdate(
             id,
-            { name, baseURL, apiKey, modelName, enabled, isDefault },
+            updateData,
             { new: true }
         );
 

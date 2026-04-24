@@ -7,6 +7,9 @@ export interface AIConfig {
     baseURL: string;
     apiKey: string;
     model: string;
+    embeddingBaseURL?: string; // Embedding 专用接口地址（部分 provider 和 chat 不同）
+    embeddingModel?: string;  // Embedding 模型名（如 embo-01 或 text-embedding-ada-002）
+    groupId?: string;         // Minimax 等需要额外 group_id 的服务商
 }
 
 // 获取用户的 AI 配置
@@ -21,6 +24,9 @@ export const getUserAIConfig = async (userId?: string): Promise<AIConfig> => {
                     baseURL: provider.baseURL,
                     apiKey: provider.apiKey,
                     model: provider.modelName,
+                    embeddingBaseURL: provider.embeddingBaseURL,
+                    embeddingModel: provider.embeddingModel,
+                    groupId: provider.groupId,
                 };
             }
         }
@@ -33,6 +39,9 @@ export const getUserAIConfig = async (userId?: string): Promise<AIConfig> => {
             baseURL: defaultProvider.baseURL,
             apiKey: defaultProvider.apiKey,
             model: defaultProvider.modelName,
+            embeddingBaseURL: defaultProvider.embeddingBaseURL,
+            embeddingModel: defaultProvider.embeddingModel,
+            groupId: defaultProvider.groupId,
         };
     }
 

@@ -6,6 +6,7 @@ import MenuIcon from '@mui/icons-material/Menu';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import { useNavigate } from 'react-router-dom';
 import FriendList from '../components/FriendList';
 import ChatWindow from '../components/ChatWindow';
@@ -64,6 +65,11 @@ const Dashboard: React.FC = () => {
                     <Tooltip title="定时任务">
                         <IconButton onClick={() => navigate('/scheduled-tasks')} size="small">
                             <ScheduleIcon />
+                        </IconButton>
+                    </Tooltip>
+                    <Tooltip title="知识库">
+                        <IconButton onClick={() => navigate('/knowledge-base')} size="small" color="info">
+                            <LibraryBooksIcon />
                         </IconButton>
                     </Tooltip>
                     {user?.role === 'admin' && (

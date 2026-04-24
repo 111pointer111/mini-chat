@@ -38,6 +38,9 @@ interface AIProvider {
     name: string;
     baseURL: string;
     modelName: string;
+    embeddingModel?: string;
+    embeddingBaseURL?: string;
+    groupId?: string;
     enabled: boolean;
     isDefault: boolean;
     createdAt: string;
@@ -48,6 +51,9 @@ interface ProviderForm {
     baseURL: string;
     apiKey: string;
     modelName: string;
+    embeddingModel: string;
+    embeddingBaseURL: string;
+    groupId: string;
     enabled: boolean;
     isDefault: boolean;
 }
@@ -57,6 +63,9 @@ const initialForm: ProviderForm = {
     baseURL: '',
     apiKey: '',
     modelName: '',
+    embeddingModel: '',
+    embeddingBaseURL: '',
+    groupId: '',
     enabled: true,
     isDefault: false,
 };
@@ -100,6 +109,9 @@ const AdminAIProviders: React.FC = () => {
                 baseURL: provider.baseURL,
                 apiKey: '',
                 modelName: provider.modelName,
+                embeddingModel: provider.embeddingModel || '',
+                embeddingBaseURL: provider.embeddingBaseURL || '',
+                groupId: provider.groupId || '',
                 enabled: provider.enabled,
                 isDefault: provider.isDefault,
             });
@@ -290,6 +302,30 @@ const AdminAIProviders: React.FC = () => {
                             onChange={(e) => setForm({ ...form, modelName: e.target.value })}
                             required
                             placeholder="例如：gpt-4、claude-3-sonnet-20240229"
+                        />
+                        <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1 }}>
+                            以下为知识库 Embedding 配置（非必填）
+                        </Typography>
+                        <TextField
+                            label="Embedding 模型"
+                            value={form.embeddingModel}
+                            onChange={(e) => setForm({ ...form, embeddingModel: e.target.value })}
+                            placeholder="例如：embo-01、text-embedding-ada-002（留空自动使用 text-embedding-ada-002）"
+                            size="small"
+                        />
+                        <TextField
+                            label="Embedding Base URL"
+                            value={form.embeddingBaseURL}
+                            onChange={(e) => setForm({ ...form, embeddingBaseURL: e.target.value })}
+                            placeholder="留空则自动从 Chat Base URL 推断"
+                            size="small"
+                        />
+                        <TextField
+                            label="Group ID（Minimax 等需要）"
+                            value={form.groupId}
+                            onChange={(e) => setForm({ ...form, groupId: e.target.value })}
+                            placeholder="如 Minimax 需要 group_id"
+                            size="small"
                         />
                         <Box sx={{ display: 'flex', gap: 2 }}>
                             <FormControlLabel
