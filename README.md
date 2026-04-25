@@ -1,123 +1,94 @@
 # Mini-Chat
 
-一款现代化的全栈实时聊天应用，支持好友聊天、AI 对话、定时任务推送等功能。基于 React + Node.js + MongoDB 构建。
+一款面向个人和小团队的全栈聊天应用，集成了实时私聊、AI 对话、知识库问答和定时推送能力。项目采用前后端分离架构，适合本地开发、Docker 部署和二次开发。
 
 ![License](https://img.shields.io/badge/license-ISC-blue)
 ![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-green)
 ![TypeScript](https://img.shields.io/badge/typescript-5.9-blue)
 
-## 功能特性
+## 功能概览
 
 ### 即时通讯
-- 用户注册登录（手机号 + 短信验证码 / 密码）
-- 好友搜索、添加与管理
-- 实时 1v1 聊天（Socket.io）
-- 好友在线状态实时显示
+- 用户注册、登录、重置密码
+- 好友搜索、发起申请、接受申请
+- 基于 Socket.io 的实时 1v1 聊天
+- 在线状态感知
 
 ### AI 对话
-- 支持多种 AI 提供者（OpenAI、Claude、DeepSeek 等兼容 OpenAI 格式的 API）
-- 流式响应输出
+- 支持接入 OpenAI 兼容格式的大模型服务
+- 多轮会话管理
 - Markdown / 代码块渲染
-- AI 提供者管理界面（管理员）
+- 管理员可在后台维护 AI Provider
+
+### 知识库
+- 支持上传本地文档或导入网页链接
+- 文档解析、分块、向量化、RAG 问答
+- 支持将聊天模型和 embedding 模型拆分配置
+- 前端展示上传状态、失败原因和知识库问答来源
 
 ### 定时任务
-- GitHub Trending 定时抓取推送
-- 插件化任务架构（TaskRegistry）
-- 用户订阅管理
-
-### 技术亮点
-- JWT 身份认证
-- Redis 会话与消息队列
-- BullMQ 后台任务处理
-- Docker 一键部署
-- 前后端 TypeScript 类型共享
+- GitHub Trending 等预设任务
+- 自定义定时推送任务
+- BullMQ + Redis 驱动后台任务
 
 ## 技术栈
 
 | 层级 | 技术 |
 |------|------|
-| 前端 | React 19, TypeScript, Vite, MUI, TailwindCSS, Zustand, TanStack Query, Socket.io Client, Framer Motion |
-| 后端 | Node.js, Express, TypeScript, Socket.io, Mongoose, BullMQ, ioredis, JWT, bcrypt |
-| 数据库 | MongoDB (主数据), Redis (缓存/队列) |
+| 前端 | React 19, TypeScript, Vite, MUI, Zustand, TanStack Query, Socket.io Client |
+| 后端 | Node.js, Express, TypeScript, Socket.io, Mongoose, BullMQ |
+| 主数据 | MongoDB |
+| 队列 / 缓存 | Redis |
+| 知识库向量存储 | PostgreSQL + pgvector |
+| 文档解析 | textract, Tesseract.js |
 | 部署 | Docker, Docker Compose, Nginx |
 
 ## 项目结构
 
-```
+```text
 mini-chat/
-├── backend/                    # 后端服务
+├── backend/                   # Express + TypeScript API
 │   ├── src/
-│   │   ├── controllers/       # 控制器层
-│   │   │   ├── authController.ts       # 认证（登录/注册/重置密码）
-│   │   │   ├── friendController.ts    # 好友管理
-│   │   │   ├── messageController.ts    # 消息操作
-│   │   │   ├── userController.ts       # 用户信息
-│   │   │   ├── aiChatController.ts     # AI 对话
-│   │   │   ├── aiProviderController.ts # AI 提供者管理
-│   │   │   └── scheduledTaskController.ts # 定时任务
-│   │   ├── models/            # MongoDB 数据模型
-│   │   │   ├── User.ts, Message.ts, Friendship.ts
-│   │   │   ├── Conversation.ts, ScheduledTask.ts
-│   │   │   ├── AIProvider.ts, PushHistory.ts
-│   │   ├── routes/            # Express 路由
-│   │   ├── middleware/        # 中间件（认证守卫等）
-│   │   ├── services/          # 业务服务
-│   │   │   ├── aiService.ts           # AI API 封装
-│   │   │   ├── smsService.ts          # 阿里云短信
-│   │   │   ├── taskScheduler.ts       # 定时调度器
-│   │   │   └── taskQueue.ts           # BullMQ 任务队列
-│   │   ├── socket/            # Socket.io 实时通讯
-│   │   │   ├── socketHandler.ts
-│   │   │   └── index.ts
-│   │   ├── utils/             # 工具函数
-│   │   ├── scripts/           # 初始化脚本
-│   │   └── server.ts          # 服务入口
-│   ├── Dockerfile
-│   ├── package.json
-│   └── tsconfig.json
-│
-├── frontend/                   # 前端应用
-│   ├── src/
-│   │   ├── components/        # UI 组件
-│   │   │   ├── ChatWindow.tsx         # 聊天窗口
-│   │   │   ├── FriendList.tsx         # 好友列表
-│   │   │   ├── UserSearch.tsx         # 用户搜索
-│   │   │   ├── AIProviderSelector.tsx # AI 提供者选择器
-│   │   │   └── PhoneCodeInput.tsx     # 短信验证码输入
-│   │   ├── pages/             # 页面
-│   │   │   ├── Login.tsx, Register.tsx, ResetPassword.tsx
-│   │   │   ├── Dashboard.tsx          # 主仪表盘
-│   │   │   ├── AIChat.tsx             # AI 对话页
-│   │   │   ├── ScheduledTasks.tsx     # 定时任务管理
-│   │   │   └── AdminAIProviders.tsx    # AI 提供者管理（管理员）
-│   │   ├── store/             # Zustand 状态管理
-│   │   │   ├── authStore.ts, chatStore.ts, socketStore.ts
-│   │   ├── services/          # API 服务层
-│   │   ├── layouts/           # 布局组件
-│   │   ├── theme.ts           # MUI 主题配置
-│   │   └── App.tsx            # 应用入口
-│   ├── Dockerfile
-│   ├── nginx.conf
-│   └── package.json
-│
-├── docs/                       # 文档
-│   ├── ROADMAP.md             # 项目路线图
-│   └── ROADMAP-DETAILED.md    # 详细路线图
-│
-├── docker-compose.yml          # 开发环境（MongoDB + Redis）
-├── docker-compose.prod.yml     # 生产环境完整部署
-├── .env.production.example     # 生产环境配置示例
-└── .gitignore
+│   │   ├── controllers/      # 路由控制器
+│   │   ├── models/           # MongoDB 模型
+│   │   ├── routes/           # Express 路由
+│   │   ├── services/         # AI、知识库、任务、上传等业务逻辑
+│   │   ├── socket/           # Socket.io 实时通讯
+│   │   ├── scripts/          # 初始化脚本
+│   │   └── utils/            # PostgreSQL / Redis / schema 工具
+│   └── Dockerfile
+├── frontend/                  # React + Vite 前端
+│   ├── src/components/
+│   ├── src/layouts/
+│   ├── src/pages/
+│   ├── src/services/
+│   └── Dockerfile
+├── docs/                      # 路线图和设计文档
+├── docker-compose.yml         # 开发环境依赖
+├── docker-compose.prod.yml    # 生产环境编排
+└── README.md
 ```
+
+## 运行前准备
+
+### 基础环境
+- Node.js 18+
+- npm 9+
+- Docker / Docker Compose
+
+### 外部服务
+- MongoDB：主业务数据
+- Redis：任务队列、验证码限流、缓存
+- PostgreSQL + pgvector：知识库文档和向量索引
+
+### AI 相关准备
+- 聊天功能需要至少一个可用的 AI Provider
+- 知识库问答额外需要可用的 embedding provider
+- 推荐方案：
+  - 聊天：MiniMax / DeepSeek / OpenAI 兼容服务
+  - Embedding：DashScope `text-embedding-v2`
 
 ## 快速开始
-
-### 环境要求
-
-- Node.js >= 18.0.0
-- Docker & Docker Compose
-- MongoDB 7+
-- Redis
 
 ### 1. 克隆项目
 
@@ -126,43 +97,29 @@ git clone https://github.com/111pointer111/mini-chat.git
 cd mini-chat
 ```
 
-### 2. 启动基础设施（开发环境）
+### 2. 启动本地依赖
+
+开发环境使用 `docker-compose.yml` 启动 MongoDB、Redis 和 PostgreSQL：
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
-这将启动 MongoDB 和 Redis 容器。
+默认端口：
+- MongoDB: `27017`
+- Redis: `6379`
+- PostgreSQL: `5432`
 
 ### 3. 配置后端
 
 ```bash
 cd backend
-cp .env.example .env   # 或手动创建 .env 文件
+cp .env.example .env
 npm install
-npm run dev           # 开发模式启动
+npm run dev
 ```
 
-**后端 `.env` 配置项：**
-
-```env
-PORT=5000
-MONGODB_URI=mongodb://localhost:27017/mini-chat
-JWT_SECRET=your_jwt_secret_at_least_32_chars
-REDIS_HOST=localhost
-REDIS_PORT=6379
-
-# AI 配置（可选）
-AI_BASE_URL=https://api.openai.com/v1
-AI_API_KEY=your_api_key
-AI_MODEL=gpt-4
-
-# 阿里云短信（可选，用于手机号注册）
-ALIYUN_ACCESS_KEY_ID=your_key_id
-ALIYUN_ACCESS_KEY_SECRET=your_key_secret
-ALIYUN_SMS_SIGN_NAME=your_sign_name
-ALIYUN_SMS_TEMPLATE_CODE=your_template_code
-```
+后端默认运行在 `http://localhost:5000`。
 
 ### 4. 配置前端
 
@@ -174,93 +131,238 @@ npm run dev
 
 前端默认运行在 `http://localhost:5173`。
 
+如果 `5173` 已被占用，可以改端口：
+
+```bash
+npm run dev -- --port 5174
+```
+
 ### 5. 访问应用
 
 - 前端：`http://localhost:5173`
-- 后端 API：`http://localhost:5000`
-- 健康检查：`http://localhost:5000/health`
+- 后端健康检查：`http://localhost:5000/health`
+
+## 环境变量
+
+### 后端 `.env`
+
+项目已提供 [`backend/.env.example`](backend/.env.example) 作为开发模板。
+
+关键配置如下：
+
+```env
+PORT=5000
+MONGODB_URI=mongodb://admin:password@localhost:27017/mini-chat?authSource=admin
+JWT_SECRET=replace_me_in_production
+
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=
+
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=minichat
+
+AI_BASE_URL=
+AI_API_KEY=
+AI_MODEL=
+
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=admin123
+ADMIN_EMAIL=admin@minichat.com
+
+ALIYUN_ACCESS_KEY_ID=
+ALIYUN_ACCESS_KEY_SECRET=
+ALIYUN_SMS_SIGN_NAME=
+ALIYUN_SMS_TEMPLATE_CODE=
+```
+
+### AI Provider 配置说明
+
+管理员可在后台维护 AI Provider。当前实现支持：
+
+- `Base URL`：聊天模型接口地址
+- `模型名称`：聊天模型名
+- `Embedding Base URL`：独立 embedding 接口地址
+- `Embedding 模型`：embedding 模型名
+- `Embedding 维度`：可选，适用于 DashScope `text-embedding-v4` 等需显式维度的模型
+
+如果你使用：
+
+- MiniMax 负责聊天
+- DashScope 负责知识库 embedding
+
+推荐配置：
+
+- Chat `Base URL`：MiniMax OpenAI 兼容地址
+- Chat `模型名称`：你当前使用的 MiniMax 模型
+- `Embedding Base URL`：`https://dashscope.aliyuncs.com/compatible-mode/v1`
+- `Embedding 模型`：`text-embedding-v2`
+- `Embedding 维度`：留空
+
+## 默认管理员账号
+
+开发环境下，如果数据库中还没有管理员账号，系统会自动初始化：
+
+- 用户名：`admin`
+- 密码：`admin123`
+
+对应逻辑见 [backend/src/scripts/initAdmin.ts](backend/src/scripts/initAdmin.ts)。
+
+强烈建议在生产环境中通过环境变量显式设置：
+- `ADMIN_USERNAME`
+- `ADMIN_PASSWORD`
+- `ADMIN_EMAIL`
+
+## 知识库说明
+
+知识库链路包括：
+
+1. 文档上传或网页导入
+2. 文本提取
+3. 文本分块
+4. 调用 embedding provider 生成向量
+5. 写入 PostgreSQL + pgvector
+6. 提问时检索相关片段，再交给聊天模型生成回答
+
+当前支持情况：
+
+- 支持的本地文件类型：`txt`, `md`, `json`, `csv`, `pdf`, `doc/docx`, `ppt/pptx`, `xls/xlsx`, 常见图片
+- 纯文本文件优先直接读取
+- PDF / Office 文档依赖系统解析组件
+- 图片走 OCR
+
+如果只配置聊天模型，没有配置 embedding 能力，知识库上传会在向量化阶段失败。
 
 ## 生产环境部署
 
-### Docker 一键部署
+### 1. 准备环境变量
 
-1. 复制并配置环境变量：
+复制模板：
 
 ```bash
-cp .env.production.example .env
-# 编辑 .env 填写实际配置
+cp .env.production.example .env.production
 ```
 
-2. 构建并推送 Docker 镜像：
+按需填写：
+- `DOCKERHUB_USERNAME`
+- `JWT_SECRET`
+- `MONGO_USER` / `MONGO_PASSWORD`
+- `POSTGRES_*`
+- `AI_*`
+- `ADMIN_*`
+
+### 2. 构建并推送镜像
 
 ```bash
 # 后端
 cd backend
-docker build -t your_docker_username/minichat-backend:latest .
-docker push your_docker_username/minichat-backend:latest
+docker build -t your_dockerhub_username/minichat-backend:latest .
+docker push your_dockerhub_username/minichat-backend:latest
 
 # 前端
-cd frontend
-docker build -t your_docker_username/minichat-frontend:latest .
-docker push your_docker_username/minichat-frontend:latest
+cd ../frontend
+docker build -t your_dockerhub_username/minichat-frontend:latest .
+docker push your_dockerhub_username/minichat-frontend:latest
 ```
 
-3. 在服务器上运行：
+### 3. 使用生产编排启动
 
 ```bash
-docker-compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d
 ```
 
-### 手动部署
+生产环境编排包括：
+- MongoDB
+- Redis
+- PostgreSQL + pgvector
+- 后端 API
+- Nginx 托管的前端
+
+## API 概览
+
+以下仅列出主要路由，完整逻辑请参考 `backend/src/routes/`。
+
+### 认证
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `POST /api/auth/send-code`
+- `POST /api/auth/register-phone`
+- `POST /api/auth/login-phone`
+- `POST /api/auth/bind-phone`
+- `POST /api/auth/reset-password-phone`
+
+### 用户 / 好友 / 消息
+- `GET /api/users/search`
+- `GET /api/friends`
+- `POST /api/friends/request`
+- `GET /api/friends/requests/pending`
+- `PUT /api/friends/request/:requestId/accept`
+- `GET /api/messages/:userId`
+
+### AI 对话
+- `POST /api/ai-chat`
+- `GET /api/ai-chat/conversations`
+- `POST /api/ai-chat/conversations`
+- `PUT /api/ai-chat/conversations/:conversationId`
+- `DELETE /api/ai-chat/conversations/:conversationId`
+
+### AI Provider
+- `GET /api/ai-providers`
+- `GET /api/ai-providers/user`
+- `PUT /api/ai-providers/user`
+- `GET /api/ai-providers/admin`
+- `POST /api/ai-providers/admin`
+
+### 定时任务
+- `GET /api/scheduled-tasks`
+- `GET /api/scheduled-tasks/conversations`
+- `POST /api/scheduled-tasks/custom`
+- `PUT /api/scheduled-tasks/custom/:taskId`
+- `DELETE /api/scheduled-tasks/custom/:taskId`
+
+### 知识库
+- `GET /api/kb/documents`
+- `POST /api/kb/documents/upload`
+- `POST /api/kb/documents/url`
+- `GET /api/kb/search`
+- `POST /api/kb/chat`
+
+## 当前已知情况
+
+- `frontend` 目前 `TypeScript build` 可以通过，但 `npm run lint` 还有历史遗留问题，集中在 `FriendList.tsx`、`ProtectedLayout.tsx`、`ScheduledTasks.tsx`
+- 后端 CORS 当前默认放行本地开发端口 `5173-5175`，如果你要做多域名部署，建议在 [backend/src/server.ts](backend/src/server.ts) 中改为环境变量配置
+
+## 开发建议
+
+- 知识库首选小文件和纯文本文件验证链路
+- 如果使用 DashScope `text-embedding-v4`，建议同时显式设置 `Embedding 维度 = 1536`
+- 如果只需要稳定上线知识库，优先选择 `text-embedding-v2`
+
+## 路线图
+
+详细规划请参考：
+
+- [docs/ROADMAP.md](docs/ROADMAP.md)
+- [docs/ROADMAP-DETAILED.md](docs/ROADMAP-DETAILED.md)
+
+## 贡献
+
+欢迎提交 Issue 和 PR。建议在提交前至少完成：
 
 ```bash
-# 构建后端
-cd backend && npm run build && npm start
-
-# 构建前端
-cd frontend && npm run build
-# 前端构建产物在 dist/ 目录，通过 Nginx 托管
+cd backend && npm run build
+cd ../frontend && npm run build
 ```
 
-**Nginx 配置参考**：`frontend/nginx.conf`
+如果你的改动涉及知识库，请附带：
+- 使用的 provider 配置方式
+- 测试文件类型
+- 上传 / 检索 / 问答结果
 
-## API 路由概览
+## License
 
-| 方法 | 路径 | 描述 |
-|------|------|------|
-| POST | `/api/auth/register` | 用户注册 |
-| POST | `/api/auth/login` | 用户登录 |
-| POST | `/api/auth/send-code` | 发送短信验证码 |
-| POST | `/api/auth/reset-password` | 重置密码 |
-| GET | `/api/auth/me` | 获取当前用户信息 |
-| GET | `/api/users` | 用户搜索 |
-| GET/POST | `/api/friends` | 好友列表/添加好友 |
-| PUT/DELETE | `/api/friends/:id` | 接受/删除好友 |
-| GET/POST | `/api/messages/:friendId` | 获取/发送消息 |
-| GET/POST | `/api/ai-chat` | AI 对话 |
-| GET/POST/PUT/DELETE | `/api/ai-providers` | AI 提供者管理 |
-| GET/POST/PUT/DELETE | `/api/scheduled-tasks` | 定时任务管理 |
-
-## 数据库模型
-
-- **User** — 用户信息（用户名、手机号、密码哈希、头像、角色）
-- **Friendship** — 好友关系（申请人、接受人、状态）
-- **Message** — 聊天消息（发送者、接收者、内容、类型、时间戳）
-- **Conversation** — 对话上下文（用于 AI 多轮对话）
-- **AIProvider** — AI 服务提供者配置
-- **ScheduledTask** — 用户订阅的定时任务
-- **PushHistory** — 推送历史记录
-
-## 开发规范
-
-项目遵循以下开发规范：
-
-- **前端**：React + TypeScript，组件化开发，Zustand 状态管理，TanStack Query 数据获取
-- **后端**：Express + TypeScript，MVC 架构，JWT 认证，Socket.io 实时通讯
-- **代码风格**：ESLint + Prettier，TypeScript 严格模式
-
-详见 `docs/` 目录下的路线图文档。
-
-## 许可证
-
-ISC
+本项目使用 ISC License，详见 [LICENSE](LICENSE)。
