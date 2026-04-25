@@ -1,7 +1,15 @@
 # Backend Dockerfile
-FROM node:20-alpine
+FROM node:20-bookworm-slim
 
 WORKDIR /app
+
+# textract 处理 PDF / Office 文档依赖的系统组件
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    antiword \
+    catdoc \
+    poppler-utils \
+    unrtf \
+ && rm -rf /var/lib/apt/lists/*
 
 # 安装依赖
 COPY package*.json ./

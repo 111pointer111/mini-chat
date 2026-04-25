@@ -21,6 +21,7 @@ import { setupSocket } from './socket/socketHandler';
 import { startTaskScheduler } from './services/taskScheduler';
 import { createTaskWorker } from './services/taskQueue';
 import { initAdmin } from './scripts/initAdmin';
+import { ensureKnowledgeBaseSchema } from './utils/kbSchema';
 
 dotenv.config();
 
@@ -82,6 +83,14 @@ mongoose.connect(MONGODB_URI)
         await initAdmin();
     })
     .catch((err) => console.error('❌ MongoDB connection error:', err));
+
+ensureKnowledgeBaseSchema()
+    .then(() => {
+        console.log('✅ Knowledge base schema is ready');
+    })
+    .catch((err) => {
+        console.error('❌ Failed to initialize knowledge base schema:', err);
+    });
 
 // Routes
 app.use('/api/auth', authRoutes);

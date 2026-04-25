@@ -40,6 +40,7 @@ interface AIProvider {
     modelName: string;
     embeddingModel?: string;
     embeddingBaseURL?: string;
+    embeddingDimensions?: number;
     groupId?: string;
     enabled: boolean;
     isDefault: boolean;
@@ -53,6 +54,7 @@ interface ProviderForm {
     modelName: string;
     embeddingModel: string;
     embeddingBaseURL: string;
+    embeddingDimensions: string;
     groupId: string;
     enabled: boolean;
     isDefault: boolean;
@@ -65,6 +67,7 @@ const initialForm: ProviderForm = {
     modelName: '',
     embeddingModel: '',
     embeddingBaseURL: '',
+    embeddingDimensions: '',
     groupId: '',
     enabled: true,
     isDefault: false,
@@ -111,6 +114,7 @@ const AdminAIProviders: React.FC = () => {
                 modelName: provider.modelName,
                 embeddingModel: provider.embeddingModel || '',
                 embeddingBaseURL: provider.embeddingBaseURL || '',
+                embeddingDimensions: provider.embeddingDimensions ? String(provider.embeddingDimensions) : '',
                 groupId: provider.groupId || '',
                 enabled: provider.enabled,
                 isDefault: provider.isDefault,
@@ -319,6 +323,15 @@ const AdminAIProviders: React.FC = () => {
                             onChange={(e) => setForm({ ...form, embeddingBaseURL: e.target.value })}
                             placeholder="留空则自动从 Chat Base URL 推断"
                             size="small"
+                        />
+                        <TextField
+                            label="Embedding 维度"
+                            type="number"
+                            value={form.embeddingDimensions}
+                            onChange={(e) => setForm({ ...form, embeddingDimensions: e.target.value })}
+                            placeholder="例如：1536"
+                            size="small"
+                            helperText="DashScope 的 text-embedding-v4 建议填 1536；留空则按模型默认值请求。"
                         />
                         <TextField
                             label="Group ID（Minimax 等需要）"

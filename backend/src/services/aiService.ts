@@ -9,6 +9,7 @@ export interface AIConfig {
     model: string;
     embeddingBaseURL?: string; // Embedding 专用接口地址（部分 provider 和 chat 不同）
     embeddingModel?: string;  // Embedding 模型名（如 embo-01 或 text-embedding-ada-002）
+    embeddingDimensions?: number; // Embedding 维度（如 DashScope v4 显式传 1536）
     groupId?: string;         // Minimax 等需要额外 group_id 的服务商
 }
 
@@ -26,6 +27,7 @@ export const getUserAIConfig = async (userId?: string): Promise<AIConfig> => {
                     model: provider.modelName,
                     embeddingBaseURL: provider.embeddingBaseURL,
                     embeddingModel: provider.embeddingModel,
+                    embeddingDimensions: provider.embeddingDimensions,
                     groupId: provider.groupId,
                 };
             }
@@ -41,6 +43,7 @@ export const getUserAIConfig = async (userId?: string): Promise<AIConfig> => {
             model: defaultProvider.modelName,
             embeddingBaseURL: defaultProvider.embeddingBaseURL,
             embeddingModel: defaultProvider.embeddingModel,
+            embeddingDimensions: defaultProvider.embeddingDimensions,
             groupId: defaultProvider.groupId,
         };
     }

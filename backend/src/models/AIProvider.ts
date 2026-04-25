@@ -7,6 +7,7 @@ export interface IAIProvider extends Document {
     modelName: string;
     embeddingModel?: string;    // Embedding 模型名（如 embo-01，默认用 text-embedding-ada-002）
     embeddingBaseURL?: string;  // Embedding 专用接口（如 Minimax 用不同地址）
+    embeddingDimensions?: number; // Embedding 维度（如 DashScope v4 可显式指定 1536）
     groupId?: string;           // 部分 provider 需要额外参数（如 Minimax）
     enabled: boolean;
     isDefault: boolean;
@@ -40,6 +41,11 @@ const aiProviderSchema = new Schema<IAIProvider>(
         embeddingModel: {
             type: String,
             required: false,
+        },
+        embeddingDimensions: {
+            type: Number,
+            required: false,
+            min: 1,
         },
         groupId: {
             type: String,

@@ -14,6 +14,33 @@ import 'dotenv/config';
 
 // ==================== 文件存储 ====================
 
+const DIRECT_TEXT_EXTENSIONS = new Set([
+    '.txt',
+    '.md',
+    '.markdown',
+    '.json',
+    '.csv',
+    '.tsv',
+    '.log',
+]);
+
+const ALLOWED_KB_EXTENSIONS = new Set([
+    ...DIRECT_TEXT_EXTENSIONS,
+    '.pdf',
+    '.doc',
+    '.docx',
+    '.ppt',
+    '.pptx',
+    '.xls',
+    '.xlsx',
+    '.png',
+    '.jpg',
+    '.jpeg',
+    '.webp',
+    '.gif',
+    '.bmp',
+]);
+
 // 存储目录：backend/uploads/kb/
 const KB_UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'kb');
 if (!fs.existsSync(KB_UPLOAD_DIR)) {
@@ -29,8 +56,19 @@ const storage = multer.diskStorage({
     },
 });
 
+const fileFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ALLOWED_KB_EXTENSIONS.has(ext) || file.mimetype.startsWith('image/') || file.mimetype.startsWith('text/')) {
+        cb(null, true);
+        return;
+    }
+
+    cb(new Error(`暂不支持上传 ${ext || '该类型'} 文件`));
+};
+
 export const uploadKbFile = multer({
     storage,
+    fileFilter,
     limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
 }).single('file');
 
@@ -45,6 +83,8 @@ export interface ExtractResult {
  * 从本地文件提取纯文本
  */
 function extractFromFile(filePath: string, mimeType: string): Promise<string> {
+    const ext = path.extname(filePath).toLowerCase();
+
     return new Promise((resolve, reject) => {
         // 图片文件用 OCR
         if (mimeType.startsWith('image/')) {
@@ -56,9 +96,22 @@ function extractFromFile(filePath: string, mimeType: string): Promise<string> {
             return;
         }
 
+        // 纯文本类文件优先直接读取，避免依赖外部 textract 二进制
+        if (DIRECT_TEXT_EXTENSIONS.has(ext) || mimeType.startsWith('text/')) {
+            fs.promises.readFile(filePath, 'utf-8')
+                .then((text) => resolve(text.trim()))
+                .catch(reject);
+            return;
+        }
+
         // 其他文件用 textract
         textract.fromFileWithPath(filePath, (err: Error | null, text: string) => {
             if (err) {
+                const rawMessage = err.message || String(err);
+                if (/spawn .*enoent|not found|command failed|could not find|missing/i.test(rawMessage)) {
+                    reject(new Error('当前服务器缺少文档解析依赖，暂时无法解析该文件类型，请优先上传 txt、md、csv 等文本文件，或为部署环境安装文档解析组件'));
+                    return;
+                }
                 reject(err);
             } else {
                 resolve((text || '').trim());

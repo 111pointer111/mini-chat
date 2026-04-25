@@ -49,6 +49,8 @@ interface Source {
     similarity: number;
 }
 
+const KB_FILE_ACCEPT = '.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.markdown,.json,.csv,.tsv,.log,image/*';
+
 const FILE_TYPE_ICONS: Record<string, string> = {
     pdf: '📄',
     docx: '📝',
@@ -82,6 +84,7 @@ const KnowledgeBase: React.FC = () => {
     const [urlTitle, setUrlTitle] = useState('');
     const [urlLoading, setUrlLoading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(false);
+    const [uploadMessage, setUploadMessage] = useState<{ severity: 'success' | 'error'; text: string } | null>(null);
 
     // ---- AI 对话状态 ----
     const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -134,16 +137,25 @@ const KnowledgeBase: React.FC = () => {
         const file = e.target.files?.[0];
         if (!file) return;
 
+        if (file.size > 50 * 1024 * 1024) {
+            setUploadMessage({ severity: 'error', text: '文件不能超过 50MB' });
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+        }
+
         const formData = new FormData();
         formData.append('file', file);
 
         setUploadProgress(true);
+        setUploadMessage(null);
         try {
             await uploadKBDocument(formData);
             await loadDocuments();
+            setUploadMessage({ severity: 'success', text: `文件“${file.name}”上传成功，知识库正在处理中。` });
         } catch (err: unknown) {
             const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || '上传失败';
-            alert(msg);
+            setUploadMessage({ severity: 'error', text: msg });
+            await loadDocuments();
         } finally {
             setUploadProgress(false);
             if (fileInputRef.current) fileInputRef.current.value = '';
@@ -205,7 +217,7 @@ const KnowledgeBase: React.FC = () => {
             const res = await chatWithKnowledge(userMsg, history);
             setMessages(prev => [...prev, { role: 'assistant', content: res.data.answer }]);
             setCurrentSources(res.data.sources || []);
-        } catch (err) {
+        } catch {
             setMessages(prev => [...prev, { role: 'assistant', content: '抱歉，对话失败了，请稍后重试。' }]);
         } finally {
             setChatLoading(false);
@@ -259,6 +271,7 @@ const KnowledgeBase: React.FC = () => {
                             ref={fileInputRef}
                             type="file"
                             hidden
+                            accept={KB_FILE_ACCEPT}
                             onChange={handleUpload}
                         />
                         <Button
@@ -290,6 +303,11 @@ const KnowledgeBase: React.FC = () => {
                     </Stack>
 
                     {uploadProgress && <LinearProgress sx={{ mb: 2 }} />}
+                    {uploadMessage && (
+                        <Alert severity={uploadMessage.severity} sx={{ mb: 2 }}>
+                            {uploadMessage.text}
+                        </Alert>
+                    )}
 
                     {/* 文档列表 */}
                     {loading ? (
@@ -309,7 +327,7 @@ const KnowledgeBase: React.FC = () => {
                                     <ListItemText
                                         primary={doc.title}
                                         secondary={
-                                            <Stack direction="row" spacing={1} alignItems="center" mt={0.5}>
+                                            <Stack direction="row" spacing={1} alignItems="center" mt={0.5} flexWrap="wrap" useFlexGap>
                                                 <Chip label={doc.source === 'local' ? '本地文件' : '网页链接'} size="small" />
                                                 {doc.file_type && <Chip label={doc.file_type.toUpperCase()} size="small" variant="outlined" />}
                                                 <Chip label={`${doc.chunk_count} 个片段`} size="small" variant="outlined" />
@@ -317,6 +335,11 @@ const KnowledgeBase: React.FC = () => {
                                                 <Typography variant="caption" color="text.secondary">
                                                     {formatDate(doc.created_at)}
                                                 </Typography>
+                                                {doc.status === 'failed' && doc.error_msg && (
+                                                    <Typography variant="caption" color="error.main">
+                                                        {doc.error_msg}
+                                                    </Typography>
+                                                )}
                                             </Stack>
                                         }
                                     />

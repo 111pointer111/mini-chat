@@ -2,6 +2,19 @@ import { Request, Response } from 'express';
 import AIProvider from '../models/AIProvider';
 import User from '../models/User';
 
+const normalizeEmbeddingDimensions = (value: unknown): number | undefined => {
+    if (value === undefined || value === null || value === '') {
+        return undefined;
+    }
+
+    const parsed = typeof value === 'number' ? value : Number.parseInt(String(value), 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+        return undefined;
+    }
+
+    return parsed;
+};
+
 // Get all enabled AI providers (for users)
 export const getProviders = async (req: Request, res: Response) => {
     try {
@@ -64,7 +77,7 @@ export const setUserProvider = async (req: Request, res: Response) => {
 // Admin: Create provider
 export const createProvider = async (req: Request, res: Response) => {
     try {
-        const { name, baseURL, apiKey, modelName, embeddingModel, embeddingBaseURL, groupId, enabled, isDefault } = req.body;
+        const { name, baseURL, apiKey, modelName, embeddingModel, embeddingBaseURL, embeddingDimensions, groupId, enabled, isDefault } = req.body;
 
         // If setting as default, unset other defaults
         if (isDefault) {
@@ -78,6 +91,7 @@ export const createProvider = async (req: Request, res: Response) => {
             modelName,
             embeddingModel,
             embeddingBaseURL,
+            embeddingDimensions: normalizeEmbeddingDimensions(embeddingDimensions),
             groupId,
             enabled: enabled !== false,
             isDefault: isDefault || false,
@@ -97,7 +111,7 @@ export const createProvider = async (req: Request, res: Response) => {
 export const updateProvider = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const { name, baseURL, apiKey, modelName, embeddingModel, embeddingBaseURL, groupId, enabled, isDefault } = req.body;
+        const { name, baseURL, apiKey, modelName, embeddingModel, embeddingBaseURL, embeddingDimensions, groupId, enabled, isDefault } = req.body;
 
         // If setting as default, unset other defaults
         if (isDefault) {
@@ -110,6 +124,7 @@ export const updateProvider = async (req: Request, res: Response) => {
             modelName,
             embeddingModel,
             embeddingBaseURL,
+            embeddingDimensions: normalizeEmbeddingDimensions(embeddingDimensions),
             groupId,
             enabled,
             isDefault,

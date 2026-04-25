@@ -22,6 +22,20 @@ services:
     networks:
       - minichat-network
 
+  # PostgreSQL + pgvector（知识库）
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: minichat-postgres
+    restart: always
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-minichat}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - minichat-network
+
   # 后端 API (从 Docker Hub 拉取)
   backend:
     image: ${DOCKERHUB_USERNAME}/minichat-backend:latest
@@ -36,6 +50,11 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-minichat}
       - ALIYUN_ACCESS_KEY_ID=${ALIYUN_ACCESS_KEY_ID}
       - ALIYUN_ACCESS_KEY_SECRET=${ALIYUN_ACCESS_KEY_SECRET}
       - ALIYUN_SMS_SIGN_NAME=${ALIYUN_SMS_SIGN_NAME}
@@ -46,6 +65,7 @@ services:
     depends_on:
       - mongodb
       - redis
+      - postgres
     networks:
       - minichat-network
 
@@ -68,3 +88,4 @@ networks:
 volumes:
   mongodb_data:
   redis_data:
+  postgres_data:
