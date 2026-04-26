@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import aiService, { ChatMessage } from '../services/aiService';
+import { chatWithKnowledge } from '../services/kbService';
 import ScheduledTask from '../models/ScheduledTask';
 import Conversation from '../models/Conversation';
 import Message from '../models/Message';
@@ -204,8 +205,15 @@ export const chat = async (req: Request, res: Response) => {
             });
         }
 
-        // Normal chat response with history context - always use chatWithHistory for context awareness
-        const normalReply = await aiService.chatWithHistory(history, message, userId);
+        // Normal chat response with history context and knowledge-base augmentation.
+        let normalReply: string;
+        try {
+            const ragResult = await chatWithKnowledge(userId, message, history);
+            normalReply = ragResult.answer;
+        } catch (err) {
+            console.warn('RAG chat fallback to normal chat:', err instanceof Error ? err.message : err);
+            normalReply = await aiService.chatWithHistory(history, message, userId);
+        }
         await saveMessage(aiConversation._id as mongoose.Types.ObjectId, AI_ASSISTANT_ID, userObjectId, normalReply);
 
         return res.json({

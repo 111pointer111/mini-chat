@@ -10,7 +10,6 @@ import {
 import {
     processUploadedFile,
     processUrlImport,
-    chatWithKnowledge,
 } from '../services/kbService';
 import { uploadKbFile } from '../services/kbFileService';
 
@@ -149,23 +148,5 @@ export const importFromUrl = async (req: Request, res: Response) => {
         const msg = err instanceof Error ? err.message : '导入失败';
         console.error('importFromUrl error:', err);
         res.status(500).json({ message: msg });
-    }
-};
-
-// POST /api/kb/chat — RAG 对话
-export const ragChat = async (req: Request, res: Response) => {
-    try {
-        const userId = req.user!.id;
-        const { query, history } = req.body;
-
-        if (!query || typeof query !== 'string') {
-            return res.status(400).json({ message: '缺少 query 参数' });
-        }
-
-        const { answer, sources } = await chatWithKnowledge(userId, query, history || []);
-        res.json({ answer, sources });
-    } catch (err) {
-        console.error('ragChat error:', err);
-        res.status(500).json({ message: '对话失败' });
     }
 };

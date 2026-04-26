@@ -3,7 +3,7 @@ import {
     Box, Paper, Typography, Button, IconButton, List, ListItem,
     ListItemText, ListItemSecondaryAction, Chip, CircularProgress,
     TextField, Dialog, DialogTitle, DialogContent, DialogActions,
-    Tabs, Tab, Alert, Tooltip, Avatar,
+    Alert, Tooltip, Avatar,
     InputAdornment, Stack, LinearProgress,
 } from '@mui/material';
 import {
@@ -16,13 +16,11 @@ import {
     SmartToy as SmartToyIcon,
     Folder as FolderIcon,
 } from '@mui/icons-material';
-import ReactMarkdown from 'react-markdown';
 import {
     getKBDocuments,
     deleteKBDocument,
     uploadKBDocument,
     importKBFromUrl,
-    chatWithKnowledge,
     searchKB,
 } from '../services/api';
 
@@ -35,18 +33,6 @@ interface KBDocument {
     status: 'processing' | 'ready' | 'failed';
     error_msg: string | null;
     created_at: string;
-}
-
-interface ChatMessage {
-    role: 'user' | 'assistant';
-    content: string;
-}
-
-interface Source {
-    documentName: string;
-    chunkIndex: number;
-    content: string;
-    similarity: number;
 }
 
 const KB_FILE_ACCEPT = '.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.markdown,.json,.csv,.tsv,.log,image/*';
@@ -67,9 +53,6 @@ const FILE_TYPE_ICONS: Record<string, string> = {
 };
 
 const KnowledgeBase: React.FC = () => {
-    // Tab: 0 = 文档管理, 1 = AI 对话
-    const [tab, setTab] = useState(0);
-
     // ---- 文档管理状态 ----
     const [documents, setDocuments] = useState<KBDocument[]>([]);
     const [loading, setLoading] = useState(false);
@@ -85,13 +68,6 @@ const KnowledgeBase: React.FC = () => {
     const [urlLoading, setUrlLoading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(false);
     const [uploadMessage, setUploadMessage] = useState<{ severity: 'success' | 'error'; text: string } | null>(null);
-
-    // ---- AI 对话状态 ----
-    const [messages, setMessages] = useState<ChatMessage[]>([]);
-    const [input, setInput] = useState('');
-    const [chatLoading, setChatLoading] = useState(false);
-    const [currentSources, setCurrentSources] = useState<Source[]>([]);
-    const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -192,38 +168,6 @@ const KnowledgeBase: React.FC = () => {
 
     const displayDocs = searchKeyword ? searchResults : documents;
 
-    // ==================== AI 对话 ====================
-
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    };
-
-    useEffect(() => {
-        scrollToBottom();
-    }, [messages, currentSources]);
-
-    const handleSendMessage = async () => {
-        if (!input.trim() || chatLoading) return;
-
-        const userMsg = input.trim();
-        setInput('');
-        const history = messages.map(m => ({ role: m.role, content: m.content }));
-
-        setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
-        setChatLoading(true);
-        setCurrentSources([]);
-
-        try {
-            const res = await chatWithKnowledge(userMsg, history);
-            setMessages(prev => [...prev, { role: 'assistant', content: res.data.answer }]);
-            setCurrentSources(res.data.sources || []);
-        } catch {
-            setMessages(prev => [...prev, { role: 'assistant', content: '抱歉，对话失败了，请稍后重试。' }]);
-        } finally {
-            setChatLoading(false);
-        }
-    };
-
     const getFileIcon = (type: string | null) => {
         if (!type) return '📄';
         return FILE_TYPE_ICONS[type.toLowerCase()] || '📄';
@@ -248,15 +192,10 @@ const KnowledgeBase: React.FC = () => {
                 <SmartToyIcon color="primary" />
                 <Typography variant="h6" fontWeight="bold">知识库</Typography>
                 <Box sx={{ flex: 1 }} />
-                <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ minHeight: 36 }}>
-                    <Tab label="文档管理" icon={<FolderIcon />} iconPosition="start" sx={{ minHeight: 36, py: 0.5 }} />
-                    <Tab label="AI 对话" icon={<SmartToyIcon />} iconPosition="start" sx={{ minHeight: 36, py: 0.5 }} />
-                </Tabs>
+                <Chip icon={<FolderIcon />} label="文档管理" color="primary" variant="outlined" />
             </Paper>
 
-            {/* Tab 0: 文档管理 */}
-            {tab === 0 && (
-                <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
+            <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
                     {/* 操作栏 */}
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 2 }}>
                         <Button
@@ -365,79 +304,7 @@ const KnowledgeBase: React.FC = () => {
                             <Button size="small" disabled={page >= Math.ceil(total / 20)} onClick={() => loadDocuments(page + 1)}>下一页</Button>
                         </Stack>
                     )}
-                </Box>
-            )}
-
-            {/* Tab 1: AI 对话 */}
-            {tab === 1 && (
-                <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                    {/* 欢迎消息 */}
-                    {messages.length === 0 && (
-                        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 4, color: 'text.secondary' }}>
-                            <SmartToyIcon sx={{ fontSize: 64, mb: 2, opacity: 0.3, color: 'primary.main' }} />
-                            <Typography variant="h6" gutterBottom>知识库 AI 助手</Typography>
-                            <Typography sx={{ maxWidth: 400, textAlign: 'center' }}>
-                                基于你上传的文档进行问答。上传文档后问我相关问题，我会从知识库中检索相关内容并回答。
-                            </Typography>
-                        </Box>
-                    )}
-
-                    {/* 消息列表 */}
-                    <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
-                        {messages.map((msg, i) => (
-                            <Box key={i} sx={{ mb: 2, display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
-                                <Paper sx={{ p: 2, maxWidth: '75%', bgcolor: msg.role === 'user' ? 'primary.main' : 'background.paper' }}>
-                                    <Typography whiteSpace="pre-wrap">
-                                        <ReactMarkdown>{msg.content}</ReactMarkdown>
-                                    </Typography>
-                                    {/* 来源引用 */}
-                                    {msg.role === 'assistant' && i === messages.length - 1 && currentSources.length > 0 && (
-                                        <Box sx={{ mt: 1, pt: 1, borderTop: '1px dashed', borderColor: 'divider' }}>
-                                            <Typography variant="caption" color="text.secondary" gutterBottom>
-                                                📚 参考来源：
-                                            </Typography>
-                                            {currentSources.map((s, j) => (
-                                                <Alert key={j} severity="info" sx={{ py: 0.5, my: 0.5 }} variant="outlined">
-                                                    <Typography variant="caption">
-                                                        <b>{s.documentName}</b> — {s.content.substring(0, 100)}...
-                                                    </Typography>
-                                                </Alert>
-                                            ))}
-                                        </Box>
-                                    )}
-                                </Paper>
-                            </Box>
-                        ))}
-                        {chatLoading && (
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.secondary', ml: 2 }}>
-                                <CircularProgress size={16} />
-                                <Typography variant="caption">知识库检索中...</Typography>
-                            </Box>
-                        )}
-                        <div ref={messagesEndRef} />
-                    </Box>
-
-                    {/* 输入框 */}
-                    <Paper sx={{ p: 2, display: 'flex', gap: 1 }}>
-                        <TextField
-                            fullWidth
-                            size="small"
-                            placeholder="问我关于知识库的问题..."
-                            value={input}
-                            onChange={e => setInput(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSendMessage())}
-                            disabled={chatLoading}
-                        />
-                        <Button
-                            variant="contained"
-                            onClick={handleSendMessage}
-                            disabled={chatLoading || !input.trim()}
-                        >
-                            发送
-                        </Button>
-                    </Paper>
-                </Box>
-            )}
+            </Box>
 
             {/* 删除确认弹窗 */}
             <Dialog open={deleteDialog.open} onClose={() => setDeleteDialog({ open: false, doc: null })}>

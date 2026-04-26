@@ -151,14 +151,14 @@ export async function insertChunks(chunks: Array<{
 
     for (const chunk of chunks) {
         placeholders.push(
-            `($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++})`
+            `($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}::vector, $${idx++})`
         );
         values.push(
             chunk.documentId,
             chunk.userId,
             chunk.chunkIndex,
             chunk.content,
-            chunk.embedding,  // pg 驱动会自动转为字符串 {val1,val2,...}（pgvector VECTOR 类型兼容）
+            `[${chunk.embedding.join(',')}]`,
             JSON.stringify(chunk.metadata || {})
         );
     }

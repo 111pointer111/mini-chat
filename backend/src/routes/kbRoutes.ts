@@ -6,7 +6,6 @@ import {
     searchKb,
     uploadDocument,
     importFromUrl,
-    ragChat,
 } from '../controllers/kbController';
 import { protect } from '../middleware/authMiddleware';
 
@@ -34,10 +33,5 @@ router.delete('/documents/:id', removeDocument);
 
 // GET /api/kb/search?q= — 关键词搜索
 router.get('/search', searchKb);
-
-// ---- AI 对话 ----
-
-// POST /api/kb/chat — RAG 对话
-router.post('/chat', ragChat);
 
 export default router;

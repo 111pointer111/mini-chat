@@ -45,10 +45,6 @@ export const uploadKBDocument = (formData: FormData) =>
 export const importKBFromUrl = (url: string, title?: string) =>
     api.post('/kb/documents/url', { url, title });
 
-/** RAG 对话 */
-export const chatWithKnowledge = (query: string, history: Array<{ role: string; content: string }> = []) =>
-    api.post('/kb/chat', { query, history });
-
 /** 关键词搜索 */
 export const searchKB = (q: string) =>
     api.get('/kb/search', { params: { q } });

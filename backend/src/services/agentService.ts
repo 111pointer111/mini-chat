@@ -6,6 +6,7 @@
 
 import { getWeather, weatherToolDefinition } from './getWeather';
 import { ChatMessage, getUserAIConfig, getClient } from './aiService';
+import { retrieveRelevantChunks } from './kbEmbeddingService';
 import OpenAI from 'openai';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -114,6 +115,42 @@ const SYSTEM_PROMPT = `你是一个友好、专业的 AI 助手。你可以帮�
 重要提醒：工具调用后会返回结果，请根据结果如实回答用户，不要添加虚假信息。
 重要提醒：如果用户发送了图片，请仔细分析图片内容并给出准确的回答。`;
 
+const getMessageText = (message: UserMessageInput | string): string => {
+    return typeof message === 'string' ? message : message.text;
+};
+
+async function buildSystemPrompt(userId: string | undefined, query: string): Promise<string> {
+    if (!userId || !query.trim()) {
+        return SYSTEM_PROMPT;
+    }
+
+    try {
+        const chunks = await retrieveRelevantChunks(query, userId, 5);
+        if (chunks.length === 0) {
+            return SYSTEM_PROMPT;
+        }
+
+        const context = chunks
+            .map((chunk, index) => {
+                const metadata = typeof chunk.metadata === 'object' && chunk.metadata !== null
+                    ? chunk.metadata as Record<string, unknown>
+                    : {};
+                const source = metadata.fileName || metadata.url || `文档 ${chunk.document_id}`;
+                return `[来源 ${index + 1}: ${String(source)}]\n${chunk.content}`;
+            })
+            .join('\n\n');
+
+        return `${SYSTEM_PROMPT}
+
+以下是从用户知识库中检索到的相关文档片段。回答时优先参考这些内容；如果片段与问题无关，请忽略片段并正常回答。不要编造知识库中不存在的信息。
+
+${context}`;
+    } catch (err) {
+        console.warn('Knowledge retrieval skipped:', err instanceof Error ? err.message : err);
+        return SYSTEM_PROMPT;
+    }
+}
+
 /**
  * 运行 Agent
  * 返回最终回复内容（不含工具调用过程）
@@ -126,9 +163,10 @@ export async function runAgent(
     const { userId } = options;
     const config = await getUserAIConfig(userId);
     const client = getClient(config);
+    const systemPrompt = await buildSystemPrompt(userId, getMessageText(newMessage));
 
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'system', content: systemPrompt },
     ];
 
     messages.push(...buildHistoryMessages(history));
@@ -207,9 +245,10 @@ export async function runAgentStream(
     try {
         const config = await getUserAIConfig(userId);
         const client = getClient(config);
+        const systemPrompt = await buildSystemPrompt(userId, getMessageText(newMessage));
 
         const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'system', content: systemPrompt },
         ];
 
         messages.push(...buildHistoryMessages(history));
