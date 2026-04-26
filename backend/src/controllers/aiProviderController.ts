@@ -77,7 +77,7 @@ export const setUserProvider = async (req: Request, res: Response) => {
 // Admin: Create provider
 export const createProvider = async (req: Request, res: Response) => {
     try {
-        const { name, baseURL, apiKey, modelName, embeddingModel, embeddingBaseURL, embeddingDimensions, groupId, enabled, isDefault } = req.body;
+        const { name, baseURL, apiKey, modelName, embeddingApiKey, embeddingModel, embeddingBaseURL, embeddingDimensions, groupId, enabled, isDefault } = req.body;
 
         // If setting as default, unset other defaults
         if (isDefault) {
@@ -89,6 +89,7 @@ export const createProvider = async (req: Request, res: Response) => {
             baseURL,
             apiKey,
             modelName,
+            embeddingApiKey,
             embeddingModel,
             embeddingBaseURL,
             embeddingDimensions: normalizeEmbeddingDimensions(embeddingDimensions),
@@ -111,7 +112,7 @@ export const createProvider = async (req: Request, res: Response) => {
 export const updateProvider = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const { name, baseURL, apiKey, modelName, embeddingModel, embeddingBaseURL, embeddingDimensions, groupId, enabled, isDefault } = req.body;
+        const { name, baseURL, apiKey, modelName, embeddingApiKey, embeddingModel, embeddingBaseURL, embeddingDimensions, groupId, enabled, isDefault } = req.body;
 
         // If setting as default, unset other defaults
         if (isDefault) {
@@ -133,6 +134,9 @@ export const updateProvider = async (req: Request, res: Response) => {
         // 只在提供了新 API Key 时才更新
         if (apiKey) {
             updateData.apiKey = apiKey;
+        }
+        if (embeddingApiKey !== undefined) {
+            updateData.embeddingApiKey = embeddingApiKey || undefined;
         }
 
         const provider = await AIProvider.findByIdAndUpdate(
@@ -176,7 +180,7 @@ export const deleteProvider = async (req: Request, res: Response) => {
 export const getAllProviders = async (req: Request, res: Response) => {
     try {
         const providers = await AIProvider.find()
-            .select('-apiKey')
+            .select('-apiKey -embeddingApiKey')
             .sort({ isDefault: -1, name: 1 });
 
         res.json(providers);

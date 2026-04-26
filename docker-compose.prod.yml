@@ -62,6 +62,10 @@ services:
       - AI_BASE_URL=${AI_BASE_URL}
       - AI_API_KEY=${AI_API_KEY}
       - AI_MODEL=${AI_MODEL}
+      - AI_EMBEDDING_BASE_URL=${AI_EMBEDDING_BASE_URL}
+      - AI_EMBEDDING_API_KEY=${AI_EMBEDDING_API_KEY}
+      - AI_EMBEDDING_MODEL=${AI_EMBEDDING_MODEL}
+      - AI_EMBEDDING_DIMENSIONS=${AI_EMBEDDING_DIMENSIONS}
     depends_on:
       - mongodb
       - redis

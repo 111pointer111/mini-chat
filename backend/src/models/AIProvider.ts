@@ -5,6 +5,7 @@ export interface IAIProvider extends Document {
     baseURL: string;
     apiKey: string;
     modelName: string;
+    embeddingApiKey?: string;  // Embedding 专用 API Key，留空则复用 apiKey
     embeddingModel?: string;    // Embedding 模型名（如 embo-01，默认用 text-embedding-ada-002）
     embeddingBaseURL?: string;  // Embedding 专用接口（如 Minimax 用不同地址）
     embeddingDimensions?: number; // Embedding 维度（如 DashScope v4 可显式指定 1536）
@@ -29,6 +30,10 @@ const aiProviderSchema = new Schema<IAIProvider>(
         apiKey: {
             type: String,
             required: true,
+        },
+        embeddingApiKey: {
+            type: String,
+            required: false,
         },
         modelName: {
             type: String,

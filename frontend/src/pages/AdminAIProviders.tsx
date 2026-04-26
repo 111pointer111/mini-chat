@@ -38,6 +38,7 @@ interface AIProvider {
     name: string;
     baseURL: string;
     modelName: string;
+    embeddingApiKey?: string;
     embeddingModel?: string;
     embeddingBaseURL?: string;
     embeddingDimensions?: number;
@@ -52,6 +53,7 @@ interface ProviderForm {
     baseURL: string;
     apiKey: string;
     modelName: string;
+    embeddingApiKey: string;
     embeddingModel: string;
     embeddingBaseURL: string;
     embeddingDimensions: string;
@@ -65,6 +67,7 @@ const initialForm: ProviderForm = {
     baseURL: '',
     apiKey: '',
     modelName: '',
+    embeddingApiKey: '',
     embeddingModel: '',
     embeddingBaseURL: '',
     embeddingDimensions: '',
@@ -112,6 +115,7 @@ const AdminAIProviders: React.FC = () => {
                 baseURL: provider.baseURL,
                 apiKey: '',
                 modelName: provider.modelName,
+                embeddingApiKey: '',
                 embeddingModel: provider.embeddingModel || '',
                 embeddingBaseURL: provider.embeddingBaseURL || '',
                 embeddingDimensions: provider.embeddingDimensions ? String(provider.embeddingDimensions) : '',
@@ -144,14 +148,19 @@ const AdminAIProviders: React.FC = () => {
 
         setSaving(true);
         try {
+            const payload: Partial<ProviderForm> = { ...form };
+            if (!payload.embeddingApiKey) {
+                delete payload.embeddingApiKey;
+            }
+
             if (editingId) {
-                const updateData: Partial<ProviderForm> & { _id?: string } = { ...form };
+                const updateData: Partial<ProviderForm> & { _id?: string } = { ...payload };
                 if (!updateData.apiKey) {
                     delete updateData.apiKey;
                 }
                 await api.put(`/ai-providers/admin/${editingId}`, updateData);
             } else {
-                await api.post('/ai-providers/admin', form);
+                await api.post('/ai-providers/admin', payload);
             }
             handleCloseDialog();
             fetchProviders();
@@ -310,6 +319,15 @@ const AdminAIProviders: React.FC = () => {
                         <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1 }}>
                             以下为知识库 Embedding 配置（非必填）
                         </Typography>
+                        <TextField
+                            label="Embedding API Key"
+                            type="password"
+                            value={form.embeddingApiKey}
+                            onChange={(e) => setForm({ ...form, embeddingApiKey: e.target.value })}
+                            placeholder={editingId ? '留空则不修改' : '留空则复用上方 API Key'}
+                            helperText="聊天模型和向量模型来自不同厂商时，在这里填写向量服务的 Key。"
+                            size="small"
+                        />
                         <TextField
                             label="Embedding 模型"
                             value={form.embeddingModel}

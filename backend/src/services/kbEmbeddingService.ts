@@ -48,7 +48,7 @@ async function generateEmbedding(text: string, userId: string): Promise<number[]
 
     const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.apiKey}`,
+        'Authorization': `Bearer ${config.embeddingApiKey || config.apiKey}`,
     };
 
     const model = config.embeddingModel || 'text-embedding-ada-002';

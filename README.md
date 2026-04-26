@@ -168,6 +168,10 @@ POSTGRES_DB=minichat
 AI_BASE_URL=
 AI_API_KEY=
 AI_MODEL=
+AI_EMBEDDING_BASE_URL=
+AI_EMBEDDING_API_KEY=
+AI_EMBEDDING_MODEL=
+AI_EMBEDDING_DIMENSIONS=
 
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=admin123
@@ -185,6 +189,7 @@ ALIYUN_SMS_TEMPLATE_CODE=
 
 - `Base URL`：聊天模型接口地址
 - `模型名称`：聊天模型名
+- `Embedding API Key`：独立 embedding API Key，留空则复用聊天模型 API Key
 - `Embedding Base URL`：独立 embedding 接口地址
 - `Embedding 模型`：embedding 模型名
 - `Embedding 维度`：可选，适用于 DashScope `text-embedding-v4` 等需显式维度的模型
@@ -198,6 +203,7 @@ ALIYUN_SMS_TEMPLATE_CODE=
 
 - Chat `Base URL`：MiniMax OpenAI 兼容地址
 - Chat `模型名称`：你当前使用的 MiniMax 模型
+- `Embedding API Key`：DashScope API Key
 - `Embedding Base URL`：`https://dashscope.aliyuncs.com/compatible-mode/v1`
 - `Embedding 模型`：`text-embedding-v2`
 - `Embedding 维度`：留空

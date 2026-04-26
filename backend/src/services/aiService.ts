@@ -7,6 +7,7 @@ export interface AIConfig {
     baseURL: string;
     apiKey: string;
     model: string;
+    embeddingApiKey?: string; // Embedding 专用 API Key，留空则复用 apiKey
     embeddingBaseURL?: string; // Embedding 专用接口地址（部分 provider 和 chat 不同）
     embeddingModel?: string;  // Embedding 模型名（如 embo-01 或 text-embedding-ada-002）
     embeddingDimensions?: number; // Embedding 维度（如 DashScope v4 显式传 1536）
@@ -25,6 +26,7 @@ export const getUserAIConfig = async (userId?: string): Promise<AIConfig> => {
                     baseURL: provider.baseURL,
                     apiKey: provider.apiKey,
                     model: provider.modelName,
+                    embeddingApiKey: provider.embeddingApiKey,
                     embeddingBaseURL: provider.embeddingBaseURL,
                     embeddingModel: provider.embeddingModel,
                     embeddingDimensions: provider.embeddingDimensions,
@@ -41,6 +43,7 @@ export const getUserAIConfig = async (userId?: string): Promise<AIConfig> => {
             baseURL: defaultProvider.baseURL,
             apiKey: defaultProvider.apiKey,
             model: defaultProvider.modelName,
+            embeddingApiKey: defaultProvider.embeddingApiKey,
             embeddingBaseURL: defaultProvider.embeddingBaseURL,
             embeddingModel: defaultProvider.embeddingModel,
             embeddingDimensions: defaultProvider.embeddingDimensions,
@@ -52,12 +55,23 @@ export const getUserAIConfig = async (userId?: string): Promise<AIConfig> => {
     const baseURL = process.env.AI_BASE_URL;
     const apiKey = process.env.AI_API_KEY;
     const model = process.env.AI_MODEL;
+    const embeddingDimensions = process.env.AI_EMBEDDING_DIMENSIONS
+        ? Number.parseInt(process.env.AI_EMBEDDING_DIMENSIONS, 10)
+        : undefined;
 
     if (!baseURL || !apiKey || !model) {
         throw new Error('No AI provider configured. Please add an AI provider or set AI_BASE_URL, AI_API_KEY, and AI_MODEL environment variables.');
     }
 
-    return { baseURL, apiKey, model };
+    return {
+        baseURL,
+        apiKey,
+        model,
+        embeddingApiKey: process.env.AI_EMBEDDING_API_KEY,
+        embeddingBaseURL: process.env.AI_EMBEDDING_BASE_URL,
+        embeddingModel: process.env.AI_EMBEDDING_MODEL,
+        embeddingDimensions: Number.isFinite(embeddingDimensions) ? embeddingDimensions : undefined,
+    };
 };
 
 // 创建 OpenAI 兼容客户端
