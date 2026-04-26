@@ -15,7 +15,9 @@ import {
     Refresh as RefreshIcon,
     SmartToy as SmartToyIcon,
     Folder as FolderIcon,
+    ArrowBack,
 } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import {
     getKBDocuments,
     deleteKBDocument,
@@ -53,6 +55,8 @@ const FILE_TYPE_ICONS: Record<string, string> = {
 };
 
 const KnowledgeBase: React.FC = () => {
+    const navigate = useNavigate();
+
     // ---- 文档管理状态 ----
     const [documents, setDocuments] = useState<KBDocument[]>([]);
     const [loading, setLoading] = useState(false);
@@ -189,6 +193,9 @@ const KnowledgeBase: React.FC = () => {
         <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
             {/* 顶部栏 */}
             <Paper elevation={1} sx={{ p: 2, px: { xs: 1, sm: 3 }, display: 'flex', alignItems: 'center', gap: 2 }}>
+                <IconButton onClick={() => navigate('/')} sx={{ mr: { xs: 0, sm: 1 } }}>
+                    <ArrowBack />
+                </IconButton>
                 <SmartToyIcon color="primary" />
                 <Typography variant="h6" fontWeight="bold">知识库</Typography>
                 <Box sx={{ flex: 1 }} />
