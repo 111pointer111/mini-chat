@@ -49,4 +49,20 @@ export const importKBFromUrl = (url: string, title?: string) =>
 export const searchKB = (q: string) =>
     api.get('/kb/search', { params: { q } });
 
+// ==================== 群知识库 API ====================
+
+export const getGroupKBDocuments = (groupId: string, page = 1, pageSize = 20) =>
+    api.get(`/groups/${groupId}/kb/documents`, { params: { page, pageSize } });
+
+export const uploadGroupKBDocument = (groupId: string, formData: FormData) =>
+    api.post(`/groups/${groupId}/kb/documents/upload`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    });
+
+export const importGroupKBFromUrl = (groupId: string, url: string, title?: string) =>
+    api.post(`/groups/${groupId}/kb/documents/url`, { url, title });
+
+export const deleteGroupKBDocument = (groupId: string, documentId: number) =>
+    api.delete(`/groups/${groupId}/kb/documents/${documentId}`);
+
 export default api;

@@ -1,17 +1,34 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Box, Paper, Typography, TextField, IconButton, Avatar } from '@mui/material';
+import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Drawer, IconButton, List, ListItem, ListItemSecondaryAction, ListItemText, Paper, Stack, TextField, Tooltip, Typography, Avatar } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
-import { GitHub, MenuBook, Translate, AutoAwesome, ChatBubbleOutline, Groups } from '@mui/icons-material';
+import { GitHub, MenuBook, Translate, AutoAwesome, ChatBubbleOutline, Groups, LibraryBooks, Upload, Link as LinkIcon, Delete, Refresh } from '@mui/icons-material';
 import ReactMarkdown from 'react-markdown';
 import { useChatStore } from '../store/chatStore';
 import type { Message } from '../store/chatStore';
 import { useAuthStore } from '../store/authStore';
 import { useSocketStore } from '../store/socketStore';
+import {
+    deleteGroupKBDocument,
+    getGroupKBDocuments,
+    importGroupKBFromUrl,
+    uploadGroupKBDocument,
+} from '../services/api';
 
 interface ScheduledTaskMessageData {
     conversationId: string;
     taskType: string;
     message: Pick<Message, '_id' | 'content' | 'type' | 'createdAt'>;
+}
+
+interface KBDocument {
+    id: number;
+    title: string;
+    source: 'local' | 'url';
+    file_type: string | null;
+    chunk_count: number;
+    status: 'processing' | 'ready' | 'failed';
+    error_msg: string | null;
+    created_at: string;
 }
 
 const PRESET_TASK_NAMES: Record<string, string> = {
@@ -32,7 +49,17 @@ const ChatWindow: React.FC = () => {
     const { user } = useAuthStore();
     const { socket } = useSocketStore();
     const [inputText, setInputText] = useState('');
+    const [kbDrawerOpen, setKbDrawerOpen] = useState(false);
+    const [kbDocuments, setKbDocuments] = useState<KBDocument[]>([]);
+    const [kbLoading, setKbLoading] = useState(false);
+    const [kbUploading, setKbUploading] = useState(false);
+    const [kbMessage, setKbMessage] = useState<{ severity: 'success' | 'error'; text: string } | null>(null);
+    const [urlDialogOpen, setUrlDialogOpen] = useState(false);
+    const [urlInput, setUrlInput] = useState('');
+    const [urlTitle, setUrlTitle] = useState('');
+    const [urlImporting, setUrlImporting] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const groupKbFileInputRef = useRef<HTMLInputElement>(null);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -71,6 +98,88 @@ const ChatWindow: React.FC = () => {
             socket.off('receive_group_message', handleReceiveGroupMessage);
         };
     }, [socket, selectedGroup, addMessage]);
+
+    const loadGroupDocuments = async () => {
+        if (!selectedGroup) return;
+        setKbLoading(true);
+        try {
+            const res = await getGroupKBDocuments(selectedGroup._id);
+            setKbDocuments(res.data.documents || []);
+            setKbMessage(null);
+        } catch (err: unknown) {
+            const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || '获取群知识库失败';
+            setKbMessage({ severity: 'error', text: msg });
+        } finally {
+            setKbLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (kbDrawerOpen && selectedGroup) {
+            loadGroupDocuments();
+        }
+    }, [kbDrawerOpen, selectedGroup?._id]);
+
+    const handleGroupKbUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file || !selectedGroup) return;
+
+        const formData = new FormData();
+        formData.append('file', file);
+        setKbUploading(true);
+        setKbMessage(null);
+
+        try {
+            await uploadGroupKBDocument(selectedGroup._id, formData);
+            setKbMessage({ severity: 'success', text: `文件“${file.name}”已上传并开始向量化。` });
+            await loadGroupDocuments();
+        } catch (err: unknown) {
+            const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || '上传失败';
+            setKbMessage({ severity: 'error', text: msg });
+        } finally {
+            setKbUploading(false);
+            if (groupKbFileInputRef.current) {
+                groupKbFileInputRef.current.value = '';
+            }
+        }
+    };
+
+    const handleGroupUrlImport = async () => {
+        if (!selectedGroup || !urlInput.trim()) return;
+
+        setUrlImporting(true);
+        setKbMessage(null);
+        try {
+            await importGroupKBFromUrl(selectedGroup._id, urlInput.trim(), urlTitle.trim() || undefined);
+            setUrlDialogOpen(false);
+            setUrlInput('');
+            setUrlTitle('');
+            setKbMessage({ severity: 'success', text: '链接已导入并开始向量化。' });
+            await loadGroupDocuments();
+        } catch (err: unknown) {
+            const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || '导入失败';
+            setKbMessage({ severity: 'error', text: msg });
+        } finally {
+            setUrlImporting(false);
+        }
+    };
+
+    const handleDeleteGroupDocument = async (documentId: number) => {
+        if (!selectedGroup || !confirm('确定删除这个群知识库文档吗？')) return;
+        try {
+            await deleteGroupKBDocument(selectedGroup._id, documentId);
+            await loadGroupDocuments();
+        } catch (err: unknown) {
+            const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || '删除失败';
+            setKbMessage({ severity: 'error', text: msg });
+        }
+    };
+
+    const getStatusColor = (status: string) => {
+        if (status === 'ready') return 'success';
+        if (status === 'failed') return 'error';
+        return 'warning';
+    };
 
     // Listen for scheduled task messages
     useEffect(() => {
@@ -226,12 +335,17 @@ const ChatWindow: React.FC = () => {
                     <Avatar src={selectedGroup.avatar} sx={{ bgcolor: 'secondary.main' }}>
                         <Groups />
                     </Avatar>
-                    <Box>
+                    <Box sx={{ flex: 1 }}>
                         <Typography variant="h6">{selectedGroup.name}</Typography>
                         <Typography variant="caption" color="text.secondary">
                             输入 @小助手 可让群聊小助手基于群知识库回答
                         </Typography>
                     </Box>
+                    <Tooltip title="群知识库">
+                        <IconButton color="primary" onClick={() => setKbDrawerOpen(true)}>
+                            <LibraryBooks />
+                        </IconButton>
+                    </Tooltip>
                 </Paper>
 
                 <Box sx={{ flex: 1, overflowY: 'auto', p: 2, bgcolor: '#f0f2f5', display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -290,6 +404,130 @@ const ChatWindow: React.FC = () => {
                         </IconButton>
                     </Box>
                 </Paper>
+
+                <Drawer
+                    anchor="right"
+                    open={kbDrawerOpen}
+                    onClose={() => setKbDrawerOpen(false)}
+                    PaperProps={{ sx: { width: { xs: '100%', sm: 420 } } }}
+                >
+                    <Box sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
+                        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+                            <LibraryBooks color="primary" />
+                            <Box sx={{ flex: 1 }}>
+                                <Typography variant="h6">群知识库</Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    @{`小助手`} 会优先检索这些文档
+                                </Typography>
+                            </Box>
+                            <Tooltip title="刷新">
+                                <IconButton onClick={loadGroupDocuments}>
+                                    <Refresh />
+                                </IconButton>
+                            </Tooltip>
+                        </Stack>
+
+                        <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+                            <Button
+                                variant="contained"
+                                startIcon={kbUploading ? <CircularProgress size={16} color="inherit" /> : <Upload />}
+                                onClick={() => groupKbFileInputRef.current?.click()}
+                                disabled={kbUploading}
+                            >
+                                上传文件
+                            </Button>
+                            <input
+                                ref={groupKbFileInputRef}
+                                type="file"
+                                hidden
+                                accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.markdown,.json,.csv,.tsv,.log,image/*"
+                                onChange={handleGroupKbUpload}
+                            />
+                            <Button
+                                variant="outlined"
+                                startIcon={<LinkIcon />}
+                                onClick={() => setUrlDialogOpen(true)}
+                            >
+                                导入链接
+                            </Button>
+                        </Stack>
+
+                        {kbMessage && (
+                            <Alert severity={kbMessage.severity} sx={{ mb: 2 }} onClose={() => setKbMessage(null)}>
+                                {kbMessage.text}
+                            </Alert>
+                        )}
+
+                        {kbLoading ? (
+                            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                                <CircularProgress />
+                            </Box>
+                        ) : (
+                            <List sx={{ flex: 1, overflowY: 'auto' }}>
+                                {kbDocuments.map((doc) => (
+                                    <ListItem
+                                        key={doc.id}
+                                        sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, mb: 1, pr: 6 }}
+                                    >
+                                        <ListItemText
+                                            primary={doc.title}
+                                            secondary={
+                                                <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 0.75 }}>
+                                                    <Chip label={doc.source === 'local' ? '文件' : '链接'} size="small" />
+                                                    {doc.file_type && <Chip label={doc.file_type.toUpperCase()} size="small" variant="outlined" />}
+                                                    <Chip label={`${doc.chunk_count} 片段`} size="small" variant="outlined" />
+                                                    <Chip label={doc.status} size="small" color={getStatusColor(doc.status)} />
+                                                    {doc.error_msg && (
+                                                        <Typography variant="caption" color="error.main">
+                                                            {doc.error_msg}
+                                                        </Typography>
+                                                    )}
+                                                </Stack>
+                                            }
+                                        />
+                                        <ListItemSecondaryAction>
+                                            <IconButton edge="end" color="error" onClick={() => handleDeleteGroupDocument(doc.id)}>
+                                                <Delete />
+                                            </IconButton>
+                                        </ListItemSecondaryAction>
+                                    </ListItem>
+                                ))}
+                                {kbDocuments.length === 0 && (
+                                    <Box sx={{ py: 6, textAlign: 'center', color: 'text.secondary' }}>
+                                        <LibraryBooks sx={{ fontSize: 42, opacity: 0.4, mb: 1 }} />
+                                        <Typography>暂无群知识库文档</Typography>
+                                    </Box>
+                                )}
+                            </List>
+                        )}
+                    </Box>
+                </Drawer>
+
+                <Dialog open={urlDialogOpen} onClose={() => setUrlDialogOpen(false)} maxWidth="sm" fullWidth>
+                    <DialogTitle>导入网页链接</DialogTitle>
+                    <DialogContent>
+                        <TextField
+                            fullWidth
+                            label="网页 URL"
+                            placeholder="https://..."
+                            value={urlInput}
+                            onChange={(e) => setUrlInput(e.target.value)}
+                            sx={{ mt: 1, mb: 2 }}
+                        />
+                        <TextField
+                            fullWidth
+                            label="标题（可选）"
+                            value={urlTitle}
+                            onChange={(e) => setUrlTitle(e.target.value)}
+                        />
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={() => setUrlDialogOpen(false)}>取消</Button>
+                        <Button variant="contained" onClick={handleGroupUrlImport} disabled={!urlInput.trim() || urlImporting}>
+                            {urlImporting ? '导入中...' : '导入'}
+                        </Button>
+                    </DialogActions>
+                </Dialog>
             </Box>
         );
     }
