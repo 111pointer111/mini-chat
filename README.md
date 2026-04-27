@@ -309,6 +309,17 @@ docker compose -f docker-compose.prod.yml --env-file .env.production up -d
 - `PUT /api/friends/request/:requestId/accept`
 - `GET /api/messages/:userId`
 
+### 群组
+- `GET /api/groups`
+- `POST /api/groups`
+- `GET /api/groups/:groupId/members`
+- `POST /api/groups/:groupId/members`
+- `GET /api/groups/:groupId/messages`
+- `GET /api/groups/:groupId/kb/documents`
+- `POST /api/groups/:groupId/kb/documents/upload`
+- `POST /api/groups/:groupId/kb/documents/url`
+- `DELETE /api/groups/:groupId/kb/documents/:documentId`
+
 ### AI 对话
 - `POST /api/ai-chat`
 - `GET /api/ai-chat/conversations`
@@ -335,7 +346,8 @@ docker compose -f docker-compose.prod.yml --env-file .env.production up -d
 - `POST /api/kb/documents/upload`
 - `POST /api/kb/documents/url`
 - `GET /api/kb/search`
-- `POST /api/kb/chat`
+
+知识库问答能力已合并到 AI 助手和群聊小助手中，不再提供独立的 `/api/kb/chat` 入口。
 
 ## 当前已知情况
 
@@ -368,6 +380,40 @@ cd ../frontend && npm run build
 - 使用的 provider 配置方式
 - 测试文件类型
 - 上传 / 检索 / 问答结果
+
+### Commit 信息规范
+
+提交信息采用 Conventional Commits 风格，描述使用中文：
+
+```text
+<type>(<scope>): <中文描述>
+```
+
+常用 `type`：
+
+- `feat`：新增功能
+- `fix`：修复问题
+- `docs`：文档更新
+- `refactor`：重构，不改变外部行为
+- `style`：格式或样式调整
+- `test`：测试相关
+- `chore`：构建、依赖、配置、脚手架等杂项
+
+示例：
+
+```text
+feat(group): 新增群知识库管理面板
+fix(kb): 修复 pgvector 向量写入格式
+docs(readme): 补充提交信息规范
+```
+
+如果存在破坏性变更，在 type 或 scope 后加 `!`，并在正文或页脚说明影响：
+
+```text
+feat(api)!: 调整知识库问答入口
+
+BREAKING CHANGE: 移除独立的 /api/kb/chat，改由 AI 助手统一触发 RAG。
+```
 
 ## License
 
