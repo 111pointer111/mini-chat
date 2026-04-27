@@ -16,6 +16,7 @@ import aiChatRoutes from './routes/aiChatRoutes';
 import aiProviderRoutes from './routes/aiProviderRoutes';
 import uploadRoutes from './routes/uploadRoutes';
 import kbRoutes from './routes/kbRoutes';
+import groupRoutes from './routes/groupRoutes';
 import path from 'path';
 import { setupSocket } from './socket/socketHandler';
 import { startTaskScheduler } from './services/taskScheduler';
@@ -102,6 +103,7 @@ app.use('/api/ai-chat', aiChatRoutes);
 app.use('/api/ai-providers', aiProviderRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/kb', kbRoutes);
+app.use('/api/groups', groupRoutes);
 
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date() });

@@ -1,6 +1,6 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
-export type ConversationType = 'ai' | 'friend' | 'scheduled_task';
+export type ConversationType = 'ai' | 'friend' | 'scheduled_task' | 'group';
 
 export interface IConversation extends Document {
     userId: mongoose.Types.ObjectId;
@@ -8,6 +8,7 @@ export interface IConversation extends Document {
     name: string;
     taskType?: string; // For scheduled_task type: 'github_trending' | 'daily_poem' | 'daily_english'
     participantId?: mongoose.Types.ObjectId; // For friend type: the other user's ID
+    groupId?: mongoose.Types.ObjectId;
     lastMessageAt?: Date;
     createdAt: Date;
     updatedAt: Date;
@@ -22,7 +23,7 @@ const conversationSchema = new Schema<IConversation>(
         },
         type: {
             type: String,
-            enum: ['ai', 'friend', 'scheduled_task'],
+            enum: ['ai', 'friend', 'scheduled_task', 'group'],
             required: true,
         },
         name: {
@@ -36,6 +37,10 @@ const conversationSchema = new Schema<IConversation>(
             type: Schema.Types.ObjectId,
             ref: 'User',
         },
+        groupId: {
+            type: Schema.Types.ObjectId,
+            ref: 'Group',
+        },
         lastMessageAt: {
             type: Date,
         },
@@ -48,5 +53,6 @@ const conversationSchema = new Schema<IConversation>(
 // Index for efficient querying
 conversationSchema.index({ userId: 1, type: 1 });
 conversationSchema.index({ userId: 1, taskType: 1 });
+conversationSchema.index({ userId: 1, groupId: 1 });
 
 export default mongoose.model<IConversation>('Conversation', conversationSchema);

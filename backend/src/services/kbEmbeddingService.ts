@@ -96,7 +96,8 @@ export async function processAndStoreChunks(
         fileName?: string;
         url?: string;
         source: string;
-    }
+    },
+    scope: { type?: 'user' | 'group'; id?: string } = {}
 ): Promise<void> {
     console.log(`🔢 开始生成 ${chunks.length} 个 chunk 的向量...`);
 
@@ -126,6 +127,8 @@ export async function processAndStoreChunks(
                 return {
                     documentId,
                     userId,
+                    scopeType: scope.type || 'user',
+                    scopeId: scope.id || userId,
                     chunkIndex: chunk.index,
                     content: chunk.content,
                     embedding,
@@ -158,13 +161,14 @@ export async function processAndStoreChunks(
 export async function retrieveRelevantChunks(
     query: string,
     userId: string,
-    topK = 5
+    topK = 5,
+    scope: { type?: 'user' | 'group'; id?: string } = {}
 ): Promise<SearchResult[]> {
     // 1. 把问题本身变成向量
     const queryEmbedding = await generateEmbedding(query, userId);
 
     // 2. 向量搜索，找到最相似的 chunk
-    const results = await vectorSearch(queryEmbedding, userId, topK);
+    const results = await vectorSearch(queryEmbedding, userId, topK, scope);
 
     return results;
 }

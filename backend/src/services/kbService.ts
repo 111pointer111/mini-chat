@@ -28,7 +28,8 @@ import OpenAI from 'openai';
 export async function processUploadedFile(
     userId: string,
     file: Express.Multer.File,
-    title?: string
+    title?: string,
+    scope: { type?: 'user' | 'group'; id?: string } = {}
 ): Promise<KBDocument> {
     const docTitle = title || file.originalname;
     const fileType = path.extname(file.originalname).replace('.', '').toLowerCase();
@@ -36,6 +37,8 @@ export async function processUploadedFile(
     // 1. 创建文档记录（状态：处理中）
     const docId = await createDocument({
         userId,
+        scopeType: scope.type || 'user',
+        scopeId: scope.id || userId,
         title: docTitle,
         source: 'local',
         fileType,
@@ -55,7 +58,7 @@ export async function processUploadedFile(
         await processAndStoreChunks(docId, userId, chunks, {
             fileName: file.originalname,
             source: 'local',
-        });
+        }, scope);
 
         // 5. 更新文档状态为"就绪"
         await updateDocumentStatus(docId, userId, 'ready', chunks.length);
@@ -77,7 +80,8 @@ export async function processUploadedFile(
 export async function processUrlImport(
     userId: string,
     url: string,
-    title?: string
+    title?: string,
+    scope: { type?: 'user' | 'group'; id?: string } = {}
 ): Promise<KBDocument> {
     // 从 URL 中提取域名作为默认标题
     const defaultTitle = title || new URL(url).hostname;
@@ -85,6 +89,8 @@ export async function processUrlImport(
     // 1. 创建文档记录
     const docId = await createDocument({
         userId,
+        scopeType: scope.type || 'user',
+        scopeId: scope.id || userId,
         title: defaultTitle,
         source: 'url',
         url,
@@ -103,7 +109,7 @@ export async function processUrlImport(
         await processAndStoreChunks(docId, userId, chunks, {
             url,
             source: 'url',
-        });
+        }, scope);
 
         // 5. 更新文档状态
         await updateDocumentStatus(docId, userId, 'ready', chunks.length);
@@ -123,10 +129,11 @@ export async function processUrlImport(
 export async function chatWithKnowledge(
     userId: string,
     query: string,
-    history: Array<{ role: string; content: string }> = []
+    history: Array<{ role: string; content: string }> = [],
+    scope: { type?: 'user' | 'group'; id?: string } = {}
 ): Promise<{ answer: string; sources: Source[] }> {
     // 1. 向量搜索，找到最相关的文档块
-    const relevantChunks = await retrieveRelevantChunks(query, userId, 5);
+    const relevantChunks = await retrieveRelevantChunks(query, userId, 5, scope);
 
     let context = '';
     const sources: Source[] = [];

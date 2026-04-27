@@ -18,6 +18,8 @@ const pool = new Pool({
 export interface KBDocument {
     id: number;
     user_id: string;
+    scope_type: 'user' | 'group';
+    scope_id: string;
     title: string;
     source: 'local' | 'url';
     file_type: string | null;
@@ -32,17 +34,19 @@ export interface KBDocument {
 
 export async function createDocument(params: {
     userId: string;
+    scopeType?: 'user' | 'group';
+    scopeId?: string;
     title: string;
     source: 'local' | 'url';
     fileType?: string;
     filePath?: string;
     url?: string;
 }): Promise<number> {
-    const { userId, title, source, fileType, filePath, url } = params;
+    const { userId, scopeType = 'user', scopeId = userId, title, source, fileType, filePath, url } = params;
     const result = await pool.query<{ id: number }>(
-        `INSERT INTO kb_documents (user_id, title, source, file_type, file_path, url)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-        [userId, title, source, fileType || null, filePath || null, url || null]
+        `INSERT INTO kb_documents (user_id, scope_type, scope_id, title, source, file_type, file_path, url)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+        [userId, scopeType, scopeId, title, source, fileType || null, filePath || null, url || null]
     );
     return result.rows[0].id;
 }
@@ -57,20 +61,24 @@ export async function getDocument(id: number, userId: string): Promise<KBDocumen
 
 export async function listDocuments(
     userId: string,
-    options: { page?: number; pageSize?: number } = {}
+    options: { page?: number; pageSize?: number; scopeType?: 'user' | 'group'; scopeId?: string } = {}
 ): Promise<{ documents: KBDocument[]; total: number }> {
-    const { page = 1, pageSize = 20 } = options;
+    const { page = 1, pageSize = 20, scopeType = 'user', scopeId = userId } = options;
     const offset = (page - 1) * pageSize;
+
+    const listWhere = scopeType === 'group'
+        ? `scope_type = $1 AND scope_id = $2`
+        : `user_id = $3 AND scope_type = $1 AND scope_id = $2`;
 
     const [docsResult, countResult] = await Promise.all([
         pool.query<KBDocument>(
-            `SELECT * FROM kb_documents WHERE user_id = $1
-             ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
-            [userId, pageSize, offset]
+            `SELECT * FROM kb_documents WHERE ${listWhere}
+             ORDER BY created_at DESC LIMIT $4 OFFSET $5`,
+            [scopeType, scopeId, userId, pageSize, offset]
         ),
         pool.query<{ count: string }>(
-            `SELECT COUNT(*) FROM kb_documents WHERE user_id = $1`,
-            [userId]
+            `SELECT COUNT(*) FROM kb_documents WHERE ${listWhere}`,
+            [scopeType, scopeId, userId]
         ),
     ]);
 
@@ -101,6 +109,18 @@ export async function deleteDocument(id: number, userId: string): Promise<boolea
     const result = await pool.query(
         `DELETE FROM kb_documents WHERE id = $1 AND user_id = $2`,
         [id, userId]
+    );
+    return (result.rowCount ?? 0) > 0;
+}
+
+export async function deleteDocumentInScope(
+    id: number,
+    scopeType: 'user' | 'group',
+    scopeId: string
+): Promise<boolean> {
+    const result = await pool.query(
+        `DELETE FROM kb_documents WHERE id = $1 AND scope_type = $2 AND scope_id = $3`,
+        [id, scopeType, scopeId]
     );
     return (result.rowCount ?? 0) > 0;
 }
@@ -138,6 +158,8 @@ export interface SearchResult extends KBChunk {
 export async function insertChunks(chunks: Array<{
     documentId: number;
     userId: string;
+    scopeType?: 'user' | 'group';
+    scopeId?: string;
     chunkIndex: number;
     content: string;
     embedding: number[];
@@ -151,11 +173,13 @@ export async function insertChunks(chunks: Array<{
 
     for (const chunk of chunks) {
         placeholders.push(
-            `($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}::vector, $${idx++})`
+            `($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}::vector, $${idx++})`
         );
         values.push(
             chunk.documentId,
             chunk.userId,
+            chunk.scopeType || 'user',
+            chunk.scopeId || chunk.userId,
             chunk.chunkIndex,
             chunk.content,
             `[${chunk.embedding.join(',')}]`,
@@ -164,7 +188,7 @@ export async function insertChunks(chunks: Array<{
     }
 
     await pool.query(
-        `INSERT INTO kb_chunks (document_id, user_id, chunk_index, content, embedding, metadata)
+        `INSERT INTO kb_chunks (document_id, user_id, scope_type, scope_id, chunk_index, content, embedding, metadata)
          VALUES ${placeholders.join(', ')}`,
         values
     );
@@ -179,17 +203,20 @@ export async function insertChunks(chunks: Array<{
 export async function vectorSearch(
     queryEmbedding: number[],
     userId: string,
-    topK = 5
+    topK = 5,
+    scope: { type?: 'user' | 'group'; id?: string } = {}
 ): Promise<SearchResult[]> {
     const embeddingStr = `[${queryEmbedding.join(',')}]`;
+    const scopeType = scope.type || 'user';
+    const scopeId = scope.id || userId;
     const result = await pool.query<SearchResult & { similarity: number }>(
         `SELECT id, document_id, user_id, chunk_index, content, metadata, created_at,
                 (embedding <=> $1::vector) AS similarity
          FROM kb_chunks
-         WHERE user_id = $2
+         WHERE scope_type = $2 AND scope_id = $3
          ORDER BY embedding <=> $1::vector
-         LIMIT $3`,
-        [embeddingStr, userId, topK]
+         LIMIT $4`,
+        [embeddingStr, scopeType, scopeId, topK]
     );
     return result.rows;
 }

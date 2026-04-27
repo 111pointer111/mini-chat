@@ -5,6 +5,8 @@ import mongoose from 'mongoose';
 import { ChatMessage } from '../services/aiService';
 import { runAgentStream, UserMessageInput } from '../services/agentService';
 import { AI_ASSISTANT_ID } from '../scripts/initAdmin';
+import GroupMember from '../models/GroupMember';
+import Group from '../models/Group';
 
 interface DecodedToken {
     id: string;
@@ -45,6 +47,19 @@ const saveStreamMessage = async (userId: string, conversationId: mongoose.Types.
     await Conversation.findByIdAndUpdate(conversationId, { lastMessageAt: new Date() });
 };
 
+const ASSISTANT_MENTION_RE = /@(?:小助手|AI|ai|助手)\b/;
+
+const isGroupMember = async (groupId: string, userId: string) => {
+    return GroupMember.findOne({
+        groupId: new mongoose.Types.ObjectId(groupId),
+        userId: new mongoose.Types.ObjectId(userId),
+    });
+};
+
+const populateMessageSender = async (messageId: mongoose.Types.ObjectId) => {
+    return Message.findById(messageId).populate('sender', 'username avatar').lean();
+};
+
 export const getIO = (): Server => {
     if (!ioInstance) {
         throw new Error('Socket.IO not initialized');
@@ -77,10 +92,34 @@ export const setupSocket = (io: Server) => {
         // Join a room based on user ID for personal notifications
         socket.join(userId);
 
+        GroupMember.find({ userId: new mongoose.Types.ObjectId(userId) })
+            .select('groupId')
+            .lean()
+            .then((memberships) => {
+                memberships.forEach((membership) => {
+                    socket.join(`group:${membership.groupId.toString()}`);
+                });
+            })
+            .catch((err) => console.error('Join group rooms error:', err));
+
         // Join a chat room
         socket.on('join_room', (room) => {
             socket.join(room);
             console.log(`User ${userId} joined room: ${room}`);
+        });
+
+        socket.on('join_group_room', async (groupId, callback) => {
+            const membership = await isGroupMember(groupId, userId);
+            if (!membership) {
+                if (typeof callback === 'function') {
+                    callback({ success: false, error: 'Not a group member' });
+                }
+                return;
+            }
+            socket.join(`group:${groupId}`);
+            if (typeof callback === 'function') {
+                callback({ success: true });
+            }
         });
 
         // Handle sending messages
@@ -115,6 +154,99 @@ export const setupSocket = (io: Server) => {
                 console.error('Socket message error:', error);
                 if (typeof callback === 'function') {
                     callback({ success: false, error: 'Failed to send message' });
+                }
+            }
+        });
+
+        socket.on('send_group_message', async (data, callback) => {
+            const { groupId, content, type = 'text' } = data;
+            if (!groupId || !content) {
+                if (typeof callback === 'function') {
+                    callback({ success: false, error: 'Invalid group message data' });
+                }
+                return;
+            }
+
+            try {
+                const membership = await isGroupMember(groupId, userId);
+                if (!membership) {
+                    if (typeof callback === 'function') {
+                        callback({ success: false, error: 'Not a group member' });
+                    }
+                    return;
+                }
+
+                const group = await Group.findById(groupId);
+                const mentionAssistant = Boolean(group?.assistantEnabled && ASSISTANT_MENTION_RE.test(content));
+                const newMessage = await Message.create({
+                    sender: new mongoose.Types.ObjectId(userId),
+                    groupId: new mongoose.Types.ObjectId(groupId),
+                    content,
+                    type,
+                    mentionAssistant,
+                });
+
+                const populated = await populateMessageSender(newMessage._id as mongoose.Types.ObjectId);
+                socket.to(`group:${groupId}`).emit('receive_group_message', populated || newMessage);
+
+                if (typeof callback === 'function') {
+                    callback({ success: true, messageId: newMessage._id.toString() });
+                }
+
+                if (mentionAssistant) {
+                    const historyMessages = await Message.find({
+                        groupId: new mongoose.Types.ObjectId(groupId),
+                    })
+                        .sort({ createdAt: -1 })
+                        .limit(12)
+                        .populate('sender', 'username')
+                        .lean();
+
+                    const history: ChatMessage[] = historyMessages
+                        .reverse()
+                        .slice(0, -1)
+                        .map((msg: any) => ({
+                            role: msg.sender?._id?.toString() === AI_ASSISTANT_ID.toString() ? 'assistant' as const : 'user' as const,
+                            content: `${msg.sender?.username || '用户'}：${msg.content}`,
+                        }));
+
+                    const cleanContent = content.replace(ASSISTANT_MENTION_RE, '').trim() || content;
+                    const userInput: UserMessageInput = { text: cleanContent };
+                    let fullContent = '';
+
+                    await runAgentStream(history, userInput, {
+                        userId,
+                        knowledgeScope: { type: 'group', id: groupId },
+                        onChunk: (chunk) => {
+                            fullContent += chunk;
+                        },
+                        onDone: async () => {
+                            if (!fullContent.trim()) return;
+                            const assistantMessage = await Message.create({
+                                sender: AI_ASSISTANT_ID,
+                                groupId: new mongoose.Types.ObjectId(groupId),
+                                content: fullContent,
+                                type: 'text',
+                            });
+                            const populatedAssistant = await populateMessageSender(assistantMessage._id as mongoose.Types.ObjectId);
+                            io.to(`group:${groupId}`).emit('receive_group_message', populatedAssistant || assistantMessage);
+                        },
+                        onError: async (err) => {
+                            const errorMessage = await Message.create({
+                                sender: AI_ASSISTANT_ID,
+                                groupId: new mongoose.Types.ObjectId(groupId),
+                                content: `小助手响应失败：${err}`,
+                                type: 'system',
+                            });
+                            const populatedError = await populateMessageSender(errorMessage._id as mongoose.Types.ObjectId);
+                            io.to(`group:${groupId}`).emit('receive_group_message', populatedError || errorMessage);
+                        },
+                    });
+                }
+            } catch (error) {
+                console.error('Socket group message error:', error);
+                if (typeof callback === 'function') {
+                    callback({ success: false, error: 'Failed to send group message' });
                 }
             }
         });

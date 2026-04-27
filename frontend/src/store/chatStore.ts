@@ -10,10 +10,22 @@ export interface User {
 
 export interface Message {
     _id: string;
-    sender: string;
-    receiver: string;
+    sender: string | User;
+    receiver?: string;
+    groupId?: string;
     content: string;
     type: 'text' | 'image' | 'system';
+    createdAt: string;
+    mentionAssistant?: boolean;
+}
+
+export interface Group {
+    _id: string;
+    name: string;
+    description?: string;
+    avatar?: string;
+    assistantEnabled: boolean;
+    role?: 'owner' | 'admin' | 'member';
     createdAt: string;
 }
 
@@ -27,18 +39,23 @@ interface FriendRequest {
 
 interface ChatState {
     friends: User[];
+    groups: Group[];
     pendingRequests: FriendRequest[];
     selectedFriend: User | null;
+    selectedGroup: Group | null;
     selectedTaskType: string | null;
     selectedTaskName: string | null;
     messages: Message[];
     isLoading: boolean;
 
     fetchFriends: () => Promise<void>;
+    fetchGroups: () => Promise<void>;
     fetchPendingRequests: () => Promise<void>;
     fetchMessages: (friendId: string) => Promise<void>;
+    fetchGroupMessages: (groupId: string) => Promise<void>;
     fetchTaskMessages: (taskType: string) => Promise<void>;
     selectFriend: (friend: User) => void;
+    selectGroup: (group: Group) => void;
     selectScheduledTask: (taskType: string, taskName?: string) => void;
     addMessage: (message: Message) => void;
     sendFriendRequest: (recipientId: string) => Promise<void>;
@@ -47,8 +64,10 @@ interface ChatState {
 
 export const useChatStore = create<ChatState>((set, get) => ({
     friends: [],
+    groups: [],
     pendingRequests: [],
     selectedFriend: null,
+    selectedGroup: null,
     selectedTaskType: null,
     selectedTaskName: null,
     messages: [],
@@ -58,6 +77,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
         try {
             const res = await api.get('/friends');
             set({ friends: res.data });
+        } catch (err) {
+            console.error(err);
+        }
+    },
+
+    fetchGroups: async () => {
+        try {
+            const res = await api.get('/groups');
+            set({ groups: res.data });
         } catch (err) {
             console.error(err);
         }
@@ -83,13 +111,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
     },
 
+    fetchGroupMessages: async (groupId: string) => {
+        try {
+            set({ isLoading: true, messages: [] });
+            const res = await api.get(`/groups/${groupId}/messages`);
+            set({ messages: res.data, isLoading: false });
+        } catch (err) {
+            console.error(err);
+            set({ isLoading: false });
+        }
+    },
+
     selectFriend: (friend) => {
-        set({ selectedFriend: friend, selectedTaskType: null });
+        set({ selectedFriend: friend, selectedGroup: null, selectedTaskType: null });
         get().fetchMessages(friend._id);
     },
 
+    selectGroup: (group) => {
+        set({ selectedGroup: group, selectedFriend: null, selectedTaskType: null, selectedTaskName: null });
+        get().fetchGroupMessages(group._id);
+    },
+
     selectScheduledTask: (taskType: string, taskName?: string) => {
-        set({ selectedTaskType: taskType, selectedTaskName: taskName || null, selectedFriend: null });
+        set({ selectedTaskType: taskType, selectedTaskName: taskName || null, selectedFriend: null, selectedGroup: null });
         get().fetchTaskMessages(taskType);
     },
 
@@ -105,11 +149,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
     },
 
     addMessage: (message) => {
-        const { selectedFriend } = get();
+        const { selectedFriend, selectedGroup } = get();
+
+        if (selectedGroup && message.groupId === selectedGroup._id) {
+            set((state) => ({ messages: [...state.messages, message] }));
+            return;
+        }
+
         if (!selectedFriend) return;
 
         const friendId = selectedFriend._id;
-        if (message.sender === friendId || message.receiver === friendId) {
+        const senderId = typeof message.sender === 'string' ? message.sender : message.sender._id;
+        if (senderId === friendId || message.receiver === friendId) {
             set((state) => ({ messages: [...state.messages, message] }));
         }
     },

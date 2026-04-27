@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Box, Paper, Typography, TextField, IconButton, Avatar } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
-import { GitHub, MenuBook, Translate, AutoAwesome, ChatBubbleOutline } from '@mui/icons-material';
+import { GitHub, MenuBook, Translate, AutoAwesome, ChatBubbleOutline, Groups } from '@mui/icons-material';
 import ReactMarkdown from 'react-markdown';
 import { useChatStore } from '../store/chatStore';
 import type { Message } from '../store/chatStore';
@@ -28,7 +28,7 @@ const TASK_ICONS: Record<string, React.ReactNode> = {
 };
 
 const ChatWindow: React.FC = () => {
-    const { selectedFriend, selectedTaskType, selectedTaskName, messages, addMessage } = useChatStore();
+    const { selectedFriend, selectedGroup, selectedTaskType, selectedTaskName, messages, addMessage } = useChatStore();
     const { user } = useAuthStore();
     const { socket } = useSocketStore();
     const [inputText, setInputText] = useState('');
@@ -56,6 +56,21 @@ const ChatWindow: React.FC = () => {
             socket.off('receive_message', handleReceiveMessage);
         };
     }, [socket, addMessage]);
+
+    useEffect(() => {
+        if (!socket || !selectedGroup) return;
+
+        socket.emit('join_group_room', selectedGroup._id);
+        const handleReceiveGroupMessage = (newMessage: Message) => {
+            addMessage(newMessage);
+        };
+
+        socket.on('receive_group_message', handleReceiveGroupMessage);
+
+        return () => {
+            socket.off('receive_group_message', handleReceiveGroupMessage);
+        };
+    }, [socket, selectedGroup, addMessage]);
 
     // Listen for scheduled task messages
     useEffect(() => {
@@ -90,7 +105,48 @@ const ChatWindow: React.FC = () => {
 
 
     const handleSend = () => {
-        if (!inputText.trim() || !selectedFriend || !socket || !user) return;
+        if (!inputText.trim() || !socket || !user) return;
+
+        if (selectedGroup) {
+            const groupId = selectedGroup._id;
+            const content = inputText;
+            const tempId = `temp-${Date.now()}`;
+            const optimisticMessage: Message = {
+                _id: tempId,
+                sender: user,
+                groupId,
+                content,
+                type: 'text',
+                createdAt: new Date().toISOString(),
+            };
+
+            useChatStore.setState((state) => ({
+                messages: [...state.messages, optimisticMessage],
+            }));
+            setInputText('');
+
+            socket.emit('send_group_message', {
+                groupId,
+                content,
+                type: 'text',
+            }, (ack: { success: boolean; error?: string; messageId?: string }) => {
+                if (!ack?.success) {
+                    useChatStore.setState((state) => ({
+                        messages: state.messages.filter((m) => m._id !== tempId),
+                    }));
+                    console.error('Failed to send group message:', ack?.error);
+                } else if (ack?.messageId) {
+                    useChatStore.setState((state) => ({
+                        messages: state.messages.map((m) =>
+                            m._id === tempId ? { ...m, _id: ack.messageId! } : m
+                        ),
+                    }));
+                }
+            });
+            return;
+        }
+
+        if (!selectedFriend) return;
 
         const friendId = selectedFriend._id;
         const tempId = `temp-${Date.now()}`;
@@ -132,7 +188,7 @@ const ChatWindow: React.FC = () => {
         });
     };
 
-    if (!selectedFriend && !selectedTaskType) {
+    if (!selectedFriend && !selectedGroup && !selectedTaskType) {
         return (
             <Box sx={{ 
                 flex: 1, 
@@ -154,11 +210,86 @@ const ChatWindow: React.FC = () => {
                     <ChatBubbleOutline sx={{ fontSize: 40, color: 'primary.main' }} />
                 </Box>
                 <Typography variant="h6" color="text.secondary" fontWeight={500}>
-                    选择一个好友开始聊天
+                    选择一个会话开始聊天
                 </Typography>
                 <Typography variant="body2" color="text.disabled">
-                    从左侧列表选择好友或定时任务
+                    从左侧列表选择好友、群组或定时任务
                 </Typography>
+            </Box>
+        );
+    }
+
+    if (selectedGroup) {
+        return (
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
+                <Paper square elevation={1} sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Avatar src={selectedGroup.avatar} sx={{ bgcolor: 'secondary.main' }}>
+                        <Groups />
+                    </Avatar>
+                    <Box>
+                        <Typography variant="h6">{selectedGroup.name}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                            输入 @小助手 可让群聊小助手基于群知识库回答
+                        </Typography>
+                    </Box>
+                </Paper>
+
+                <Box sx={{ flex: 1, overflowY: 'auto', p: 2, bgcolor: '#f0f2f5', display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    {messages.map((msg, index) => {
+                        const sender = typeof msg.sender === 'string' ? null : msg.sender;
+                        const senderId = typeof msg.sender === 'string' ? msg.sender : msg.sender._id;
+                        const isMe = senderId === user?._id;
+                        const isAssistant = senderId === '000000000000000000000001';
+                        return (
+                            <Box
+                                key={index}
+                                sx={{
+                                    alignSelf: isMe ? 'flex-end' : 'flex-start',
+                                    maxWidth: { xs: '88%', sm: '72%' },
+                                }}
+                            >
+                                {!isMe && (
+                                    <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                                        {isAssistant ? '群聊小助手' : sender?.username || '成员'}
+                                    </Typography>
+                                )}
+                                <Paper
+                                    elevation={0}
+                                    sx={{
+                                        p: 1.5,
+                                        bgcolor: isMe ? 'primary.main' : isAssistant ? '#EEF2FF' : 'white',
+                                        color: isMe ? 'white' : 'text.primary',
+                                        borderRadius: 2,
+                                        borderTopRightRadius: isMe ? 0 : 2,
+                                        borderTopLeftRadius: isMe ? 2 : 0,
+                                    }}
+                                >
+                                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                                </Paper>
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: isMe ? 'right' : 'left', mt: 0.5 }}>
+                                    {new Date(msg.createdAt).toLocaleTimeString()}
+                                </Typography>
+                            </Box>
+                        );
+                    })}
+                    <div ref={messagesEndRef} />
+                </Box>
+
+                <Paper square elevation={3} sx={{ p: 2 }}>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                        <TextField
+                            fullWidth
+                            placeholder="输入消息，@小助手 可提问..."
+                            value={inputText}
+                            onChange={(e) => setInputText(e.target.value)}
+                            onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+                            size="small"
+                        />
+                        <IconButton color="primary" onClick={handleSend}>
+                            <SendIcon />
+                        </IconButton>
+                    </Box>
+                </Paper>
             </Box>
         );
     }
@@ -270,7 +401,8 @@ const ChatWindow: React.FC = () => {
             {/* Messages Area */}
             <Box sx={{ flex: 1, overflowY: 'auto', p: 2, bgcolor: '#f0f2f5', display: 'flex', flexDirection: 'column', gap: 1 }}>
                 {messages.map((msg, index) => {
-                    const isMe = msg.sender === user?._id;
+                    const senderId = typeof msg.sender === 'string' ? msg.sender : msg.sender._id;
+                    const isMe = senderId === user?._id;
                     return (
                         <Box
                             key={index}

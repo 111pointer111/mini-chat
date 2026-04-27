@@ -100,6 +100,7 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
 
 interface RunAgentOptions {
     userId?: string;
+    knowledgeScope?: { type?: 'user' | 'group'; id?: string };
 }
 
 const MAX_ITERATIONS = 10;
@@ -119,13 +120,17 @@ const getMessageText = (message: UserMessageInput | string): string => {
     return typeof message === 'string' ? message : message.text;
 };
 
-async function buildSystemPrompt(userId: string | undefined, query: string): Promise<string> {
+async function buildSystemPrompt(
+    userId: string | undefined,
+    query: string,
+    knowledgeScope: { type?: 'user' | 'group'; id?: string } = {}
+): Promise<string> {
     if (!userId || !query.trim()) {
         return SYSTEM_PROMPT;
     }
 
     try {
-        const chunks = await retrieveRelevantChunks(query, userId, 5);
+        const chunks = await retrieveRelevantChunks(query, userId, 5, knowledgeScope);
         if (chunks.length === 0) {
             return SYSTEM_PROMPT;
         }
@@ -163,7 +168,7 @@ export async function runAgent(
     const { userId } = options;
     const config = await getUserAIConfig(userId);
     const client = getClient(config);
-    const systemPrompt = await buildSystemPrompt(userId, getMessageText(newMessage));
+    const systemPrompt = await buildSystemPrompt(userId, getMessageText(newMessage), options.knowledgeScope);
 
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
         { role: 'system', content: systemPrompt },
@@ -245,7 +250,7 @@ export async function runAgentStream(
     try {
         const config = await getUserAIConfig(userId);
         const client = getClient(config);
-        const systemPrompt = await buildSystemPrompt(userId, getMessageText(newMessage));
+        const systemPrompt = await buildSystemPrompt(userId, getMessageText(newMessage), options.knowledgeScope);
 
         const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
             { role: 'system', content: systemPrompt },

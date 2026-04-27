@@ -30,6 +30,8 @@ async function createVectorIndex() {
             CREATE TABLE IF NOT EXISTS kb_documents (
                 id SERIAL PRIMARY KEY,
                 user_id VARCHAR(255) NOT NULL,
+                scope_type VARCHAR(20) NOT NULL DEFAULT 'user',
+                scope_id VARCHAR(255),
                 title VARCHAR(500) NOT NULL,
                 source VARCHAR(20) NOT NULL,          -- 'local' 或 'url'
                 file_type VARCHAR(50),                  -- pdf/docx/pptx/image/url/text
@@ -50,6 +52,8 @@ async function createVectorIndex() {
                 id SERIAL PRIMARY KEY,
                 document_id INTEGER REFERENCES kb_documents(id) ON DELETE CASCADE,
                 user_id VARCHAR(255) NOT NULL,
+                scope_type VARCHAR(20) NOT NULL DEFAULT 'user',
+                scope_id VARCHAR(255),
                 chunk_index INTEGER NOT NULL,
                 content TEXT NOT NULL,
                 embedding VECTOR(1536),                -- 1536 维向量
@@ -69,7 +73,9 @@ async function createVectorIndex() {
         // 5. 创建普通索引（加速按用户查询）
         await client.query(`
             CREATE INDEX IF NOT EXISTS kb_chunks_user_id_idx ON kb_chunks(user_id);
+            CREATE INDEX IF NOT EXISTS kb_chunks_scope_idx ON kb_chunks(scope_type, scope_id);
             CREATE INDEX IF NOT EXISTS kb_documents_user_id_idx ON kb_documents(user_id);
+            CREATE INDEX IF NOT EXISTS kb_documents_scope_idx ON kb_documents(scope_type, scope_id);
         `);
         console.log('✅ 普通索引已创建');
 
