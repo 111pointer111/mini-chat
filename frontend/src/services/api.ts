@@ -65,4 +65,41 @@ export const importGroupKBFromUrl = (groupId: string, url: string, title?: strin
 export const deleteGroupKBDocument = (groupId: string, documentId: number) =>
     api.delete(`/groups/${groupId}/kb/documents/${documentId}`);
 
+// ==================== MCP 工具 API ====================
+
+export interface MCPHeaderInput {
+    key: string;
+    value: string;
+}
+
+export interface MCPServerInput {
+    name: string;
+    description?: string;
+    transport: 'http' | 'sse';
+    url: string;
+    headers?: MCPHeaderInput[];
+    enabled?: boolean;
+}
+
+export const getMCPServers = () =>
+    api.get('/mcp/servers');
+
+export const createMCPServer = (data: MCPServerInput) =>
+    api.post('/mcp/servers', data);
+
+export const updateMCPServer = (id: string, data: Partial<MCPServerInput>) =>
+    api.put(`/mcp/servers/${id}`, data);
+
+export const deleteMCPServer = (id: string) =>
+    api.delete(`/mcp/servers/${id}`);
+
+export const testMCPServer = (id: string) =>
+    api.post(`/mcp/servers/${id}/test`);
+
+export const refreshMCPServerTools = (id: string) =>
+    api.post(`/mcp/servers/${id}/refresh-tools`);
+
+export const getMCPTools = () =>
+    api.get('/mcp/tools');
+
 export default api;

@@ -10,6 +10,7 @@ import ScheduledTasks from './pages/ScheduledTasks';
 import AIChat from './pages/AIChat';
 import AdminAIProviders from './pages/AdminAIProviders';
 import KnowledgeBase from './pages/KnowledgeBase';
+import MCPTools from './pages/MCPTools';
 import AuthLayout from './layouts/AuthLayout';
 import ProtectedLayout from './layouts/ProtectedLayout';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -38,6 +39,7 @@ function App() {
               <Route path="/scheduled-tasks" element={<ScheduledTasks />} />
               <Route path="/ai-chat" element={<AIChat />} />
               <Route path="/knowledge-base" element={<KnowledgeBase />} />
+              <Route path="/mcp-tools" element={<MCPTools />} />
               <Route path="/admin/ai-providers" element={<AdminAIProviders />} />
             </Route>
 

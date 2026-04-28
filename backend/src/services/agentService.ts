@@ -7,6 +7,7 @@
 import { getWeather, weatherToolDefinition } from './getWeather';
 import { ChatMessage, getUserAIConfig, getClient } from './aiService';
 import { retrieveRelevantChunks } from './kbEmbeddingService';
+import { executeMcpTool, getMcpToolDefinitions } from './mcpService';
 import OpenAI from 'openai';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -80,22 +81,34 @@ const toolRegistry: Record<string, Tool> = {
 };
 
 // 获取工具描述列表
-export function getTools() {
-    return Object.values(toolRegistry).map((t) => t.definition);
+export async function getTools(userId?: string) {
+    const localTools = Object.values(toolRegistry).map((t) => t.definition);
+    const mcpTools = userId ? await getMcpToolDefinitions(userId) : [];
+    return [...localTools, ...mcpTools];
 }
 
 // 执行工具
-export async function executeTool(name: string, args: Record<string, unknown>): Promise<string> {
+export async function executeTool(name: string, args: Record<string, unknown>, userId?: string): Promise<string> {
     const tool = toolRegistry[name];
-    if (!tool) {
-        return `错误：未找到工具 "${name}"`;
+    if (tool) {
+        try {
+            return await tool.handler(args);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return `工具执行失败: ${msg}`;
+        }
     }
-    try {
-        return await tool.handler(args);
-    } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return `工具执行失败: ${msg}`;
+
+    if (name.startsWith('mcp_') && userId) {
+        try {
+            return await executeMcpTool(userId, name, args);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return `MCP 工具执行失败: ${msg}`;
+        }
     }
+
+    return `错误：未找到工具 "${name}"`;
 }
 
 interface RunAgentOptions {
@@ -192,7 +205,7 @@ export async function runAgent(
         const response = await client.chat.completions.create({
             model: config.model,
             messages,
-            tools: getTools(),
+            tools: await getTools(userId),
         });
 
         const message = response.choices[0].message;
@@ -214,7 +227,7 @@ export async function runAgent(
                     args = {};
                 }
 
-                const result = await executeTool(toolName, args);
+                const result = await executeTool(toolName, args, userId);
 
                 messages.push({
                     role: 'tool',
@@ -272,7 +285,7 @@ export async function runAgentStream(
             const response = await client.chat.completions.create({
                 model: config.model,
                 messages,
-                tools: getTools(),
+                tools: await getTools(userId),
             });
 
             const message = response.choices[0].message;
@@ -291,7 +304,7 @@ export async function runAgentStream(
                         args = {};
                     }
 
-                    const result = await executeTool(toolName, args);
+                    const result = await executeTool(toolName, args, userId);
 
                     messages.push({
                         role: 'tool',
