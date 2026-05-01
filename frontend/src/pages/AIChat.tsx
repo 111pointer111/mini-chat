@@ -186,8 +186,6 @@ const AIChat: React.FC = () => {
                 if (streamingMessageIdRef.current) {
                     setExpandedThink((prev) => ({ ...prev, [streamingMessageIdRef.current!]: false }));
                 }
-                // 刷新对话列表（自动生成的标题会热更新）
-                loadConversations();
                 streamingRawRef.current = '';
                 pendingThinkingRef.current = '';
                 isStreamingRef.current = false;
@@ -232,6 +230,14 @@ const AIChat: React.FC = () => {
             }
         });
 
+        socket.on('conversation_renamed', (data: { conversationId: string; name: string }) => {
+            setConversations((prev) =>
+                prev.map((c) =>
+                    c._id === data.conversationId ? { ...c, name: data.name } : c
+                )
+            );
+        });
+
         socket.on('ai_stream_error', (data: { error: string }) => {
             setMessages((prev) => {
                 const withoutStreaming = prev.filter((m) => m.id !== streamingMessageIdRef.current);
@@ -253,6 +259,7 @@ const AIChat: React.FC = () => {
 
         return () => {
             socket!.off('ai_stream');
+            socket!.off('conversation_renamed');
             socket!.off('ai_stream_error');
         };
     }, []);

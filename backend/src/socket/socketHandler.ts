@@ -333,8 +333,11 @@ export const setupSocket = (io: Server) => {
                         socket.emit('ai_stream', { content: '', done: true });
                         if (fullContent) {
                             await saveStreamMessage(userId, aiConversation._id as mongoose.Types.ObjectId, fullContent);
-                            autoTitleConversation(aiConversation._id.toString(), userId, message, fullContent)
-                                .catch(err => console.error('Auto-title failed:', err));
+                            const convId = aiConversation._id.toString();
+                            const newTitle = await autoTitleConversation(convId, userId, message, fullContent);
+                            if (newTitle) {
+                                socket.emit('conversation_renamed', { conversationId: convId, name: newTitle });
+                            }
                         }
                     },
                     onError: (err) => {

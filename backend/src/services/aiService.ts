@@ -347,33 +347,23 @@ export const parseTaskIntent = async (message: string, userId?: string): Promise
     }
 };
 
-// 自动为对话生成标题（首次对话后触发）
+// 自动为对话生成标题（首次对话后触发）。返回生成的标题，失败返回空字符串。
 export const autoTitleConversation = async (
     conversationId: string,
     userId: string,
     userMessage: string,
     aiResponse: string
-): Promise<void> => {
+): Promise<string> => {
     try {
         const conversation = await Conversation.findById(conversationId);
-        if (!conversation) {
-            console.log('[AutoTitle] Conversation not found:', conversationId);
-            return;
-        }
-
-        console.log('[AutoTitle] Current name:', conversation.name);
+        if (!conversation) return '';
 
         // 只有默认名称才自动生成标题
-        if (!/^(AI 助手|对话 \d{4}\/\d{1,2}\/\d{1,2})$/.test(conversation.name)) {
-            console.log('[AutoTitle] Skipped: name already customized');
-            return;
-        }
+        if (!/^(AI 助手|对话 \d{4}\/\d{1,2}\/\d{1,2})$/.test(conversation.name)) return '';
 
         const stripThink = (text: string) => text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
         const userText = stripThink(userMessage).substring(0, 50);
         const aiText = stripThink(aiResponse).substring(0, 80);
-
-        console.log('[AutoTitle] Calling generateContent with userMsg:', userText);
 
         const title = await generateContent(
             `根据以下对话，生成一个简短的中文标题（2-8个字），概括这次对话的主题：\n\n用户：${userText}\n助手：${aiText}\n\n标题：`,
@@ -381,24 +371,20 @@ export const autoTitleConversation = async (
             userId
         );
 
-        console.log('[AutoTitle] AI raw response:', title.substring(0, 200));
-
         const cleaned = stripThink(title)
             .replace(/<think[\s\S]*/i, '')
             .replace(/["""''「」『』【】]/g, '')
             .trim()
             .substring(0, 50);
 
-        console.log('[AutoTitle] Cleaned title:', JSON.stringify(cleaned));
-
         if (cleaned) {
             await Conversation.findByIdAndUpdate(conversationId, { name: cleaned });
-            console.log('[AutoTitle] Updated name to:', cleaned);
-        } else {
-            console.log('[AutoTitle] Skipped: cleaned title is empty');
+            return cleaned;
         }
+        return '';
     } catch (err) {
-        console.error('[AutoTitle] Failed:', err);
+        console.error('Auto-title failed:', err);
+        return '';
     }
 };
 
