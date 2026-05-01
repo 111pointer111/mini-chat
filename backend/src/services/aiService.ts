@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import AIProvider, { IAIProvider } from '../models/AIProvider';
 import User from '../models/User';
+import Conversation from '../models/Conversation';
 
 // 支持的 AI 提供商配置
 export interface AIConfig {
@@ -343,6 +344,35 @@ export const parseTaskIntent = async (message: string, userId?: string): Promise
     } catch (err) {
         console.error('Failed to parse AI intent response as JSON:', err, 'Raw response:', response.substring(0, 200));
         return { isTaskCreation: false, reply: response };
+    }
+};
+
+// 自动为对话生成标题（首次对话后触发）
+export const autoTitleConversation = async (
+    conversationId: string,
+    userId: string,
+    userMessage: string,
+    aiResponse: string
+): Promise<void> => {
+    try {
+        const conversation = await Conversation.findById(conversationId);
+        if (!conversation) return;
+
+        // 只有默认名称才自动生成标题
+        if (!/^(AI 助手|对话 \d{4}\/\d{1,2}\/\d{1,2})$/.test(conversation.name)) return;
+
+        const title = await generateContent(
+            `根据以下对话，生成一个简短的中文标题（2-8个字），概括这次对话的主题：\n\n用户：${userMessage.substring(0, 200)}\n助手：${aiResponse.substring(0, 200)}\n\n标题：`,
+            '你是一个智能助手，根据对话内容生成简洁标题。只返回标题本身，不要引号或格式。',
+            userId
+        );
+
+        const cleanTitle = title.replace(/["""''「」『』【】]/g, '').trim().substring(0, 50);
+        if (cleanTitle) {
+            await Conversation.findByIdAndUpdate(conversationId, { name: cleanTitle });
+        }
+    } catch (err) {
+        console.error('Auto-title failed:', err);
     }
 };
 

@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import mongoose from 'mongoose';
-import aiService, { ChatMessage } from '../services/aiService';
+import aiService, { ChatMessage, autoTitleConversation } from '../services/aiService';
 import { chatWithKnowledge } from '../services/kbService';
 import ScheduledTask from '../models/ScheduledTask';
 import Conversation from '../models/Conversation';
@@ -215,6 +215,9 @@ export const chat = async (req: Request, res: Response) => {
             normalReply = await aiService.chatWithHistory(history, message, userId);
         }
         await saveMessage(aiConversation._id as mongoose.Types.ObjectId, AI_ASSISTANT_ID, userObjectId, normalReply);
+
+        autoTitleConversation(aiConversation._id.toString(), userId, message, normalReply)
+            .catch(err => console.error('Auto-title failed:', err));
 
         return res.json({
             reply: normalReply,

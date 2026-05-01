@@ -2,7 +2,7 @@ import { Server, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import Message from '../models/Message';
 import mongoose from 'mongoose';
-import { ChatMessage } from '../services/aiService';
+import { ChatMessage, autoTitleConversation } from '../services/aiService';
 import { runAgentStream, UserMessageInput } from '../services/agentService';
 import { AI_ASSISTANT_ID } from '../scripts/initAdmin';
 import GroupMember from '../models/GroupMember';
@@ -333,6 +333,8 @@ export const setupSocket = (io: Server) => {
                         socket.emit('ai_stream', { content: '', done: true });
                         if (fullContent) {
                             await saveStreamMessage(userId, aiConversation._id as mongoose.Types.ObjectId, fullContent);
+                            autoTitleConversation(aiConversation._id.toString(), userId, message, fullContent)
+                                .catch(err => console.error('Auto-title failed:', err));
                         }
                     },
                     onError: (err) => {
