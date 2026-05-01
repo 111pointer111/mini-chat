@@ -370,7 +370,11 @@ export const autoTitleConversation = async (
             userId
         );
 
-        const cleanTitle = title.replace(/["""''「」『』【】]/g, '').trim().substring(0, 50);
+        const cleanTitle = stripThink(title)
+            .replace(/<think[\s\S]*/i, '')
+            .replace(/["""''「」『』【】]/g, '')
+            .trim()
+            .substring(0, 50);
         if (cleanTitle) {
             await Conversation.findByIdAndUpdate(conversationId, { name: cleanTitle });
         }
