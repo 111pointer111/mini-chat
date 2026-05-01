@@ -43,6 +43,8 @@ services:
     restart: always
     ports:
       - "5000:5000"
+    volumes:
+      - uploads_data:/app/uploads
     environment:
       - NODE_ENV=production
       - PORT=5000
@@ -93,3 +95,4 @@ volumes:
   mongodb_data:
   redis_data:
   postgres_data:
+  uploads_data:
