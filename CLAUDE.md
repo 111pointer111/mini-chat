@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Mini-Chat is a full-stack intelligent chat platform with real-time messaging, AI chat, and scheduled task push notifications. Located in the `mini-chat/` subdirectory (the parent `mini-chat/` is the repo root with a nested `mini-chat/` codebase).
+Mini-Chat is a full-stack intelligent chat platform with real-time messaging, AI chat, and scheduled task push notifications. The repo root contains `backend/` and `frontend/` directories side by side.
 
 ## Development Commands
 

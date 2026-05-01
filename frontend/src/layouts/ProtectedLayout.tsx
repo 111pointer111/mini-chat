@@ -17,7 +17,7 @@ const ProtectedLayout: React.FC = () => {
             try {
                 const response = await api.get('/auth/me');
                 login(response.data.user, token);
-            } catch (error) {
+            } catch {
                 useAuthStore.getState().logout();
                 // Socket will be disconnected by Dashboard unmount or we can force it here
             } finally {

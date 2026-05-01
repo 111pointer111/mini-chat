@@ -39,16 +39,20 @@ if (!process.env.JWT_SECRET) {
 
 const app = express();
 const httpServer = createServer(app);
+const corsOrigins = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',')
+    : ["http://localhost:5173", "http://localhost:5174", "http://localhost:5175"];
+
 const io = new Server(httpServer, {
     cors: {
-        origin: ["http://localhost:5173", "http://localhost:5174", "http://localhost:5175"],
+        origin: corsOrigins,
         methods: ["GET", "POST"]
     }
 });
 
 // Middleware
 app.use(express.json());
-app.use(cors({ origin: ["http://localhost:5173", "http://localhost:5174", "http://localhost:5175"] }));
+app.use(cors({ origin: corsOrigins }));
 app.use(helmet());
 app.use(morgan('dev'));
 

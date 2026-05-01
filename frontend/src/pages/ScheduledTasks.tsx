@@ -91,9 +91,8 @@ const TaskCard: React.FC<{
     const [localTime, setLocalTime] = useState(task.pushTime || DEFAULT_TIME);
     const timeRef = useRef(task.pushTime || DEFAULT_TIME);
 
-    // Sync local time when task.pushTime changes from server
+    // Sync committed time ref when task.pushTime changes from server
     useEffect(() => {
-        setLocalTime(task.pushTime || DEFAULT_TIME);
         timeRef.current = task.pushTime || DEFAULT_TIME;
     }, [task.pushTime]);
 
@@ -296,7 +295,7 @@ const ScheduledTasks: React.FC = () => {
             const res = await api.get<TasksResponse>('/scheduled-tasks');
             setPresetTasks(res.data.presetTasks);
             setCustomTasks(res.data.customTasks);
-        } catch (err) {
+        } catch {
             setError('获取任务列表失败');
         } finally {
             setLoading(false);
@@ -315,7 +314,7 @@ const ScheduledTasks: React.FC = () => {
             setPresetTasks((prev) =>
                 prev.map((t) => (t.taskType === taskType ? { ...res.data, isCustom: false as const } : t))
             );
-        } catch (err) {
+        } catch {
             setError('更新失败');
         } finally {
             setUpdating(null);
@@ -330,7 +329,7 @@ const ScheduledTasks: React.FC = () => {
             setPresetTasks((prev) =>
                 prev.map((t) => (t.taskType === taskType ? { ...res.data, isCustom: false as const } : t))
             );
-        } catch (err) {
+        } catch {
             setError('更新失败');
         } finally {
             setUpdating(null);
@@ -345,7 +344,7 @@ const ScheduledTasks: React.FC = () => {
             setCustomTasks((prev) =>
                 prev.map((t) => (t._id === taskId ? { ...res.data, isCustom: true as const } : t))
             );
-        } catch (err) {
+        } catch {
             setError('更新失败');
         } finally {
             setUpdating(null);
@@ -360,7 +359,7 @@ const ScheduledTasks: React.FC = () => {
             setCustomTasks((prev) =>
                 prev.map((t) => (t._id === taskId ? { ...res.data, isCustom: true as const } : t))
             );
-        } catch (err) {
+        } catch {
             setError('更新失败');
         } finally {
             setUpdating(null);
@@ -380,7 +379,7 @@ const ScheduledTasks: React.FC = () => {
             setCustomTasks((prev) => prev.filter((t) => t._id !== taskToDelete._id));
             setDeleteDialogOpen(false);
             setTaskToDelete(null);
-        } catch (err) {
+        } catch {
             setError('删除失败');
         }
     };

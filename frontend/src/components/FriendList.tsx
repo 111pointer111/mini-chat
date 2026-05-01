@@ -67,9 +67,21 @@ const FriendList: React.FC = () => {
         fetchFriends();
         fetchGroups();
         fetchPendingRequests();
+
+        const fetchScheduledTasks = async () => {
+            try {
+                const res = await api.get('/scheduled-tasks');
+                const { presetTasks, customTasks } = res.data;
+                setScheduledTasks([
+                    ...presetTasks.filter((t: PresetTask) => t.enabled),
+                    ...customTasks.filter((t: CustomTask) => t.enabled),
+                ]);
+            } catch {
+                console.error('Failed to fetch scheduled tasks');
+            }
+        };
         fetchScheduledTasks();
 
-        // Poll for updates every 10 seconds (in a real app, use socket events for requests too)
         const interval = setInterval(() => {
             fetchFriends();
             fetchGroups();
@@ -77,20 +89,6 @@ const FriendList: React.FC = () => {
         }, 10000);
         return () => clearInterval(interval);
     }, [fetchFriends, fetchGroups, fetchPendingRequests]);
-
-    const fetchScheduledTasks = async () => {
-        try {
-            const res = await api.get('/scheduled-tasks');
-            const { presetTasks, customTasks } = res.data;
-            const allTasks = [
-                ...presetTasks.filter((t: PresetTask) => t.enabled),
-                ...customTasks.filter((t: CustomTask) => t.enabled),
-            ];
-            setScheduledTasks(allTasks);
-        } catch (err) {
-            console.error('Failed to fetch scheduled tasks:', err);
-        }
-    };
 
     const toggleMember = (memberId: string) => {
         setSelectedMemberIds((current) =>
