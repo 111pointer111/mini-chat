@@ -75,3 +75,28 @@ No test framework configured (`test: echo "Error: no test specified"`).
 ## CI/CD
 
 `.github/workflows/deploy.yml` — pushes to `main` trigger Docker build+push then SSH deploy with `docker compose pull && up -d --force-recreate`.
+
+## Behavioral Guidelines (Karpathy Principles)
+
+Derived from [andrej-karpathy-skills](https://github.com/forrestchang/andrej-karpathy-skills). Bias toward caution over speed; use judgment for trivial tasks.
+
+### 1. Think Before Coding
+
+State assumptions explicitly before implementing. If uncertain, ask. If multiple interpretations exist, present them — don't pick silently. If something is unclear, stop and name what's confusing.
+
+### 2. Simplicity First
+
+Minimum code that solves the problem. No speculative features, abstractions for single-use code, or "flexibility" not requested. If 200 lines could be 50, rewrite it. Ask: would a senior engineer say this is overcomplicated?
+
+### 3. Surgical Changes
+
+Touch only what you must. Don't "improve" adjacent code, comments, or formatting. Don't refactor things not broken. Match existing style. Clean up only what your changes made unused — don't remove pre-existing dead code unless asked. Every changed line should trace to the request.
+
+### 4. Goal-Driven Execution
+
+Define verifiable success criteria before starting. For multi-step tasks, state a brief plan with verify checks:
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+```
+Loop until criteria are met. After changes, run relevant verification (lint → typecheck → build).
