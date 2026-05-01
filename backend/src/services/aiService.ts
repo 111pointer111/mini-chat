@@ -361,8 +361,11 @@ export const autoTitleConversation = async (
         // 只有默认名称才自动生成标题
         if (!/^(AI 助手|对话 \d{4}\/\d{1,2}\/\d{1,2})$/.test(conversation.name)) return;
 
+        // 剥离 thinking 标签，避免干扰标题生成
+        const stripThink = (text: string) => text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+
         const title = await generateContent(
-            `根据以下对话，生成一个简短的中文标题（2-8个字），概括这次对话的主题：\n\n用户：${userMessage.substring(0, 200)}\n助手：${aiResponse.substring(0, 200)}\n\n标题：`,
+            `根据以下对话，生成一个简短的中文标题（2-8个字），概括这次对话的主题：\n\n用户：${stripThink(userMessage).substring(0, 50)}\n助手：${stripThink(aiResponse).substring(0, 80)}\n\n标题：`,
             '你是一个智能助手，根据对话内容生成简洁标题。只返回标题本身，不要引号或格式。',
             userId
         );

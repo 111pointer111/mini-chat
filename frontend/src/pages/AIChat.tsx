@@ -186,6 +186,8 @@ const AIChat: React.FC = () => {
                 if (streamingMessageIdRef.current) {
                     setExpandedThink((prev) => ({ ...prev, [streamingMessageIdRef.current!]: false }));
                 }
+                // 刷新对话列表（自动生成的标题会热更新）
+                loadConversations();
                 streamingRawRef.current = '';
                 pendingThinkingRef.current = '';
                 isStreamingRef.current = false;
@@ -532,11 +534,13 @@ const AIChat: React.FC = () => {
                                 sx={{ mr: 1 }}
                             />
                         ) : (
-                            <ListItemText
-                                primary={conv.name}
-                                secondary={conv.lastMessageAt ? new Date(conv.lastMessageAt).toLocaleDateString('zh-CN') : ''}
-                                primaryTypographyProps={{ noWrap: true }}
-                            />
+                            <Tooltip title={conv.name} arrow>
+                                <ListItemText
+                                    primary={conv.name}
+                                    secondary={conv.lastMessageAt ? new Date(conv.lastMessageAt).toLocaleDateString('zh-CN') : ''}
+                                    primaryTypographyProps={{ noWrap: true }}
+                                />
+                            </Tooltip>
                         )}
                         {editingConvId !== conv._id && (
                             <Box className="action-buttons" sx={{ display: 'flex' }}>
