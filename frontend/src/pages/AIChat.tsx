@@ -97,7 +97,6 @@ const AIChat: React.FC = () => {
     const [convToDelete, setConvToDelete] = useState<string | null>(null);
     const [expandedThink, setExpandedThink] = useState<Record<string, boolean>>({});
     const [isStreaming, setIsStreaming] = useState(false);
-    const [streamingStatus, setStreamingStatus] = useState<string>('');
     const [pendingImages, setPendingImages] = useState<File[]>([]); // 待发送的图片
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const imageInputRef = useRef<HTMLInputElement>(null);
@@ -171,11 +170,7 @@ const AIChat: React.FC = () => {
             socketRef.current = socket;
         }
 
-        socket.on('ai_stream_status', (data: { status: string }) => {
-            setStreamingStatus(data.status);
-        });
-
-        socket.on('ai_stream', (data: { content: string; done: boolean }) => {
+                socket.on('ai_stream', (data: { content: string; done: boolean }) => {
             if (data.done) {
                 // 流式结束：用完整原始内容更新 message，确保 thinking 正确解析
                 if (streamingMessageIdRef.current && streamingRawRef.current) {
@@ -187,13 +182,16 @@ const AIChat: React.FC = () => {
                         })
                     );
                 }
+                // 流式结束，折叠思考过程
+                if (streamingMessageIdRef.current) {
+                    setExpandedThink((prev) => ({ ...prev, [streamingMessageIdRef.current!]: false }));
+                }
                 streamingRawRef.current = '';
                 pendingThinkingRef.current = '';
                 isStreamingRef.current = false;
                 setIsStreaming(false);
                 setLoading(false);
                 streamingMessageIdRef.current = null;
-                setStreamingStatus('');
             } else {
                 // 累积原始内容
                 streamingRawRef.current += data.content;
@@ -218,9 +216,12 @@ const AIChat: React.FC = () => {
                             }
                         }
 
-                        // 如果本 chunk 包含 </think>，清空 pending
+                        // 如果本 chunk 包含 </think>，清空 pending 并折叠思考过程
                         if (data.content.includes('</think>')) {
                             pendingThinkingRef.current = '';
+                            if (streamingMessageIdRef.current) {
+                                setExpandedThink((prev) => ({ ...prev, [streamingMessageIdRef.current!]: false }));
+                            }
                         }
 
                         return { ...msg, content: main, thinking: finalThinking };
@@ -246,11 +247,9 @@ const AIChat: React.FC = () => {
             setLoading(false);
 
             streamingMessageIdRef.current = null;
-            setStreamingStatus('');
         });
 
         return () => {
-            socket!.off('ai_stream_status');
             socket!.off('ai_stream');
             socket!.off('ai_stream_error');
         };
@@ -390,7 +389,7 @@ const AIChat: React.FC = () => {
         
         streamingMessageIdRef.current = streamId;
         isStreamingRef.current = true;
-        setStreamingStatus('thinking');
+        setExpandedThink((prev) => ({ ...prev, [streamId]: true }));
         setError('');
 
         // 通过 Socket.IO 流式发送
@@ -414,7 +413,6 @@ const AIChat: React.FC = () => {
                     setIsStreaming(false);
 
                     streamingMessageIdRef.current = null;
-                    setStreamingStatus('');
                 } else if (response.conversationId && !currentConversationId) {
                     setCurrentConversationId(response.conversationId);
                 }
@@ -465,7 +463,6 @@ const AIChat: React.FC = () => {
                 setLoading(false);
 
                 streamingMessageIdRef.current = null;
-                setStreamingStatus('');
             }
         }
     };
@@ -780,7 +777,7 @@ const AIChat: React.FC = () => {
                                         )}
                                         {message.content ? (
                                             <ReactMarkdown>{message.content}</ReactMarkdown>
-                                        ) : (
+                                        ) : message.thinking ? null : (
                                             <Typography sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
                                                 ...
                                             </Typography>
@@ -842,7 +839,7 @@ const AIChat: React.FC = () => {
                         ))}
                     </AnimatePresence>
 
-                    {(loading || isStreaming) && (
+                    {loading && !isStreaming && (
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
                             <Box
                                 sx={{
@@ -867,17 +864,7 @@ const AIChat: React.FC = () => {
                                     borderColor: 'divider',
                                 }}
                             >
-                                {isStreaming ? (
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                        <SmartToy sx={{ color: 'primary.main', fontSize: 18 }} />
-                                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                            AI 正在输入
-                                            {streamingStatus === 'thinking' ? ' ···' : ''}
-                                        </Typography>
-                                    </Box>
-                                ) : (
-                                    <CircularProgress size={20} />
-                                )}
+                                <CircularProgress size={20} />
                             </Paper>
                         </Box>
                     )}
