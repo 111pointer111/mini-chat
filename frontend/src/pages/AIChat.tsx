@@ -338,7 +338,7 @@ const AIChat: React.FC = () => {
     };
 
     const handleSend = async () => {
-        if (!input.trim() || loading || isStreaming) return;
+        if ((!input.trim() && pendingImages.length === 0) || loading || isStreaming) return;
 
         const userMessage: Message = {
             id: Date.now().toString(),
@@ -975,7 +975,7 @@ const AIChat: React.FC = () => {
                         <IconButton
                             color="primary"
                             onClick={handleSend}
-                            disabled={!input.trim() || loading || isStreaming}
+                            disabled={(!input.trim() && pendingImages.length === 0) || loading || isStreaming}
                             sx={{
                                 flexShrink: 0,
                                 bgcolor: 'primary.main',
