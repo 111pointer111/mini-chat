@@ -8,16 +8,19 @@ import Message from '../models/Message';
 import { getIO } from '../socket';
 import aiService from './aiService';
 import { SYSTEM_USER_ID } from '../scripts/initAdmin';
+import redis from '../utils/redis';
 
 const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
 const REDIS_PORT = parseInt(process.env.REDIS_PORT || '6379');
 
+const REDIS_PASSWORD = process.env.REDIS_PASSWORD || undefined;
+
 const connection = {
     host: REDIS_HOST,
     port: REDIS_PORT,
+    password: REDIS_PASSWORD,
 };
 
-// Create the task queue
 export const taskQueue = new Queue('scheduled-tasks', {
     connection,
     defaultJobOptions: {
@@ -26,14 +29,12 @@ export const taskQueue = new Queue('scheduled-tasks', {
     },
 });
 
-// Task type to display name mapping (for preset tasks)
 const PRESET_TASK_NAMES: Record<string, string> = {
     github_trending: 'GitHub 热点',
     daily_poem: '每日诗句',
     daily_english: '每日英文',
 };
 
-// Get exclude list for deduplication
 const getExcludeList = async (userId: string, taskType: TaskType): Promise<string[]> => {
     const recentHistory = await PushHistory.find({
         userId: new mongoose.Types.ObjectId(userId),
@@ -46,7 +47,6 @@ const getExcludeList = async (userId: string, taskType: TaskType): Promise<strin
     return recentHistory.map((h) => h.content.substring(0, 100));
 };
 
-// Generate content based on task type using aiService
 const generateTaskContent = async (taskType: TaskType, userId: string, customPrompt?: string): Promise<string> => {
     const excludeList = await getExcludeList(userId, taskType);
 
@@ -67,7 +67,6 @@ const generateTaskContent = async (taskType: TaskType, userId: string, customPro
     }
 };
 
-// Process a single task
 const processTask = async (job: Job) => {
     const { taskId, userId, taskType } = job.data as {
         taskId: string;
@@ -78,13 +77,11 @@ const processTask = async (job: Job) => {
     console.log(`Processing task: ${taskType} for user ${userId}`);
 
     try {
-        // Get the task to retrieve prompt for custom tasks
         const scheduledTask = await ScheduledTask.findById(taskId);
         if (!scheduledTask) {
             throw new Error(`Task ${taskId} not found`);
         }
 
-        // Get or create conversation for this task
         let conversation = await Conversation.findOne({
             userId: new mongoose.Types.ObjectId(userId),
             type: 'scheduled_task',
@@ -93,10 +90,10 @@ const processTask = async (job: Job) => {
         });
 
         if (!conversation) {
-            const taskName = taskType === 'custom' 
-                ? scheduledTask.taskName 
+            const taskName = taskType === 'custom'
+                ? scheduledTask.taskName
                 : PRESET_TASK_NAMES[taskType];
-            
+
             conversation = await Conversation.create({
                 userId: new mongoose.Types.ObjectId(userId),
                 type: 'scheduled_task',
@@ -104,20 +101,16 @@ const processTask = async (job: Job) => {
                 taskType,
             });
 
-            // Update ScheduledTask with conversationId
             await ScheduledTask.findByIdAndUpdate(taskId, {
                 conversationId: conversation._id,
             });
         }
 
-        // Generate AI content using geminiService
         const customPrompt = taskType === 'custom' ? scheduledTask.prompt : undefined;
         const content = await generateTaskContent(taskType, userId, customPrompt);
 
-        // Create content hash for deduplication
         const contentHash = createHash('md5').update(content).digest('hex');
 
-        // Check if this exact content was already pushed
         const existingPush = await PushHistory.findOne({
             userId: new mongoose.Types.ObjectId(userId),
             taskType,
@@ -129,15 +122,13 @@ const processTask = async (job: Job) => {
             return;
         }
 
-        // Save push history
         await PushHistory.create({
             userId: new mongoose.Types.ObjectId(userId),
             taskType,
             contentHash,
-            content: content.substring(0, 500), // Store truncated for history
+            content: content.substring(0, 500),
         });
 
-        // Create message in conversation using the system user
         const message = await Message.create({
             sender: SYSTEM_USER_ID,
             receiver: new mongoose.Types.ObjectId(userId),
@@ -146,12 +137,10 @@ const processTask = async (job: Job) => {
             type: 'system',
         });
 
-        // Update conversation last message time
         await Conversation.findByIdAndUpdate(conversation._id, {
             lastMessageAt: new Date(),
         });
 
-        // Push to user via WebSocket if online
         const io = getIO();
         io.to(userId).emit('scheduled_task_message', {
             conversationId: conversation._id,
@@ -171,17 +160,16 @@ const processTask = async (job: Job) => {
     }
 };
 
-// Create worker to process tasks
 export const createTaskWorker = () => {
     console.log('[Worker] Creating task worker with Redis connection:', REDIS_HOST, REDIS_PORT);
-    
+
     const worker = new Worker('scheduled-tasks', processTask, {
         connection,
         limiter: {
             max: 10,
-            duration: 60000, // 10 jobs per minute
+            duration: 60000,
         },
-        concurrency: 1,
+        concurrency: 5,
     });
 
     worker.on('ready', () => {
@@ -204,18 +192,40 @@ export const createTaskWorker = () => {
     return worker;
 };
 
-// Add task to queue with retry configuration
-export const addTaskToQueue = async (taskId: string, userId: string, taskType: TaskType) => {
+export const addTaskToQueue = async (taskId: string, userId: string, taskType: TaskType, delayMs?: number) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const dedupKey = `task:queue:${taskType}:${userId}:${today}`;
+
+    try {
+        const alreadyQueued = await redis.get(dedupKey);
+        if (alreadyQueued) {
+            console.log(`[Queue] Task ${taskType} for user ${userId} already queued today, skipping`);
+            return;
+        }
+    } catch (err) {
+        console.warn('[Queue] Redis check failed, proceeding:', err);
+    }
+
     await taskQueue.add(
         `task-${taskType}-${userId}`,
         { taskId, userId, taskType },
         {
             jobId: `${taskType}-${userId}-${Date.now()}`,
+            delay: delayMs || 0,
             attempts: 3,
             backoff: {
                 type: 'exponential',
-                delay: 60000, // 首次重试等待1分钟，之后指数增长
+                delay: 60000,
             },
-        }
+        },
     );
+
+    try {
+        const endOfDay = new Date();
+        endOfDay.setHours(23, 59, 59, 999);
+        const ttl = Math.ceil((endOfDay.getTime() - Date.now()) / 1000);
+        await redis.set(dedupKey, '1', 'EX', ttl);
+    } catch (err) {
+        console.warn('[Queue] Redis set failed, dedup not applied:', err);
+    }
 };

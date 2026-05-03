@@ -11,6 +11,7 @@ export interface IScheduledTask extends Document {
     pushTime: string; // "HH:mm" format, e.g., "09:00"
     timezone: string; // IANA timezone, e.g., "Asia/Shanghai"
     conversationId?: mongoose.Types.ObjectId;
+    nextRunAt?: Date | null;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -54,6 +55,10 @@ const scheduledTaskSchema = new Schema<IScheduledTask>(
             type: Schema.Types.ObjectId,
             ref: 'Conversation',
         },
+        nextRunAt: {
+            type: Date,
+            default: null,
+        },
     },
     {
         timestamps: true,
@@ -67,5 +72,6 @@ scheduledTaskSchema.index({ userId: 1, taskType: 1 }, {
     partialFilterExpression: { taskType: { $ne: 'custom' } }
 });
 scheduledTaskSchema.index({ userId: 1 });
+scheduledTaskSchema.index({ enabled: 1, nextRunAt: 1 });
 
 export default mongoose.model<IScheduledTask>('ScheduledTask', scheduledTaskSchema);

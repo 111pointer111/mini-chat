@@ -15,15 +15,30 @@ export interface AIConfig {
     groupId?: string;         // Minimax 等需要额外 group_id 的服务商
 }
 
-// 获取用户的 AI 配置
+const configCache = new Map<string, { config: AIConfig; expiresAt: number }>();
+const CONFIG_CACHE_TTL = 5 * 60 * 1000;
+
+export const clearAIConfigCache = (userId?: string) => {
+    if (userId) {
+        configCache.delete(userId);
+    } else {
+        configCache.clear();
+    }
+};
+
 export const getUserAIConfig = async (userId?: string): Promise<AIConfig> => {
+    const cacheKey = userId || '__default__';
+    const cached = configCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+        return cached.config;
+    }
     // 如果有 userId，尝试获取用户选择的 provider
     if (userId) {
         const user = await User.findById(userId).populate('selectedAIProvider');
         if (user?.selectedAIProvider) {
             const provider = user.selectedAIProvider as unknown as IAIProvider;
             if (provider.enabled) {
-                return {
+                const config = {
                     baseURL: provider.baseURL,
                     apiKey: provider.apiKey,
                     model: provider.modelName,
@@ -33,6 +48,8 @@ export const getUserAIConfig = async (userId?: string): Promise<AIConfig> => {
                     embeddingDimensions: provider.embeddingDimensions,
                     groupId: provider.groupId,
                 };
+                configCache.set(cacheKey, { config, expiresAt: Date.now() + CONFIG_CACHE_TTL });
+                return config;
             }
         }
     }
@@ -40,7 +57,7 @@ export const getUserAIConfig = async (userId?: string): Promise<AIConfig> => {
     // 尝试获取默认 provider
     const defaultProvider = await AIProvider.findOne({ isDefault: true, enabled: true });
     if (defaultProvider) {
-        return {
+        const config = {
             baseURL: defaultProvider.baseURL,
             apiKey: defaultProvider.apiKey,
             model: defaultProvider.modelName,
@@ -50,6 +67,8 @@ export const getUserAIConfig = async (userId?: string): Promise<AIConfig> => {
             embeddingDimensions: defaultProvider.embeddingDimensions,
             groupId: defaultProvider.groupId,
         };
+        configCache.set(cacheKey, { config, expiresAt: Date.now() + CONFIG_CACHE_TTL });
+        return config;
     }
 
     // 回退到环境变量配置
@@ -64,7 +83,7 @@ export const getUserAIConfig = async (userId?: string): Promise<AIConfig> => {
         throw new Error('No AI provider configured. Please add an AI provider or set AI_BASE_URL, AI_API_KEY, and AI_MODEL environment variables.');
     }
 
-    return {
+    const config = {
         baseURL,
         apiKey,
         model,
@@ -73,6 +92,9 @@ export const getUserAIConfig = async (userId?: string): Promise<AIConfig> => {
         embeddingModel: process.env.AI_EMBEDDING_MODEL,
         embeddingDimensions: Number.isFinite(embeddingDimensions) ? embeddingDimensions : undefined,
     };
+
+    configCache.set(cacheKey, { config, expiresAt: Date.now() + CONFIG_CACHE_TTL });
+    return config;
 };
 
 // 创建 OpenAI 兼容客户端

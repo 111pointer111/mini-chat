@@ -1,6 +1,7 @@
 import { Server, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import Message from '../models/Message';
+import Conversation from '../models/Conversation';
 import mongoose from 'mongoose';
 import { ChatMessage, autoTitleConversation } from '../services/aiService';
 import { runAgentStream, UserMessageInput } from '../services/agentService';
@@ -19,7 +20,6 @@ let ioInstance: Server | null = null;
 const streamContentMap = new Map<string, string>();
 
 const getOrCreateAIConversation = async (userId: string) => {
-    const Conversation = (await import('../models/Conversation')).default;
     let conversation = await Conversation.findOne({
         userId: new mongoose.Types.ObjectId(userId),
         type: 'ai',
@@ -35,9 +35,7 @@ const getOrCreateAIConversation = async (userId: string) => {
 };
 
 const saveStreamMessage = async (userId: string, conversationId: mongoose.Types.ObjectId, content: string) => {
-    const MessageModel = (await import('../models/Message')).default;
-    const Conversation = (await import('../models/Conversation')).default;
-    await MessageModel.create({
+    await Message.create({
         sender: AI_ASSISTANT_ID,
         receiver: new mongoose.Types.ObjectId(userId),
         conversationId,
@@ -267,7 +265,6 @@ export const setupSocket = (io: Server) => {
                 streamContentMap.delete(userId);
 
                 // 获取或创建会话
-                const Conversation = (await import('../models/Conversation')).default;
                 let aiConversation;
                 if (conversationId) {
                     aiConversation = await Conversation.findOne({
@@ -293,8 +290,7 @@ export const setupSocket = (io: Server) => {
                 await Conversation.findByIdAndUpdate(aiConversation._id, { lastMessageAt: new Date() });
 
                 // 获取历史（最近10条，不含刚发的用户消息）
-                const MessageModel = (await import('../models/Message')).default;
-                const historyMessages = await MessageModel.find({
+                const historyMessages = await Message.find({
                     conversationId: aiConversation._id,
                 })
                     .sort({ createdAt: -1 })
@@ -356,6 +352,7 @@ export const setupSocket = (io: Server) => {
         });
 
         socket.on('disconnect', () => {
+            streamContentMap.delete(userId);
             console.log('User disconnected:', userId);
         });
     });

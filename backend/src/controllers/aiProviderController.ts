@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import AIProvider from '../models/AIProvider';
 import User from '../models/User';
+import { clearAIConfigCache } from '../services/aiService';
 
 const normalizeEmbeddingDimensions = (value: unknown): number | undefined => {
     if (value === undefined || value === null || value === '') {
@@ -66,6 +67,7 @@ export const setUserProvider = async (req: Request, res: Response) => {
         }
 
         await User.findByIdAndUpdate(userId, { selectedAIProvider: providerId });
+        clearAIConfigCache(userId);
 
         res.json({ message: 'Provider updated', provider: { name: provider.name, modelName: provider.modelName } });
     } catch (error) {
@@ -98,6 +100,7 @@ export const createProvider = async (req: Request, res: Response) => {
             isDefault: isDefault || false,
         });
 
+        clearAIConfigCache();
         res.status(201).json(provider);
     } catch (error: any) {
         if (error.code === 11000) {
@@ -149,6 +152,7 @@ export const updateProvider = async (req: Request, res: Response) => {
             return res.status(404).json({ message: 'Provider not found' });
         }
 
+        clearAIConfigCache();
         res.json(provider);
     } catch (error) {
         console.error('Update provider error:', error);
@@ -169,6 +173,7 @@ export const deleteProvider = async (req: Request, res: Response) => {
         // Clear users' selection if they had this provider
         await User.updateMany({ selectedAIProvider: id }, { $unset: { selectedAIProvider: 1 } });
 
+        clearAIConfigCache();
         res.json({ message: 'Provider deleted' });
     } catch (error) {
         console.error('Delete provider error:', error);

@@ -10,8 +10,6 @@ import { retrieveRelevantChunks } from './kbEmbeddingService';
 import { executeMcpTool, getMcpToolDefinitions } from './mcpService';
 import OpenAI from 'openai';
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
 // 用户消息输入：支持纯文本或文本+多张图片
 export interface UserMessageInput {
     text: string;
@@ -246,8 +244,8 @@ export async function runAgent(
 }
 
 /**
- * 流式运行 Agent
- * 工具调用过程不展示给用户，只流式输出最终回复
+ * 流式运行 Agent（全流式 ReAct 循环）
+ * 内容实时输出给用户，同时检测 tool_calls 增量拼装
  */
 export async function runAgentStream(
     history: ChatMessage[],
@@ -282,53 +280,71 @@ export async function runAgentStream(
         while (iterations < MAX_ITERATIONS) {
             iterations++;
 
-            const response = await client.chat.completions.create({
+            const stream = await client.chat.completions.create({
                 model: config.model,
                 messages,
                 tools: await getTools(userId),
+                stream: true,
             });
 
-            const message = response.choices[0].message;
+            let content = '';
+            const toolCalls: { index: number; id: string; type: string; function: { name: string; arguments: string } }[] = [];
+            let finishReason: string | null = null;
 
-            if (message.tool_calls && message.tool_calls.length > 0) {
-                messages.push(message as OpenAI.Chat.ChatCompletionMessageParam);
+            for await (const chunk of stream) {
+                const choice = chunk.choices[0];
+                if (!choice) continue;
 
-                for (const toolCall of message.tool_calls) {
-                    if (toolCall.type !== 'function') continue;
-                    const fn = toolCall.function;
-                    const toolName = fn.name;
-                    let args: Record<string, unknown> = {};
-                    try {
-                        args = JSON.parse(fn.arguments);
-                    } catch {
-                        args = {};
+                finishReason = choice.finish_reason;
+
+                if (choice.delta?.content) {
+                    content += choice.delta.content;
+                    if (onChunk) onChunk(choice.delta.content);
+                }
+
+                if (choice.delta?.tool_calls) {
+                    for (const tc of choice.delta.tool_calls) {
+                        const idx = tc.index;
+                        if (!toolCalls[idx]) {
+                            toolCalls[idx] = { index: idx, id: '', type: 'function', function: { name: '', arguments: '' } };
+                        }
+                        if (tc.id) toolCalls[idx].id = tc.id;
+                        if (tc.type) toolCalls[idx].type = tc.type;
+                        if (tc.function) {
+                            if (tc.function.name) toolCalls[idx].function.name += tc.function.name;
+                            if (tc.function.arguments) toolCalls[idx].function.arguments += tc.function.arguments;
+                        }
                     }
+                }
+            }
 
-                    const result = await executeTool(toolName, args, userId);
+            const validToolCalls = finishReason === 'tool_calls'
+                ? toolCalls.filter(tc => tc.id && tc.function.name)
+                : [];
 
+            if (validToolCalls.length > 0) {
+                const assistantMsg: OpenAI.Chat.ChatCompletionAssistantMessageParam = {
+                    role: 'assistant',
+                    content: content || null,
+                    tool_calls: validToolCalls.map(tc => ({
+                        id: tc.id,
+                        type: 'function',
+                        function: { name: tc.function.name, arguments: tc.function.arguments },
+                    })),
+                };
+                messages.push(assistantMsg);
+
+                for (const tc of validToolCalls) {
+                    let args: Record<string, unknown> = {};
+                    try { args = JSON.parse(tc.function.arguments); } catch { args = {}; }
+                    const result = await executeTool(tc.function.name, args, userId);
                     messages.push({
                         role: 'tool',
-                        tool_call_id: toolCall.id,
+                        tool_call_id: tc.id,
                         content: result,
                     });
                 }
             } else {
-                // 最终回复 → 逐字符流式输出（模拟打字效果）
-                const finalContent = message.content || '';
-
-                if (finalContent && onChunk) {
-                    // 按句子分块，模拟自然流速
-                    const sentences = finalContent.split(/(?<=[\.!?。！？\n])/);
-                    for (const sentence of sentences) {
-                        if (!sentence) continue;
-                        // 每3-6个字符推送一次，模拟打字
-                        for (let i = 0; i < sentence.length; i += 4) {
-                            onChunk(sentence.slice(i, i + 4));
-                            await sleep(15);
-                        }
-                    }
-                }
-
                 if (onDone) onDone();
                 return;
             }

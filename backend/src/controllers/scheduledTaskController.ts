@@ -3,6 +3,7 @@ import ScheduledTask, { TaskType } from '../models/ScheduledTask';
 import Conversation from '../models/Conversation';
 import Message from '../models/Message';
 import mongoose from 'mongoose';
+import { computeNextRunTime } from '../utils/timeUtils';
 
 const PRESET_TASK_NAMES: Record<string, string> = {
     github_trending: 'GitHub 热点',
@@ -105,6 +106,13 @@ export const updateScheduledTask = async (req: Request, res: Response) => {
             task.conversationId = conversation._id;
         }
 
+        // Recompute next run time when task is enabled or time changed
+        if (task.enabled) {
+            task.nextRunAt = computeNextRunTime(task.pushTime, task.timezone || 'Asia/Shanghai');
+        } else {
+            task.nextRunAt = null;
+        }
+
         await task.save();
 
         res.json({
@@ -150,6 +158,7 @@ export const createCustomTask = async (req: Request, res: Response) => {
             pushTime: pushTime || '09:00',
             timezone: timezone || 'Asia/Shanghai',
             conversationId: conversation._id,
+            nextRunAt: computeNextRunTime(pushTime || '09:00', timezone || 'Asia/Shanghai'),
         });
 
         await task.save();
@@ -190,6 +199,12 @@ export const updateCustomTask = async (req: Request, res: Response) => {
         if (enabled !== undefined) task.enabled = enabled;
         if (pushTime) task.pushTime = pushTime;
         if (timezone) task.timezone = timezone;
+
+        if (task.enabled) {
+            task.nextRunAt = computeNextRunTime(task.pushTime, task.timezone || 'Asia/Shanghai');
+        } else {
+            task.nextRunAt = null;
+        }
 
         await task.save();
 
