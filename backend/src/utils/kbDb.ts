@@ -173,7 +173,7 @@ export async function insertChunks(chunks: Array<{
 
     for (const chunk of chunks) {
         placeholders.push(
-            `($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}::vector, $${idx++})`
+            `($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}::vector, $${idx++})`
         );
         values.push(
             chunk.documentId,
@@ -250,14 +250,17 @@ export async function getChunksByDocument(
 export async function textSearch(
     userId: string,
     keyword: string,
-    topK = 10
+    topK = 10,
+    scope: { type?: 'user' | 'group'; id?: string } = {}
 ): Promise<KBChunk[]> {
+    const scopeType = scope.type || 'user';
+    const scopeId = scope.id || userId;
     const result = await pool.query<KBChunk>(
         `SELECT * FROM kb_chunks
-         WHERE user_id = $1 AND content ILIKE $2
+         WHERE scope_type = $1 AND scope_id = $2 AND content ILIKE $3
          ORDER BY created_at DESC
-         LIMIT $3`,
-        [userId, `%${keyword}%`, topK]
+         LIMIT $4`,
+        [scopeType, scopeId, `%${keyword}%`, topK]
     );
     return result.rows;
 }

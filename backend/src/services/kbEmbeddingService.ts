@@ -7,7 +7,7 @@
  * 直接发 HTTP 请求更灵活可控。
  */
 import { getUserAIConfig } from './aiService';
-import { insertChunks, vectorSearch, type SearchResult } from '../utils/kbDb';
+import { insertChunks, vectorSearch, textSearch, type SearchResult } from '../utils/kbDb';
 import type { TextChunk } from './kbFileService';
 
 const DEFAULT_EMBEDDING_BATCH_SIZE = 2;
@@ -157,6 +157,7 @@ export async function processAndStoreChunks(
 
 /**
  * RAG 搜索：给定用户问题，检索最相关的文档块
+ * 使用 Hybrid Search（向量 + 关键词）+ RRF 排序 + MMR 去重 + 相似度阈值过滤
  */
 export async function retrieveRelevantChunks(
     query: string,
@@ -164,11 +165,78 @@ export async function retrieveRelevantChunks(
     topK = 5,
     scope: { type?: 'user' | 'group'; id?: string } = {}
 ): Promise<SearchResult[]> {
-    // 1. 把问题本身变成向量
+    const OVERFETCH = topK * 3;
+    const SIMILARITY_THRESHOLD = 0.7;
+    const RRF_K = 60;
+    const MMR_LAMBDA = 0.7;
+
     const queryEmbedding = await generateEmbedding(query, userId);
 
-    // 2. 向量搜索，找到最相似的 chunk
-    const results = await vectorSearch(queryEmbedding, userId, topK, scope);
+    const [vectorResults, textResults] = await Promise.all([
+        vectorSearch(queryEmbedding, userId, OVERFETCH, scope),
+        textSearch(userId, query, OVERFETCH, scope),
+    ]);
 
-    return results;
+    const filtered = vectorResults.filter(r => r.similarity < SIMILARITY_THRESHOLD);
+
+    const rrfScores = new Map<number, number>();
+
+    for (let i = 0; i < filtered.length; i++) {
+        const rank = i + 1;
+        const prev = rrfScores.get(filtered[i].id) || 0;
+        rrfScores.set(filtered[i].id, prev + 1 / (RRF_K + rank));
+    }
+
+    for (let i = 0; i < textResults.length; i++) {
+        const rank = i + 1;
+        const prev = rrfScores.get(textResults[i].id) || 0;
+        rrfScores.set(textResults[i].id, prev + 1 / (RRF_K + rank));
+    }
+
+    const candidatesMap = new Map<number, SearchResult>();
+    for (const r of filtered) candidatesMap.set(r.id, r);
+    for (const r of textResults) {
+        if (!candidatesMap.has(r.id)) {
+            candidatesMap.set(r.id, { ...r, similarity: 1 });
+        }
+    }
+
+    const candidates = [...candidatesMap.values()]
+        .map(r => ({ ...r, _rrf: rrfScores.get(r.id) || 0 }))
+        .sort((a, b) => b._rrf - a._rrf);
+
+    const selected: SearchResult[] = [];
+    const remaining = [...candidates];
+
+    while (selected.length < topK && remaining.length > 0) {
+        let bestIdx = 0;
+        let bestScore = -Infinity;
+
+        for (let i = 0; i < remaining.length; i++) {
+            const candidate = remaining[i];
+            let maxSimToSelected = 0;
+
+            for (const s of selected) {
+                const sim = 1 - candidate.similarity;
+                const sSim = 1 - s.similarity;
+                const overlap = Math.min(candidate.content.length, s.content.length) /
+                    Math.max(candidate.content.length, s.content.length);
+                const similarity = sim * sSim * (1 + overlap);
+                maxSimToSelected = Math.max(maxSimToSelected, similarity);
+            }
+
+            const mmrScore = MMR_LAMBDA * candidate._rrf -
+                (1 - MMR_LAMBDA) * maxSimToSelected;
+
+            if (mmrScore > bestScore) {
+                bestScore = mmrScore;
+                bestIdx = i;
+            }
+        }
+
+        selected.push(remaining[bestIdx]);
+        remaining.splice(bestIdx, 1);
+    }
+
+    return selected;
 }
