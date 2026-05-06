@@ -125,6 +125,7 @@ const KnowledgeBase: React.FC = () => {
 
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('title', file.name);
 
         setUploadProgress(true);
         setUploadMessage(null);
