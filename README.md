@@ -1,10 +1,12 @@
 # Mini-Chat
 
-一款面向个人和小团队的全栈聊天应用，集成了实时私聊、AI 对话、知识库问答和定时推送能力。项目采用前后端分离架构，适合本地开发、Docker 部署和二次开发。
+一款面向个人和小团队的全栈聊天应用，集成了实时私聊、AI 对话、知识库问答和定时推送能力。项目采用前后端分离架构，包含 Web 前端和 Android 原生客户端，适合本地开发、Docker 部署和二次开发。
 
 ![License](https://img.shields.io/badge/license-ISC-blue)
 ![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-green)
 ![TypeScript](https://img.shields.io/badge/typescript-5.9-blue)
+![Flutter](https://img.shields.io/badge/Flutter-3.x-blue)
+![Dart](https://img.shields.io/badge/Dart-3.5-blue)
 
 ## 功能概览
 
@@ -57,7 +59,8 @@
 
 | 层级 | 技术 |
 |------|------|
-| 前端 | React 19, TypeScript 5.9, Vite 7, MUI 7, Zustand 5, TanStack Query 5, Tailwind CSS 4, Socket.io Client, Framer Motion, React Hook Form, React Markdown |
+| Web 前端 | React 19, TypeScript 5.9, Vite 7, MUI 7, Zustand 5, TanStack Query 5, Tailwind CSS 4, Socket.io Client, Framer Motion, React Hook Form, React Markdown |
+| Android 客户端 | Flutter 3.x, Dart 3.5, Riverpod 2, Dio, Socket.IO Client, GoRouter, Flutter Markdown |
 | 后端 | Node.js 18+, Express 5, TypeScript 5.9, Socket.io 4, Mongoose 9, BullMQ 5, Helmet, Express Rate Limit |
 | 主数据 | MongoDB |
 | 队列 / 缓存 | Redis |
@@ -94,6 +97,15 @@ mini-chat/
 │   ├── src/services/
 │   ├── src/store/              # Zustand 状态管理
 │   └── Dockerfile
+├── mobile/                      # Flutter Android 客户端 (BoltChat)
+│   ├── lib/
+│   │   ├── core/               # 常量、主题、路由
+│   │   ├── data/               # API 层、数据模型、Socket 服务
+│   │   ├── providers/          # Riverpod 状态管理
+│   │   ├── features/           # 各功能页面
+│   │   └── shared/             # 通用组件和工具
+│   ├── android/                # Android 原生配置
+│   └── pubspec.yaml
 ├── docs/                        # 路线图和设计文档
 ├── docker-compose.yml           # 开发环境依赖
 ├── docker-compose.prod.yml      # 生产环境编排
@@ -168,9 +180,28 @@ npm run dev
 npm run dev -- --port 5174
 ```
 
-### 5. 访问应用
+### 5. 构建 Android 客户端 (BoltChat)
 
-- 前端：`http://localhost:5173`
+```bash
+cd mobile
+flutter pub get
+flutter run          # 调试模式
+flutter build apk    # 构建 Release APK
+```
+
+Android 客户端功能与 Web 前端一致，包括：
+- 实时 1v1 / 群聊
+- AI 对话（流式输出 + Markdown）
+- 定时任务管理
+- 知识库
+- MCP 工具管理
+
+APK 输出路径：`mobile/build/app/outputs/flutter-apk/app-release.apk`
+
+### 6. 访问应用
+
+- Web 前端：`http://localhost:5173`
+- Android 客户端：安装 APK 后配置服务器地址
 - 后端健康检查：`http://localhost:5000/health`
 
 ## 环境变量
