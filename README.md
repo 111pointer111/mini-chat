@@ -9,15 +9,27 @@
 ## 功能概览
 
 ### 即时通讯
-- 用户注册、登录、重置密码
+- 用户注册、登录、重置密码（支持邮箱、手机号、Google OAuth）
 - 好友搜索、发起申请、接受申请
 - 基于 Socket.io 的实时 1v1 聊天
 - 在线状态感知
+- 图片消息支持
+
+### 群组
+- 创建/管理群组
+- 群成员管理（owner/admin/member 角色）
+- 群消息实时推送
+- @AI 助手触发群内 AI 回答
+- 群组独立知识库
 
 ### AI 对话
 - 支持接入 OpenAI 兼容格式的大模型服务
 - 多轮会话管理
+- 流式输出
 - Markdown / 代码块渲染
+- 图片理解（多模态）
+- Agent ReAct 循环（多轮工具调用）
+- MCP 工具集成
 - 管理员可在后台维护 AI Provider
 
 ### 知识库
@@ -25,47 +37,66 @@
 - 文档解析、分块、向量化、RAG 问答
 - 支持将聊天模型和 embedding 模型拆分配置
 - 前端展示上传状态、失败原因和知识库问答来源
+- 群组独立知识库管理
+
+### MCP 工具管理
+- 支持 Streamable HTTP 和 SSE 两种传输方式
+- Bearer Token 和自定义 Header 认证
+- 工具发现与缓存
+- 工具测试与执行
+- 与 AI 对话深度集成
 
 ### 定时任务
-- GitHub Trending 等预设任务
+- GitHub Trending、每日诗词、每日英语等预设任务
 - 自定义定时推送任务
 - BullMQ + Redis 驱动后台任务
+- 多时区支持
+- 推送历史去重
 
 ## 技术栈
 
 | 层级 | 技术 |
 |------|------|
-| 前端 | React 19, TypeScript, Vite, MUI, Zustand, TanStack Query, Socket.io Client |
-| 后端 | Node.js, Express, TypeScript, Socket.io, Mongoose, BullMQ |
+| 前端 | React 19, TypeScript 5.9, Vite 7, MUI 7, Zustand 5, TanStack Query 5, Tailwind CSS 4, Socket.io Client, Framer Motion, React Hook Form, React Markdown |
+| 后端 | Node.js 18+, Express 5, TypeScript 5.9, Socket.io 4, Mongoose 9, BullMQ 5, Helmet, Express Rate Limit |
 | 主数据 | MongoDB |
 | 队列 / 缓存 | Redis |
 | 知识库向量存储 | PostgreSQL + pgvector |
-| 文档解析 | textract, Tesseract.js |
-| 部署 | Docker, Docker Compose, Nginx |
+| AI 集成 | OpenAI SDK, LangChain, @modelcontextprotocol/sdk |
+| 文档解析 | textract, Tesseract.js, Cheerio |
+| 部署 | Docker, Docker Compose, Nginx, GitHub Actions |
 
 ## 项目结构
 
 ```text
 mini-chat/
-├── backend/                   # Express + TypeScript API
+├── .agent/skills/               # AI Agent 技能库
+├── .github/workflows/           # CI/CD 自动部署
+├── .mcp.json                    # MCP 配置
+├── AGENTS.md                    # OpenCode Agent 指令
+├── CLAUDE.md                    # Claude Code 指令
+├── backend/                     # Express + TypeScript API
 │   ├── src/
-│   │   ├── controllers/      # 路由控制器
-│   │   ├── models/           # MongoDB 模型
-│   │   ├── routes/           # Express 路由
-│   │   ├── services/         # AI、知识库、任务、上传等业务逻辑
-│   │   ├── socket/           # Socket.io 实时通讯
-│   │   ├── scripts/          # 初始化脚本
-│   │   └── utils/            # PostgreSQL / Redis / schema 工具
+│   │   ├── controllers/        # 路由控制器
+│   │   ├── middleware/          # JWT 认证中间件
+│   │   ├── models/             # MongoDB 模型
+│   │   ├── routes/             # Express 路由
+│   │   ├── services/           # AI、知识库、任务、MCP 等业务逻辑
+│   │   ├── socket/             # Socket.io 实时通讯
+│   │   ├── scripts/            # 初始化脚本
+│   │   └── utils/              # PostgreSQL / Redis / schema 工具
+│   ├── scripts/                # 种子用户脚本
 │   └── Dockerfile
-├── frontend/                  # React + Vite 前端
+├── frontend/                    # React + Vite 前端
 │   ├── src/components/
 │   ├── src/layouts/
 │   ├── src/pages/
 │   ├── src/services/
+│   ├── src/store/              # Zustand 状态管理
 │   └── Dockerfile
-├── docs/                      # 路线图和设计文档
-├── docker-compose.yml         # 开发环境依赖
-├── docker-compose.prod.yml    # 生产环境编排
+├── docs/                        # 路线图和设计文档
+├── docker-compose.yml           # 开发环境依赖
+├── docker-compose.prod.yml      # 生产环境编排
 └── README.md
 ```
 
@@ -181,6 +212,15 @@ ALIYUN_ACCESS_KEY_ID=
 ALIYUN_ACCESS_KEY_SECRET=
 ALIYUN_SMS_SIGN_NAME=
 ALIYUN_SMS_TEMPLATE_CODE=
+
+# 知识库 embedding 批处理大小（可选）
+KB_EMBEDDING_BATCH_SIZE=2
+
+# CORS 源（逗号分隔，可选）
+CORS_ORIGINS=http://localhost:5173,http://localhost:5174,http://localhost:5175
+
+# 运行环境（production 时强制要求 JWT_SECRET）
+NODE_ENV=development
 ```
 
 ### AI Provider 配置说明
@@ -349,10 +389,25 @@ docker compose -f docker-compose.prod.yml --env-file .env.production up -d
 
 知识库问答能力已合并到 AI 助手和群聊小助手中，不再提供独立的 `/api/kb/chat` 入口。
 
+### MCP 工具管理
+- `GET /api/mcp/servers`
+- `POST /api/mcp/servers`
+- `PUT /api/mcp/servers/:id`
+- `DELETE /api/mcp/servers/:id`
+- `POST /api/mcp/servers/:id/test`
+- `POST /api/mcp/servers/:id/refresh-tools`
+- `GET /api/mcp/tools`
+
+### 文件上传
+- `POST /api/upload`
+
 ## 当前已知情况
 
 - `frontend` 目前 `TypeScript build` 可以通过，但 `npm run lint` 还有历史遗留问题，集中在 `FriendList.tsx`、`ProtectedLayout.tsx`、`ScheduledTasks.tsx`
-- 后端 CORS 当前默认放行本地开发端口 `5173-5175`，如果你要做多域名部署，建议在 [backend/src/server.ts](backend/src/server.ts) 中改为环境变量配置
+- 后端 CORS 已支持通过 `CORS_ORIGINS` 环境变量配置（逗号分隔），默认放行本地开发端口 `5173-5175`
+- 没有配置测试框架（`test: echo "Error: no test specified"`），验证方式为 `npm run build` + `npm run lint`
+- 后端 Dockerfile 安装了系统依赖用于文档解析（antiword, catdoc, poppler-utils, unrtf），这些是知识库功能所需的
+- 生产环境必须设置 `JWT_SECRET`，否则服务启动失败
 
 ## 开发建议
 
