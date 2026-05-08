@@ -4,7 +4,7 @@
  * 支持图片消息
  */
 
-import { getWeather, weatherToolDefinition } from './getWeather';
+import { getWeather, weatherToolDefinition, ToolResult } from './getWeather';
 import { ChatMessage, getUserAIConfig, getClient } from './aiService';
 import { retrieveRelevantChunks } from './kbEmbeddingService';
 import { executeMcpTool, getMcpToolDefinitions } from './mcpService';
@@ -73,7 +73,15 @@ const toolRegistry: Record<string, Tool> = {
         handler: async (args) => {
             const city = args.city as string;
             const date = args.date as string | undefined;
-            return await getWeather(city, date);
+            const result: ToolResult = await getWeather(city, date);
+
+            // 返回格式化结果给大模型
+            if (result.success) {
+                return result.data || '查询成功';
+            } else {
+                // 包含 suggestion，让大模型知道怎么解释
+                return `查询失败：${result.error}\n建议：${result.suggestion || '请稍后重试'}`;
+            }
         },
     },
 };

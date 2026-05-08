@@ -226,7 +226,12 @@ export const getMcpToolDefinitions = async (userId: string) => {
         type: 'function' as const,
         function: {
             name: tool.openAIToolName,
-            description: `[MCP: ${tool.serverName}] ${tool.description || tool.name}`,
+            description: `[MCP: ${tool.serverName}] ${tool.description || tool.name}
+
+使用提示：
+- 当用户需要 "${tool.description || tool.name}" 相关功能时使用本工具
+- 如果工具返回错误，请向用户解释并建议替代方案
+- 不要在闲聊或无关问题时使用本工具`,
             parameters: normalizeInputSchema(tool.inputSchema),
         },
     }));
