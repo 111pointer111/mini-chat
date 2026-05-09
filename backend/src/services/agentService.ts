@@ -5,6 +5,7 @@
  */
 
 import { getWeather, weatherToolDefinition, ToolResult } from './getWeather';
+import { createScheduledTask, scheduledTaskToolDefinition } from './createScheduledTaskTool';
 import { ChatMessage, getUserAIConfig, getClient } from './aiService';
 import { retrieveRelevantChunks } from './kbEmbeddingService';
 import { executeMcpTool, getMcpToolDefinitions } from './mcpService';
@@ -63,7 +64,7 @@ export interface Tool {
             parameters: Record<string, unknown>;
         };
     };
-    handler: (args: Record<string, unknown>) => Promise<string>;
+    handler: (args: Record<string, unknown>, userId?: string) => Promise<string>;
 }
 
 // 工具注册表
@@ -84,6 +85,27 @@ const toolRegistry: Record<string, Tool> = {
             }
         },
     },
+    create_scheduled_task: {
+        definition: scheduledTaskToolDefinition,
+        handler: async (args, userId) => {
+            if (!userId) {
+                return '错误：需要用户登录才能创建定时任务';
+            }
+
+            const taskName = args.taskName as string;
+            const prompt = args.prompt as string;
+            const pushTime = (args.pushTime as string) || '09:00';
+            const timezone = (args.timezone as string) || 'Asia/Shanghai';
+
+            const result = await createScheduledTask(userId, taskName, prompt, pushTime, timezone);
+
+            if (result.success) {
+                return result.data || '创建成功';
+            } else {
+                return `创建失败：${result.error}\n建议：${result.suggestion || '请稍后重试'}`;
+            }
+        },
+    },
 };
 
 // 获取工具描述列表
@@ -98,7 +120,7 @@ export async function executeTool(name: string, args: Record<string, unknown>, u
     const tool = toolRegistry[name];
     if (tool) {
         try {
-            return await tool.handler(args);
+            return await tool.handler(args, userId);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             return `工具执行失败: ${msg}`;
@@ -127,11 +149,12 @@ const MAX_ITERATIONS = 10;
 const SYSTEM_PROMPT = `你是一个友好、专业的 AI 助手。你可以帮助用户：
 1. 回答各种问题，包括图片内容理解和分析
 2. 查询天气（当用户询问天气时，必须使用 get_weather 工具获取真实数据，不要编造天气信息）
-3. 创建定时推送任务（当用户说"每天XX点推送/提醒我..."时）
+3. 创建定时推送任务（当用户说"每天XX点推送/提醒我..."时，使用 create_scheduled_task 工具）
 4. 进行日常对话
 
 请用中文回复，保持友好和专业。
 重要提醒：当用户询问任何地点的天气时，必须调用 get_weather 工具获取实时数据。
+重要提醒：当用户要求创建定时任务时，必须调用 create_scheduled_task 工具。
 重要提醒：工具调用后会返回结果，请根据结果如实回答用户，不要添加虚假信息。
 重要提醒：如果用户发送了图片，请仔细分析图片内容并给出准确的回答。`;
 

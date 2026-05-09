@@ -25,11 +25,11 @@ final scheduledTaskApiProvider = Provider<ScheduledTaskApi>((ref) {
   return ScheduledTaskApi(ref.read(apiClientProvider));
 });
 
-final friendsProvider = AsyncNotifierProvider<FriendsNotifier, List<User>>(() {
+final friendsProvider = AsyncNotifierProvider.autoDispose<FriendsNotifier, List<User>>(() {
   return FriendsNotifier();
 });
 
-class FriendsNotifier extends AsyncNotifier<List<User>> {
+class FriendsNotifier extends AutoDisposeAsyncNotifier<List<User>> {
   @override
   Future<List<User>> build() async {
     final res = await ref.read(friendApiProvider).getFriends();
@@ -49,11 +49,11 @@ class FriendsNotifier extends AsyncNotifier<List<User>> {
 }
 
 final pendingRequestsProvider =
-    AsyncNotifierProvider<PendingRequestsNotifier, List<FriendRequest>>(() {
+    AsyncNotifierProvider.autoDispose<PendingRequestsNotifier, List<FriendRequest>>(() {
   return PendingRequestsNotifier();
 });
 
-class PendingRequestsNotifier extends AsyncNotifier<List<FriendRequest>> {
+class PendingRequestsNotifier extends AutoDisposeAsyncNotifier<List<FriendRequest>> {
   @override
   Future<List<FriendRequest>> build() async {
     final res = await ref.read(friendApiProvider).getPendingRequests();
@@ -93,14 +93,14 @@ class ChatSelection {
 }
 
 final chatSelectionProvider =
-    StateProvider<ChatSelection>((ref) => const ChatSelection());
+    StateProvider.autoDispose<ChatSelection>((ref) => const ChatSelection());
 
 final messagesProvider =
-    AsyncNotifierProvider<MessagesNotifier, List<Message>>(() {
+    AsyncNotifierProvider.autoDispose<MessagesNotifier, List<Message>>(() {
   return MessagesNotifier();
 });
 
-class MessagesNotifier extends AsyncNotifier<List<Message>> {
+class MessagesNotifier extends AutoDisposeAsyncNotifier<List<Message>> {
   @override
   List<Message> build() => [];
 

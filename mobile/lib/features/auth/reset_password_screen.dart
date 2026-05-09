@@ -18,6 +18,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   final _phoneController = TextEditingController();
   final _codeController = TextEditingController();
   final _newPasswordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   bool _isLoading = false;
 
   @override
@@ -25,10 +26,47 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
     _phoneController.dispose();
     _codeController.dispose();
     _newPasswordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
+  bool _isValidPhone(String phone) {
+    return RegExp(r'^1[3-9]\d{9}$').hasMatch(phone);
+  }
+
+  bool _validateForm() {
+    if (!_isValidPhone(_phoneController.text.trim())) {
+      _showError('请输入正确的手机号');
+      return false;
+    }
+    if (_codeController.text.trim().isEmpty) {
+      _showError('请输入验证码');
+      return false;
+    }
+    if (_newPasswordController.text.isEmpty) {
+      _showError('请输入新密码');
+      return false;
+    }
+    if (_newPasswordController.text.length < 6) {
+      _showError('密码长度不能少于6位');
+      return false;
+    }
+    if (_newPasswordController.text != _confirmPasswordController.text) {
+      _showError('两次密码不一致');
+      return false;
+    }
+    return true;
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
+  }
+
   Future<void> _resetPassword() async {
+    if (!_validateForm()) return;
+
     setState(() => _isLoading = true);
     try {
       await ref.read(authApiProvider).resetPasswordPhone(
@@ -44,9 +82,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('重置失败: ${e.toString()}')),
-        );
+        _showError('重置失败: ${e.toString()}');
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -87,7 +123,16 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                           TextField(
                             controller: _newPasswordController,
                             decoration: const InputDecoration(
-                              hintText: '新密码',
+                              hintText: '新密码（至少6位）',
+                              prefixIcon: Icon(Icons.lock_outlined),
+                            ),
+                            obscureText: true,
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _confirmPasswordController,
+                            decoration: const InputDecoration(
+                              hintText: '确认密码',
                               prefixIcon: Icon(Icons.lock_outlined),
                             ),
                             obscureText: true,

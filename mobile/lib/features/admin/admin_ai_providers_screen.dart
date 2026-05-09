@@ -17,12 +17,6 @@ class AdminAIProvidersScreen extends ConsumerStatefulWidget {
 
 class _AdminAIProvidersScreenState
     extends ConsumerState<AdminAIProvidersScreen> {
-  @override
-  void initState() {
-    super.initState();
-    ref.read(adminProvidersProvider.notifier).refresh();
-  }
-
   Future<void> _showProviderDialog({AIProvider? existing}) async {
     final nameCtrl = TextEditingController(text: existing?.name ?? '');
     final baseUrlCtrl = TextEditingController(text: existing?.baseURL ?? '');

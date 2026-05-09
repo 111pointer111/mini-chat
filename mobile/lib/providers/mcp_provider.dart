@@ -9,11 +9,11 @@ final mcpApiProvider = Provider<MCPApi>((ref) {
 });
 
 final mcpServersProvider =
-    AsyncNotifierProvider<MCPServersNotifier, List<MCPServer>>(() {
+    AsyncNotifierProvider.autoDispose<MCPServersNotifier, List<MCPServer>>(() {
   return MCPServersNotifier();
 });
 
-class MCPServersNotifier extends AsyncNotifier<List<MCPServer>> {
+class MCPServersNotifier extends AutoDisposeAsyncNotifier<List<MCPServer>> {
   @override
   Future<List<MCPServer>> build() async {
     final res = await ref.read(mcpApiProvider).getServers();

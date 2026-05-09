@@ -28,11 +28,13 @@ class AuthApi {
     });
   }
 
-  Future<Response> registerPhone(String username, String phone, String code) {
+  Future<Response> registerPhone(String username, String phone, String code, {String? email, String? password}) {
     return _client.dio.post('/auth/register-phone', data: {
       'username': username,
       'phone': phone,
       'code': code,
+      if (email != null && email.isNotEmpty) 'email': email,
+      if (password != null && password.isNotEmpty) 'password': password,
     });
   }
 

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/constants.dart';
 import '../../../core/theme.dart';
 import '../../../data/models/user.dart';
 import '../../../providers/chat_provider.dart';
@@ -21,8 +20,13 @@ class _FriendListState extends ConsumerState<FriendList> {
   @override
   void initState() {
     super.initState();
-    _loadEnabledTasks();
-    _startPolling();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    await ref.read(friendsProvider.notifier).refresh();
+    await ref.read(pendingRequestsProvider.notifier).refresh();
+    await _loadEnabledTasks();
   }
 
   Future<void> _loadEnabledTasks() async {
@@ -70,17 +74,6 @@ class _FriendListState extends ConsumerState<FriendList> {
       default:
         return Icons.task_alt;
     }
-  }
-
-  void _startPolling() {
-    Future.doWhile(() async {
-      await Future.delayed(AppConstants.friendListPollInterval);
-      if (!mounted) return false;
-      ref.read(friendsProvider.notifier).refresh();
-      ref.read(pendingRequestsProvider.notifier).refresh();
-      _loadEnabledTasks();
-      return mounted;
-    });
   }
 
   @override
@@ -184,11 +177,7 @@ class _FriendListState extends ConsumerState<FriendList> {
                 );
               }
               return RefreshIndicator(
-                onRefresh: () async {
-                  await ref.read(friendsProvider.notifier).refresh();
-                  await ref.read(pendingRequestsProvider.notifier).refresh();
-                  await _loadEnabledTasks();
-                },
+                onRefresh: _loadData,
                 child: ListView(
                   children: [
                     if (_enabledTasks.isNotEmpty) ...[

@@ -19,10 +19,30 @@ class KnowledgeBaseScreen extends ConsumerStatefulWidget {
 
 class _KnowledgeBaseScreenState extends ConsumerState<KnowledgeBaseScreen> {
   bool _uploading = false;
+  final _searchController = TextEditingController();
+  bool _isSearching = false;
 
   @override
-  void initState() {
-    super.initState();
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String query) {
+    if (query.trim().isEmpty) {
+      setState(() => _isSearching = false);
+      ref.read(kbSearchResultsProvider.notifier).clear();
+      ref.read(kbDocumentsProvider.notifier).refresh();
+    } else {
+      setState(() => _isSearching = true);
+      ref.read(kbSearchResultsProvider.notifier).search(query);
+    }
+  }
+
+  void _clearSearch() {
+    _searchController.clear();
+    setState(() => _isSearching = false);
+    ref.read(kbSearchResultsProvider.notifier).clear();
     ref.read(kbDocumentsProvider.notifier).refresh();
   }
 
@@ -46,6 +66,7 @@ class _KnowledgeBaseScreenState extends ConsumerState<KnowledgeBaseScreen> {
           file.bytes!,
           filename: file.name,
         ),
+        'title': file.name,
       });
       await ref.read(kbApiProvider).uploadDocument(formData);
       if (mounted) {
@@ -190,7 +211,9 @@ class _KnowledgeBaseScreenState extends ConsumerState<KnowledgeBaseScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final docsAsync = ref.watch(kbDocumentsProvider);
+    final docsAsync = _isSearching
+        ? ref.watch(kbSearchResultsProvider)
+        : ref.watch(kbDocumentsProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -212,79 +235,191 @@ class _KnowledgeBaseScreenState extends ConsumerState<KnowledgeBaseScreen> {
           ),
         ],
       ),
-      body: Stack(
+      body: Column(
         children: [
-          docsAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.error_outline, size: 48, color: Colors.red[300]),
-                  const SizedBox(height: 12),
-                  Text('加载失败', style: TextStyle(color: Colors.grey[600])),
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    onPressed: () =>
-                        ref.read(kbDocumentsProvider.notifier).refresh(),
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('重试'),
-                  ),
-                ],
-              ),
-            ),
-            data: (docs) {
-              if (docs.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.library_books_outlined,
-                          size: 64, color: Colors.grey[300]),
-                      const SizedBox(height: 16),
-                      Text('暂无文档',
-                          style: TextStyle(
-                              fontSize: 16, color: Colors.grey[500])),
-                      const SizedBox(height: 8),
-                      Text('点击右上角按钮上传文件或导入 URL',
-                          style: TextStyle(
-                              fontSize: 13, color: Colors.grey[400])),
-                    ],
-                  ),
-                );
-              }
-              return RefreshIndicator(
-                onRefresh: () =>
-                    ref.read(kbDocumentsProvider.notifier).refresh(),
-                child: ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: docs.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) =>
-                      _buildDocCard(docs[index]),
+          // 搜索栏
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: '搜索文档...',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                suffixIcon: _isSearching
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 20),
+                        onPressed: _clearSearch,
+                      )
+                    : null,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey[300]!),
                 ),
-              );
-            },
+                contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                filled: true,
+                fillColor: Colors.grey[50],
+              ),
+              onChanged: _onSearchChanged,
+            ),
           ),
-          if (_uploading)
-            Container(
-              color: Colors.black.withAlpha(80),
-              child: const Center(
-                child: Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(24),
+          // 文档列表
+          Expanded(
+            child: Stack(
+              children: [
+                docsAsync.when(
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
+                  error: (e, _) => Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 16),
-                        Text('正在上传...'),
+                        Icon(Icons.error_outline,
+                            size: 48, color: Colors.red[300]),
+                        const SizedBox(height: 12),
+                        Text('加载失败',
+                            style: TextStyle(color: Colors.grey[600])),
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          onPressed: _isSearching
+                              ? () => ref
+                                  .read(kbSearchResultsProvider.notifier)
+                                  .search(_searchController.text)
+                              : () => ref
+                                  .read(kbDocumentsProvider.notifier)
+                                  .refresh(),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('重试'),
+                        ),
                       ],
                     ),
                   ),
+                  data: (data) {
+                    final docs = _isSearching
+                        ? data as List<KBDocument>
+                        : (data as KBDocumentState).documents;
+                    final pagination =
+                        _isSearching ? null : (data as KBDocumentState).pagination;
+
+                    if (docs.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.library_books_outlined,
+                                size: 64, color: Colors.grey[300]),
+                            const SizedBox(height: 16),
+                            Text(
+                                _isSearching ? '未找到匹配的文档' : '暂无文档',
+                                style: TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.grey[500])),
+                            const SizedBox(height: 8),
+                            if (!_isSearching)
+                              Text('点击右上角按钮上传文件或导入 URL',
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.grey[400])),
+                          ],
+                        ),
+                      );
+                    }
+                    return RefreshIndicator(
+                      onRefresh: () => _isSearching
+                          ? ref
+                              .read(kbSearchResultsProvider.notifier)
+                              .search(_searchController.text)
+                          : ref
+                              .read(kbDocumentsProvider.notifier)
+                              .refresh(),
+                      child: Column(
+                        children: [
+                          Expanded(
+                            child: ListView.separated(
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                              itemCount: docs.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 8),
+                              itemBuilder: (context, index) =>
+                                  _buildDocCard(docs[index]),
+                            ),
+                          ),
+                          // 分页控件
+                          if (!_isSearching &&
+                              pagination != null &&
+                              pagination.totalPages > 1)
+                            _buildPagination(pagination),
+                        ],
+                      ),
+                    );
+                  },
                 ),
-              ),
+                if (_uploading)
+                  Container(
+                    color: Colors.black.withAlpha(80),
+                    child: const Center(
+                      child: Card(
+                        child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CircularProgressIndicator(),
+                              SizedBox(height: 16),
+                              Text('正在上传...'),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPagination(KBPagination pagination) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          top: BorderSide(color: Colors.grey[200]!),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.chevron_left),
+            onPressed: pagination.page > 1
+                ? () => ref
+                    .read(kbDocumentsProvider.notifier)
+                    .goToPage(pagination.page - 1)
+                : null,
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Text(
+              '${pagination.page} / ${pagination.totalPages}',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.chevron_right),
+            onPressed: pagination.page < pagination.totalPages
+                ? () => ref
+                    .read(kbDocumentsProvider.notifier)
+                    .goToPage(pagination.page + 1)
+                : null,
+          ),
         ],
       ),
     );

@@ -21,7 +21,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   void initState() {
     super.initState();
     _setupSocketListeners();
-    _loadData();
   }
 
   void _setupSocketListeners() {
@@ -45,11 +44,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ref.read(messagesProvider.notifier).fetchTaskMessages(selection.id!);
       }
     });
-  }
-
-  Future<void> _loadData() async {
-    ref.read(friendsProvider.notifier).refresh();
-    ref.read(pendingRequestsProvider.notifier).refresh();
   }
 
   void _logout() {
@@ -177,6 +171,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   icon: const Icon(Icons.smart_toy_outlined),
                   tooltip: 'AI 对话',
                   onPressed: () => context.push('/ai-chat'),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.group_outlined),
+                  tooltip: '群组',
+                  onPressed: () => context.push('/groups'),
                 ),
                 IconButton(
                   icon: const Icon(Icons.schedule_outlined),

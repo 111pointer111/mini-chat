@@ -15,12 +15,6 @@ class ScheduledTasksScreen extends ConsumerStatefulWidget {
 }
 
 class _ScheduledTasksScreenState extends ConsumerState<ScheduledTasksScreen> {
-  @override
-  void initState() {
-    super.initState();
-    ref.read(tasksProvider.notifier).refresh();
-  }
-
   IconData _presetIcon(String taskType) {
     switch (taskType) {
       case 'github_trending':
@@ -39,9 +33,9 @@ class _ScheduledTasksScreenState extends ConsumerState<ScheduledTasksScreen> {
       case 'github_trending':
         return 'GitHub Trending';
       case 'daily_poem':
-        return '每日诗词';
+        return '每日诗句';
       case 'daily_english':
-        return '每日英语';
+        return '每日英文';
       default:
         return taskType;
     }
@@ -49,63 +43,51 @@ class _ScheduledTasksScreenState extends ConsumerState<ScheduledTasksScreen> {
 
   Future<void> _pickTime(PresetTask task) async {
     final parts = task.pushTime.split(':');
-    final initial = TimeOfDay(
-      hour: int.tryParse(parts[0]) ?? 9,
-      minute: int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0,
+    final initialTime = TimeOfDay(
+      hour: int.parse(parts[0]),
+      minute: int.parse(parts[1]),
     );
-    final picked = await showTimePicker(context: context, initialTime: initial);
-    if (picked != null && mounted) {
-      final time =
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+    );
+    if (picked != null) {
+      final timeStr =
           '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
-      try {
-        await ref
-            .read(tasksProvider.notifier)
-            .updatePresetTask(task.taskType, task.enabled, time);
-        if (mounted) showSuccessToast(context, '推送时间已更新');
-      } catch (e) {
-        if (mounted) showErrorToast(context, '更新失败');
-      }
+      await ref
+          .read(tasksProvider.notifier)
+          .updatePresetTask(task.taskType, task.enabled, timeStr);
     }
+  }
+
+  Future<void> _togglePreset(PresetTask task, bool enabled) async {
+    await ref
+        .read(tasksProvider.notifier)
+        .updatePresetTask(task.taskType, enabled, task.pushTime);
+  }
+
+  Future<void> _toggleCustom(CustomTask task, bool enabled) async {
+    await ref
+        .read(tasksProvider.notifier)
+        .updateCustomTask(task.id, enabled, task.pushTime);
   }
 
   Future<void> _pickCustomTime(CustomTask task) async {
     final parts = task.pushTime.split(':');
-    final initial = TimeOfDay(
-      hour: int.tryParse(parts[0]) ?? 9,
-      minute: int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0,
+    final initialTime = TimeOfDay(
+      hour: int.parse(parts[0]),
+      minute: int.parse(parts[1]),
     );
-    final picked = await showTimePicker(context: context, initialTime: initial);
-    if (picked != null && mounted) {
-      final time =
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+    );
+    if (picked != null) {
+      final timeStr =
           '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
-      try {
-        await ref
-            .read(tasksProvider.notifier)
-            .updateCustomTask(task.id, task.enabled, time);
-        if (mounted) showSuccessToast(context, '推送时间已更新');
-      } catch (e) {
-        if (mounted) showErrorToast(context, '更新失败');
-      }
-    }
-  }
-
-  Future<void> _togglePreset(PresetTask task, bool value) async {
-    try {
       await ref
           .read(tasksProvider.notifier)
-          .updatePresetTask(task.taskType, value, task.pushTime);
-    } catch (e) {
-      if (mounted) showErrorToast(context, '更新失败');
-    }
-  }
-
-  Future<void> _toggleCustom(CustomTask task, bool value) async {
-    try {
-      await ref
-          .read(tasksProvider.notifier)
-          .updateCustomTask(task.id, value, task.pushTime);
-    } catch (e) {
-      if (mounted) showErrorToast(context, '更新失败');
+          .updateCustomTask(task.id, task.enabled, timeStr);
     }
   }
 
@@ -114,7 +96,7 @@ class _ScheduledTasksScreenState extends ConsumerState<ScheduledTasksScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('确认删除'),
-        content: Text('确定要删除任务「${task.taskName}」吗？'),
+        content: Text('确定要删除「${task.taskName}」吗？'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -129,12 +111,8 @@ class _ScheduledTasksScreenState extends ConsumerState<ScheduledTasksScreen> {
       ),
     );
     if (confirm == true && mounted) {
-      try {
-        await ref.read(tasksProvider.notifier).deleteCustomTask(task.id);
-        if (mounted) showSuccessToast(context, '已删除');
-      } catch (e) {
-        if (mounted) showErrorToast(context, '删除失败');
-      }
+      await ref.read(tasksProvider.notifier).deleteCustomTask(task.id);
+      if (mounted) showSuccessToast(context, '已删除');
     }
   }
 

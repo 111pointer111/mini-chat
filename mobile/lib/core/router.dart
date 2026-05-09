@@ -11,6 +11,11 @@ import '../features/scheduled_tasks/scheduled_tasks_screen.dart';
 import '../features/knowledge_base/knowledge_base_screen.dart';
 import '../features/mcp_tools/mcp_tools_screen.dart';
 import '../features/admin/admin_ai_providers_screen.dart';
+import '../features/group/group_list_screen.dart';
+import '../features/group/create_group_screen.dart';
+import '../features/group/group_chat_screen.dart';
+import '../features/group/group_settings_screen.dart';
+import '../features/group/group_kb_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateProvider);
@@ -63,6 +68,33 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/admin/ai-providers',
         builder: (context, state) => const AdminAIProvidersScreen(),
+      ),
+      // 群聊相关路由
+      GoRoute(
+        path: '/groups',
+        builder: (context, state) => const GroupListScreen(),
+      ),
+      GoRoute(
+        path: '/groups/create',
+        builder: (context, state) => const CreateGroupScreen(),
+      ),
+      GoRoute(
+        path: '/groups/:id',
+        builder: (context, state) => GroupChatScreen(
+          groupId: state.pathParameters['id']!,
+        ),
+      ),
+      GoRoute(
+        path: '/groups/:id/settings',
+        builder: (context, state) => GroupSettingsScreen(
+          groupId: state.pathParameters['id']!,
+        ),
+      ),
+      GoRoute(
+        path: '/groups/:id/knowledge-base',
+        builder: (context, state) => GroupKBScreen(
+          groupId: state.pathParameters['id']!,
+        ),
       ),
     ],
   );

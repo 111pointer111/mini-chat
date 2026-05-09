@@ -62,3 +62,6 @@ coverage/
 # Runtime uploads and generated files
 uploads/
 */uploads/
+
+# Dev logs and docs (personal notes)
+docs/

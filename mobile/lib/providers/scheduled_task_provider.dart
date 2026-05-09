@@ -10,11 +10,11 @@ final scheduledTaskApiRefProvider = Provider<ScheduledTaskApi>((ref) {
 });
 
 final tasksProvider =
-    AsyncNotifierProvider<TasksNotifier, TasksResponse>(() {
+    AsyncNotifierProvider.autoDispose<TasksNotifier, TasksResponse>(() {
   return TasksNotifier();
 });
 
-class TasksNotifier extends AsyncNotifier<TasksResponse> {
+class TasksNotifier extends AutoDisposeAsyncNotifier<TasksResponse> {
   @override
   Future<TasksResponse> build() async {
     final res = await ref.read(scheduledTaskApiRefProvider).getTasks();
@@ -31,7 +31,7 @@ class TasksNotifier extends AsyncNotifier<TasksResponse> {
       'enabled': enabled,
       'pushTime': pushTime,
     });
-    refresh();
+    await refresh();
   }
 
   Future<void> updateCustomTask(String taskId, bool enabled, String pushTime) async {
@@ -39,12 +39,12 @@ class TasksNotifier extends AsyncNotifier<TasksResponse> {
       'enabled': enabled,
       'pushTime': pushTime,
     });
-    refresh();
+    await refresh();
   }
 
   Future<void> deleteCustomTask(String taskId) async {
     await ref.read(scheduledTaskApiRefProvider).deleteCustomTask(taskId);
-    refresh();
+    await refresh();
   }
 }
 

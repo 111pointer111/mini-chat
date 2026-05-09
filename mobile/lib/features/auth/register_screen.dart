@@ -20,8 +20,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
   final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   final _phoneController = TextEditingController();
   final _codeController = TextEditingController();
+  final _phoneEmailController = TextEditingController();
+  final _phonePasswordController = TextEditingController();
   bool _isLoading = false;
 
   @override
@@ -36,12 +39,74 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     _phoneController.dispose();
     _codeController.dispose();
+    _phoneEmailController.dispose();
+    _phonePasswordController.dispose();
     super.dispose();
   }
 
+  bool _isValidPhone(String phone) {
+    return RegExp(r'^1[3-9]\d{9}$').hasMatch(phone);
+  }
+
+  bool _validateEmailForm() {
+    if (_usernameController.text.trim().isEmpty) {
+      _showError('请输入用户名');
+      return false;
+    }
+    if (_emailController.text.trim().isEmpty) {
+      _showError('请输入邮箱');
+      return false;
+    }
+    if (_passwordController.text.isEmpty) {
+      _showError('请输入密码');
+      return false;
+    }
+    if (_passwordController.text.length < 6) {
+      _showError('密码长度不能少于6位');
+      return false;
+    }
+    if (_passwordController.text != _confirmPasswordController.text) {
+      _showError('两次密码不一致');
+      return false;
+    }
+    return true;
+  }
+
+  bool _validatePhoneForm() {
+    if (_usernameController.text.trim().isEmpty) {
+      _showError('请输入用户名');
+      return false;
+    }
+    if (!_isValidPhone(_phoneController.text.trim())) {
+      _showError('请输入正确的手机号');
+      return false;
+    }
+    if (_codeController.text.trim().isEmpty) {
+      _showError('请输入验证码');
+      return false;
+    }
+    // 如果填写了密码，检查确认密码
+    if (_phonePasswordController.text.isNotEmpty) {
+      if (_phonePasswordController.text.length < 6) {
+        _showError('密码长度不能少于6位');
+        return false;
+      }
+    }
+    return true;
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
+  }
+
   Future<void> _registerWithEmail() async {
+    if (!_validateEmailForm()) return;
+
     setState(() => _isLoading = true);
     try {
       final res = await ref.read(authApiProvider).register(
@@ -56,9 +121,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
       if (mounted) context.go('/');
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('注册失败: ${e.toString()}')),
-        );
+        _showError('注册失败: ${e.toString()}');
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -66,12 +129,20 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
   }
 
   Future<void> _registerWithPhone() async {
+    if (!_validatePhoneForm()) return;
+
     setState(() => _isLoading = true);
     try {
       final res = await ref.read(authApiProvider).registerPhone(
             _usernameController.text.trim(),
             _phoneController.text.trim(),
             _codeController.text.trim(),
+            email: _phoneEmailController.text.trim().isNotEmpty
+                ? _phoneEmailController.text.trim()
+                : null,
+            password: _phonePasswordController.text.isNotEmpty
+                ? _phonePasswordController.text
+                : null,
           );
       final data = res.data;
       final user = User.fromJson(data['user'] as Map<String, dynamic>);
@@ -80,9 +151,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
       if (mounted) context.go('/');
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('注册失败: ${e.toString()}')),
-        );
+        _showError('注册失败: ${e.toString()}');
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -126,7 +195,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                           ),
                           const SizedBox(height: 20),
                           SizedBox(
-                            height: 300,
+                            height: 380,
                             child: TabBarView(
                               controller: _tabController,
                               children: [
@@ -177,7 +246,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
         TextField(
           controller: _passwordController,
           decoration: const InputDecoration(
-            hintText: '密码',
+            hintText: '密码（至少6位）',
+            prefixIcon: Icon(Icons.lock_outlined),
+          ),
+          obscureText: true,
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _confirmPasswordController,
+          decoration: const InputDecoration(
+            hintText: '确认密码',
             prefixIcon: Icon(Icons.lock_outlined),
           ),
           obscureText: true,
@@ -201,36 +279,56 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
   }
 
   Widget _buildPhoneTab() {
-    return Column(
-      children: [
-        TextField(
-          controller: _usernameController,
-          decoration: const InputDecoration(
-            hintText: '用户名',
-            prefixIcon: Icon(Icons.person_outlined),
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          TextField(
+            controller: _usernameController,
+            decoration: const InputDecoration(
+              hintText: '用户名',
+              prefixIcon: Icon(Icons.person_outlined),
+            ),
           ),
-        ),
-        const SizedBox(height: 12),
-        PhoneCodeInput(
-          phoneController: _phoneController,
-          codeController: _codeController,
-          codeType: 'register',
-        ),
-        const SizedBox(height: 20),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: _isLoading ? null : _registerWithPhone,
-            child: _isLoading
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white))
-                : const Text('注册'),
+          const SizedBox(height: 12),
+          PhoneCodeInput(
+            phoneController: _phoneController,
+            codeController: _codeController,
+            codeType: 'register',
           ),
-        ),
-      ],
+          const SizedBox(height: 12),
+          TextField(
+            controller: _phoneEmailController,
+            decoration: const InputDecoration(
+              hintText: '邮箱（可选）',
+              prefixIcon: Icon(Icons.email_outlined),
+            ),
+            keyboardType: TextInputType.emailAddress,
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _phonePasswordController,
+            decoration: const InputDecoration(
+              hintText: '密码（可选，至少6位）',
+              prefixIcon: Icon(Icons.lock_outlined),
+            ),
+            obscureText: true,
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _isLoading ? null : _registerWithPhone,
+              child: _isLoading
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Text('注册'),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

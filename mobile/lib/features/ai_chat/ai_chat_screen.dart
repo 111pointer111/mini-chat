@@ -34,7 +34,6 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadConversations();
       _setupSocketListeners();
     });
   }
@@ -167,16 +166,92 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
     _scrollToBottom();
 
     final socketService = ref.read(socketServiceProvider);
+    final socket = socketService.socket;
     final conversationId = ref.read(currentConversationIdProvider);
     final now = DateTime.now();
     final timezoneOffset = now.timeZoneOffset.inMinutes;
 
-    socketService.emit('ai_chat_stream', {
-      'message': content,
-      if (imageUrls.isNotEmpty) 'images': imageUrls,
-      'timezone': timezoneOffset,
-      if (conversationId != null) 'conversationId': conversationId,
-    });
+    // 检查 Socket 连接状态
+    if (socket != null && socket.connected) {
+      // Socket 连接正常 → 使用 Socket 流式传输
+      socketService.emit('ai_chat_stream', {
+        'message': content,
+        if (imageUrls.isNotEmpty) 'images': imageUrls,
+        'timezone': timezoneOffset,
+        if (conversationId != null) 'conversationId': conversationId,
+      });
+    } else {
+      // Socket 断开 → fallback 到 REST API
+      try {
+        final api = ref.read(aiChatApiProvider);
+        final res = await api.sendMessage(
+          content,
+          images: imageUrls.isNotEmpty ? imageUrls : null,
+          conversationId: conversationId,
+        );
+        
+        final data = res.data;
+        if (data != null) {
+          final reply = data['reply'] as String? ?? '';
+          final newConversationId = data['conversationId'] as String?;
+          
+          // 解析回复内容
+          String mainContent = reply;
+          String? thinkingContent;
+          
+          // 提取 thinking 标签
+          final thinkRegex = RegExp(r'<think>([\s\S]*?)</think>', dotAll: true);
+          final thinkMatch = thinkRegex.firstMatch(reply);
+          if (thinkMatch != null) {
+            thinkingContent = thinkMatch.group(1)?.trim();
+            mainContent = reply.replaceAll(thinkRegex, '').trim();
+          }
+          
+          // 更新消息
+          final messages = ref.read(aiMessagesProvider);
+          if (messages.isNotEmpty) {
+            final lastMessage = messages.last;
+            ref.read(aiMessagesProvider.notifier).setMessages(
+              messages.sublist(0, messages.length - 1)..add(
+                AIChatMessage(
+                  id: lastMessage.id,
+                  role: 'assistant',
+                  content: mainContent,
+                  thinking: thinkingContent,
+                  createdAt: DateTime.now().toIso8601String(),
+                ),
+              ),
+            );
+          }
+          
+          // 更新会话 ID
+          if (newConversationId != null && conversationId == null) {
+            ref.read(currentConversationIdProvider.notifier).state = newConversationId;
+          }
+          
+          _loadConversations();
+        }
+      } catch (e) {
+        // REST API 也失败了，显示错误
+        final messages = ref.read(aiMessagesProvider);
+        if (messages.isNotEmpty) {
+          final lastMessage = messages.last;
+          ref.read(aiMessagesProvider.notifier).setMessages(
+            messages.sublist(0, messages.length - 1)..add(
+              AIChatMessage(
+                id: lastMessage.id,
+                role: 'assistant',
+                content: '❌ 发送失败，请检查网络连接后重试',
+                createdAt: DateTime.now().toIso8601String(),
+              ),
+            ),
+          );
+        }
+      } finally {
+        ref.read(isStreamingProvider.notifier).state = false;
+        _scrollToBottom();
+      }
+    }
   }
 
   Future<void> _selectConversation(String convId) async {

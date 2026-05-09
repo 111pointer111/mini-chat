@@ -21,6 +21,16 @@ class GroupApi {
     return _client.dio.get('/groups/$groupId/messages');
   }
 
+  Future<Response> getGroupMembers(String groupId) {
+    return _client.dio.get('/groups/$groupId/members');
+  }
+
+  Future<Response> addGroupMembers(String groupId, List<String> memberIds) {
+    return _client.dio.post('/groups/$groupId/members', data: {
+      'memberIds': memberIds,
+    });
+  }
+
   // Group KB
   Future<Response> getGroupKBDocuments(String groupId, {int page = 1, int pageSize = 20}) {
     return _client.dio.get('/groups/$groupId/kb/documents',

@@ -14,11 +14,11 @@ final uploadApiProvider = Provider<UploadApi>((ref) {
 });
 
 final conversationsProvider =
-    AsyncNotifierProvider<ConversationsNotifier, List<Conversation>>(() {
+    AsyncNotifierProvider.autoDispose<ConversationsNotifier, List<Conversation>>(() {
   return ConversationsNotifier();
 });
 
-class ConversationsNotifier extends AsyncNotifier<List<Conversation>> {
+class ConversationsNotifier extends AutoDisposeAsyncNotifier<List<Conversation>> {
   @override
   Future<List<Conversation>> build() async {
     final res = await ref.read(aiChatApiProvider).getConversations();
@@ -100,7 +100,7 @@ class AIChatMessage {
 }
 
 final aiMessagesProvider =
-    StateNotifierProvider<AIMessagesNotifier, List<AIChatMessage>>((ref) {
+    StateNotifierProvider.autoDispose<AIMessagesNotifier, List<AIChatMessage>>((ref) {
   return AIMessagesNotifier();
 });
 
@@ -166,5 +166,5 @@ class AIMessagesNotifier extends StateNotifier<List<AIChatMessage>> {
   }
 }
 
-final currentConversationIdProvider = StateProvider<String?>((ref) => null);
-final isStreamingProvider = StateProvider<bool>((ref) => false);
+final currentConversationIdProvider = StateProvider.autoDispose<String?>((ref) => null);
+final isStreamingProvider = StateProvider.autoDispose<bool>((ref) => false);

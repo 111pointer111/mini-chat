@@ -18,12 +18,6 @@ class _MCPToolsScreenState extends ConsumerState<MCPToolsScreen> {
   MCPServer? _selectedServer;
   String? _actionLoading;
 
-  @override
-  void initState() {
-    super.initState();
-    ref.read(mcpServersProvider.notifier).refresh();
-  }
-
   Future<void> _showServerDialog({MCPServer? existing}) async {
     final nameCtrl = TextEditingController(text: existing?.name ?? '');
     final descCtrl =

@@ -9,11 +9,11 @@ final aiProviderApiProvider = Provider<AIProviderApi>((ref) {
 });
 
 final aiProvidersProvider =
-    AsyncNotifierProvider<AIProvidersNotifier, List<AIProvider>>(() {
+    AsyncNotifierProvider.autoDispose<AIProvidersNotifier, List<AIProvider>>(() {
   return AIProvidersNotifier();
 });
 
-class AIProvidersNotifier extends AsyncNotifier<List<AIProvider>> {
+class AIProvidersNotifier extends AutoDisposeAsyncNotifier<List<AIProvider>> {
   @override
   Future<List<AIProvider>> build() async {
     final res = await ref.read(aiProviderApiProvider).getProviders();
@@ -29,11 +29,11 @@ class AIProvidersNotifier extends AsyncNotifier<List<AIProvider>> {
 }
 
 final userAIProviderProvider =
-    AsyncNotifierProvider<UserAIProviderNotifier, AIProvider?>(() {
+    AsyncNotifierProvider.autoDispose<UserAIProviderNotifier, AIProvider?>(() {
   return UserAIProviderNotifier();
 });
 
-class UserAIProviderNotifier extends AsyncNotifier<AIProvider?> {
+class UserAIProviderNotifier extends AutoDisposeAsyncNotifier<AIProvider?> {
   @override
   Future<AIProvider?> build() async {
     try {
@@ -53,11 +53,11 @@ class UserAIProviderNotifier extends AsyncNotifier<AIProvider?> {
 
 // Admin providers
 final adminProvidersProvider =
-    AsyncNotifierProvider<AdminProvidersNotifier, List<AIProvider>>(() {
+    AsyncNotifierProvider.autoDispose<AdminProvidersNotifier, List<AIProvider>>(() {
   return AdminProvidersNotifier();
 });
 
-class AdminProvidersNotifier extends AsyncNotifier<List<AIProvider>> {
+class AdminProvidersNotifier extends AutoDisposeAsyncNotifier<List<AIProvider>> {
   @override
   Future<List<AIProvider>> build() async {
     final res = await ref.read(aiProviderApiProvider).getAdminProviders();
