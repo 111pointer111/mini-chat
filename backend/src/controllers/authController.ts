@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import User, { IUser } from '../models/User';
 import smsService from '../services/smsService';
+import emailService from '../services/emailService';
 
 const generateToken = (user: IUser) => {
     return jwt.sign(
@@ -13,11 +14,11 @@ const generateToken = (user: IUser) => {
 
 export const register = async (req: Request, res: Response) => {
     try {
-        const { username, email, password } = req.body;
+        const { username, email, password, code } = req.body;
 
         // Validate required fields
-        if (!username || !email || !password) {
-            return res.status(400).json({ message: 'Username, email, and password are required' });
+        if (!username || !email || !password || !code) {
+            return res.status(400).json({ message: 'Username, email, password and verification code are required' });
         }
 
         // Validate lengths
@@ -34,12 +35,19 @@ export const register = async (req: Request, res: Response) => {
             return res.status(400).json({ message: 'User with this email or username already exists' });
         }
 
-        // Create user
+        // Verify email code (consumed on success)
+        const isValid = await emailService.verifyCode(email, code, true);
+        if (!isValid) {
+            return res.status(400).json({ message: '验证码错误或已过期' });
+        }
+
+        // Create user with email verified
         const user = await User.create({
             username,
             email,
             password, // Hashed by pre-save hook
-            provider: 'local'
+            provider: 'local',
+            isEmailVerified: true
         });
 
         // Generate token
@@ -53,7 +61,8 @@ export const register = async (req: Request, res: Response) => {
                 username: user.username,
                 email: user.email,
                 role: user.role,
-                avatar: user.avatar
+                avatar: user.avatar,
+                isEmailVerified: true
             }
         });
     } catch (error) {
@@ -117,7 +126,8 @@ export const getMe = async (req: Request, res: Response) => {
                 email: user.email,
                 phone: user.phone,
                 role: user.role,
-                avatar: user.avatar
+                avatar: user.avatar,
+                isEmailVerified: user.isEmailVerified
             }
         });
     } catch (error) {
@@ -353,6 +363,56 @@ export const resetPasswordByPhone = async (req: Request, res: Response) => {
         res.json({ message: '密码重置成功' });
     } catch (error) {
         console.error('ResetPasswordByPhone error:', error);
+        res.status(500).json({ message: '服务器错误' });
+    }
+};
+
+// Send verification email
+export const sendVerificationEmail = async (req: Request, res: Response) => {
+    try {
+        const { email } = req.body;
+
+        if (!email) {
+            return res.status(400).json({ message: '邮箱不能为空' });
+        }
+
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({ message: '邮箱格式不正确' });
+        }
+
+        // Send verification email
+        const result = await emailService.sendVerifyEmail(email);
+        if (result.success) {
+            res.json({ message: result.message });
+        } else {
+            res.status(400).json({ message: result.message });
+        }
+    } catch (error) {
+        console.error('SendVerificationEmail error:', error);
+        res.status(500).json({ message: '服务器错误' });
+    }
+};
+
+// Verify email
+export const verifyEmail = async (req: Request, res: Response) => {
+    try {
+        const { email, code } = req.body;
+
+        if (!email || !code) {
+            return res.status(400).json({ message: '邮箱和验证码不能为空' });
+        }
+
+        // Verify code (don't delete - optional pre-check)
+        const isValid = await emailService.verifyCode(email, code, false);
+        if (!isValid) {
+            return res.status(400).json({ message: '验证码错误或已过期' });
+        }
+
+        res.json({ message: '验证成功' });
+    } catch (error) {
+        console.error('VerifyEmail error:', error);
         res.status(500).json({ message: '服务器错误' });
     }
 };

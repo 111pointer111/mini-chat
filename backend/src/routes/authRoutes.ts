@@ -1,5 +1,5 @@
 import express from 'express';
-import { register, login, getMe, sendSmsCode, registerByPhone, loginByPhone, bindPhone, resetPasswordByPhone } from '../controllers/authController';
+import { register, login, getMe, sendSmsCode, registerByPhone, loginByPhone, bindPhone, resetPasswordByPhone, sendVerificationEmail, verifyEmail } from '../controllers/authController';
 import { protect } from '../middleware/authMiddleware';
 
 const router = express.Router();
@@ -14,5 +14,9 @@ router.post('/register-phone', registerByPhone);
 router.post('/login-phone', loginByPhone);
 router.post('/bind-phone', protect, bindPhone);
 router.post('/reset-password-phone', resetPasswordByPhone);
+
+// Email verification routes
+router.post('/send-verification', sendVerificationEmail);
+router.post('/verify-email', verifyEmail);
 
 export default router;
