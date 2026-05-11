@@ -72,6 +72,11 @@ jobs:
             sed -i '/^ALIYUN_ACCESS_KEY_SECRET=/d' .env.production 2>/dev/null || true
             sed -i '/^ALIYUN_SMS_SIGN_NAME=/d' .env.production 2>/dev/null || true
             sed -i '/^ALIYUN_SMS_TEMPLATE_CODE=/d' .env.production 2>/dev/null || true
+            sed -i '/^ALIYUN_SMTP_HOST=/d' .env.production 2>/dev/null || true
+            sed -i '/^ALIYUN_SMTP_PORT=/d' .env.production 2>/dev/null || true
+            sed -i '/^ALIYUN_SMTP_USER=/d' .env.production 2>/dev/null || true
+            sed -i '/^ALIYUN_SMTP_PASS=/d' .env.production 2>/dev/null || true
+            sed -i '/^ALIYUN_SMTP_SENDER_NAME=/d' .env.production 2>/dev/null || true
             echo "DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}" >> .env.production
             echo "MONGO_USER=${{ secrets.MONGO_USER || 'admin' }}" >> .env.production
             echo "MONGO_PASSWORD=${{ secrets.MONGO_PASSWORD }}" >> .env.production
@@ -83,6 +88,11 @@ jobs:
             echo "ALIYUN_ACCESS_KEY_SECRET=${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}" >> .env.production
             echo "ALIYUN_SMS_SIGN_NAME=${{ secrets.ALIYUN_SMS_SIGN_NAME }}" >> .env.production
             echo "ALIYUN_SMS_TEMPLATE_CODE=${{ secrets.ALIYUN_SMS_TEMPLATE_CODE }}" >> .env.production
+            echo "ALIYUN_SMTP_HOST=${{ secrets.ALIYUN_SMTP_HOST }}" >> .env.production
+            echo "ALIYUN_SMTP_PORT=${{ secrets.ALIYUN_SMTP_PORT }}" >> .env.production
+            echo "ALIYUN_SMTP_USER=${{ secrets.ALIYUN_SMTP_USER }}" >> .env.production
+            echo "ALIYUN_SMTP_PASS=${{ secrets.ALIYUN_SMTP_PASS }}" >> .env.production
+            echo "ALIYUN_SMTP_SENDER_NAME=${{ secrets.ALIYUN_SMTP_SENDER_NAME }}" >> .env.production
             docker compose -f docker-compose.prod.yml --env-file .env.production pull
             docker compose -f docker-compose.prod.yml --env-file .env.production up -d --force-recreate
             docker image prune -f
