@@ -88,11 +88,11 @@ jobs:
             echo "ALIYUN_ACCESS_KEY_SECRET=${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}" >> .env.production
             echo "ALIYUN_SMS_SIGN_NAME=${{ secrets.ALIYUN_SMS_SIGN_NAME }}" >> .env.production
             echo "ALIYUN_SMS_TEMPLATE_CODE=${{ secrets.ALIYUN_SMS_TEMPLATE_CODE }}" >> .env.production
-            echo "ALIYUN_SMTP_HOST=${{ secrets.ALIYUN_SMTP_HOST }}" >> .env.production
-            echo "ALIYUN_SMTP_PORT=${{ secrets.ALIYUN_SMTP_PORT }}" >> .env.production
-            echo "ALIYUN_SMTP_USER=${{ secrets.ALIYUN_SMTP_USER }}" >> .env.production
+            echo "ALIYUN_SMTP_HOST=smtpdm.aliyun.com" >> .env.production
+            echo "ALIYUN_SMTP_PORT=465" >> .env.production
+            echo "ALIYUN_SMTP_USER=verify@mini-chat.cn" >> .env.production
             echo "ALIYUN_SMTP_PASS=${{ secrets.ALIYUN_SMTP_PASS }}" >> .env.production
-            echo "ALIYUN_SMTP_SENDER_NAME=${{ secrets.ALIYUN_SMTP_SENDER_NAME }}" >> .env.production
+            echo "ALIYUN_SMTP_SENDER_NAME=微聊天智能助手" >> .env.production
             docker compose -f docker-compose.prod.yml --env-file .env.production pull
             docker compose -f docker-compose.prod.yml --env-file .env.production up -d --force-recreate
             docker image prune -f
