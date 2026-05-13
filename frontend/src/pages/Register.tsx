@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import api from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import PhoneCodeInput from '../components/PhoneCodeInput';
+import { authInputSx, authTabsSx, authButtonSx, authLinkSx, authAlertSx } from '../styles/authStyles';
 
 const Register: React.FC = () => {
     const { register, handleSubmit, formState: { errors } } = useForm();
@@ -35,10 +36,7 @@ const Register: React.FC = () => {
         try {
             setRegisterLoading(true);
             setError('');
-            const response = await api.post('/auth/register', {
-                ...data,
-                code: verificationCode
-            });
+            const response = await api.post('/auth/register', { ...data, code: verificationCode });
             login(response.data.user, response.data.token);
             navigate('/');
         } catch (err: unknown) {
@@ -98,51 +96,42 @@ const Register: React.FC = () => {
     return (
         <Box
             component={motion.div}
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
         >
-            <Typography variant="h4" component="h1" gutterBottom align="center" fontWeight="bold">
-                Create Account
+            <Typography variant="h5" component="h1" sx={{ fontWeight: 700, color: '#f1f5f9', textAlign: 'center', mb: 0.5 }}>
+                创建账号
             </Typography>
-            <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 2 }}>
-                Join Mini Chat today
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center', mb: 3 }}>
+                加入 Mini Chat，开始智能对话
             </Typography>
 
-            <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)} centered sx={{ mb: 2 }}>
+            <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)} centered sx={authTabsSx}>
                 <Tab label="邮箱注册" />
                 <Tab label="手机号注册" />
             </Tabs>
 
-            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+            {error && <Alert severity="error" sx={authAlertSx}>{error}</Alert>}
 
             {tabValue === 0 ? (
                 <form onSubmit={handleSubmit(onSubmit)}>
                     <TextField
-                        fullWidth
-                        label="用户名"
-                        margin="normal"
+                        fullWidth label="用户名" margin="normal"
                         {...register('username', { required: '请输入用户名', minLength: { value: 2, message: '至少2个字符' }, maxLength: { value: 30, message: '最多30个字符' } })}
-                        error={!!errors.username}
-                        helperText={errors.username?.message as string}
+                        error={!!errors.username} helperText={errors.username?.message as string}
+                        sx={authInputSx}
                     />
                     <TextField
-                        fullWidth
-                        label="邮箱"
-                        type="email"
-                        margin="normal"
+                        fullWidth label="邮箱" type="email" margin="normal"
                         {...register('email', { required: '请输入邮箱' })}
-                        error={!!errors.email}
-                        helperText={errors.email?.message as string}
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        error={!!errors.email} helperText={errors.email?.message as string}
+                        value={email} onChange={(e) => setEmail(e.target.value)}
+                        sx={authInputSx}
                     />
                     <TextField
-                        fullWidth
-                        label="验证码"
-                        margin="normal"
-                        value={verificationCode}
-                        onChange={(e) => setVerificationCode(e.target.value)}
+                        fullWidth label="验证码" margin="normal"
+                        value={verificationCode} onChange={(e) => setVerificationCode(e.target.value)}
                         inputProps={{ maxLength: 6 }}
                         InputProps={{
                             endAdornment: (
@@ -151,93 +140,57 @@ const Register: React.FC = () => {
                                         onClick={handleSendCode}
                                         disabled={countdown > 0 || sendingCode || !email}
                                         size="small"
+                                        sx={{ color: '#a5b4fc', fontWeight: 600, '&:disabled': { color: 'rgba(255,255,255,0.2)' } }}
                                     >
-                                        {sendingCode ? <CircularProgress size={18} /> : countdown > 0 ? `${countdown}s` : '发送验证码'}
+                                        {sendingCode ? <CircularProgress size={18} sx={{ color: '#a5b4fc' }} /> : countdown > 0 ? `${countdown}s` : '发送验证码'}
                                     </Button>
                                 </InputAdornment>
-                            )
+                            ),
                         }}
+                        sx={authInputSx}
                     />
-                    {sendError && <Alert severity="error" sx={{ mt: 1, mb: 1 }}>{sendError}</Alert>}
+                    {sendError && <Alert severity="error" sx={{ ...authAlertSx, mt: 1, mb: 1 }}>{sendError}</Alert>}
                     <TextField
-                        fullWidth
-                        label="密码"
-                        type="password"
-                        margin="normal"
+                        fullWidth label="密码" type="password" margin="normal"
                         {...register('password', { required: '请输入密码', minLength: { value: 6, message: '密码至少6位' } })}
-                        error={!!errors.password}
-                        helperText={errors.password?.message as string}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
+                        error={!!errors.password} helperText={errors.password?.message as string}
+                        value={password} onChange={(e) => setPassword(e.target.value)}
+                        sx={authInputSx}
                     />
-
-                    <Button
-                        fullWidth
-                        type="submit"
-                        variant="contained"
-                        size="large"
-                        disabled={registerLoading}
-                        sx={{ mt: 3, mb: 2, height: 48 }}
-                    >
-                        {registerLoading ? <CircularProgress size={24} /> : '注册'}
+                    <Button fullWidth type="submit" variant="contained" size="large" disabled={registerLoading} sx={authButtonSx}>
+                        {registerLoading ? <CircularProgress size={24} sx={{ color: '#fff' }} /> : '注册'}
                     </Button>
                 </form>
             ) : (
-                <Box sx={{ mt: 2 }}>
+                <Box>
                     <TextField
-                        fullWidth
-                        label="用户名"
-                        value={username}
+                        fullWidth label="用户名" value={username}
                         onChange={(e) => setUsername(e.target.value)}
-                        margin="normal"
-                        required
+                        margin="normal" required sx={authInputSx}
                     />
                     <TextField
-                        fullWidth
-                        label="邮箱（可选）"
-                        type="email"
-                        value={email}
+                        fullWidth label="邮箱（可选）" type="email" value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        margin="normal"
-                        helperText="填写邮箱后可使用邮箱登录"
+                        margin="normal" helperText="填写邮箱后可使用邮箱登录" sx={authInputSx}
                     />
                     <Box sx={{ mt: 2 }}>
-                        <PhoneCodeInput
-                            phone={phone}
-                            setPhone={setPhone}
-                            code={code}
-                            setCode={setCode}
-                            type="register"
-                        />
+                        <PhoneCodeInput phone={phone} setPhone={setPhone} code={code} setCode={setCode} type="register" />
                     </Box>
                     <TextField
-                        fullWidth
-                        label="密码（可选）"
-                        type="password"
-                        value={password}
+                        fullWidth label="密码（可选）" type="password" value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        margin="normal"
-                        helperText="设置密码后可使用密码登录"
+                        margin="normal" helperText="设置密码后可使用密码登录" sx={authInputSx}
                     />
-                    <Button
-                        fullWidth
-                        variant="contained"
-                        size="large"
-                        onClick={handlePhoneRegister}
-                        disabled={phoneLoading}
-                        sx={{ mt: 3, mb: 2, height: 48 }}
-                    >
+                    <Button fullWidth variant="contained" size="large" onClick={handlePhoneRegister} disabled={phoneLoading} sx={authButtonSx}>
                         {phoneLoading ? '注册中...' : '注册'}
                     </Button>
                 </Box>
             )}
 
-            <Box sx={{ textAlign: 'center', mt: 2 }}>
-                <Typography variant="body2">
-                    Already have an account?{' '}
-                    <Link component={RouterLink} to="/login" underline="hover">
-                        Sign in
-                    </Link>
+            <Box sx={{ textAlign: 'center', mt: 2.5 }}>
+                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.45)' }}>
+                    已有账号？{' '}
+                    <Link component={RouterLink} to="/login" sx={authLinkSx}>返回登录</Link>
                 </Typography>
             </Box>
         </Box>

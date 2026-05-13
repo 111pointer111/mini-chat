@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import api from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import PhoneCodeInput from '../components/PhoneCodeInput';
+import { authInputSx, authTabsSx, authButtonSx, authLinkSx, authAlertSx } from '../styles/authStyles';
 
 const Login: React.FC = () => {
     const { register, handleSubmit, formState: { errors } } = useForm();
@@ -52,87 +53,58 @@ const Login: React.FC = () => {
     return (
         <Box
             component={motion.div}
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
         >
-            <Typography variant="h4" component="h1" gutterBottom align="center" fontWeight="bold">
+            <Typography variant="h5" component="h1" sx={{ fontWeight: 700, color: '#f1f5f9', textAlign: 'center', mb: 0.5 }}>
                 欢迎回来
             </Typography>
-            <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 2 }}>
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center', mb: 3 }}>
                 登录以继续使用 Mini Chat
             </Typography>
 
-            <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)} centered sx={{ mb: 2 }}>
+            <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)} centered sx={authTabsSx}>
                 <Tab label="邮箱登录" />
                 <Tab label="手机号登录" />
             </Tabs>
 
-            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+            {error && <Alert severity="error" sx={authAlertSx}>{error}</Alert>}
 
             {tabValue === 0 ? (
                 <form onSubmit={handleSubmit(onSubmit)}>
                     <TextField
-                        fullWidth
-                        label="邮箱地址"
-                        margin="normal"
+                        fullWidth label="邮箱地址" margin="normal"
                         {...register('email', { required: '请输入邮箱' })}
-                        error={!!errors.email}
-                        helperText={errors.email?.message as string}
+                        error={!!errors.email} helperText={errors.email?.message as string}
+                        sx={authInputSx}
                     />
                     <TextField
-                        fullWidth
-                        label="密码"
-                        type="password"
-                        margin="normal"
+                        fullWidth label="密码" type="password" margin="normal"
                         {...register('password', { required: '请输入密码' })}
-                        error={!!errors.password}
-                        helperText={errors.password?.message as string}
+                        error={!!errors.password} helperText={errors.password?.message as string}
+                        sx={authInputSx}
                     />
-
-                    <Button
-                        fullWidth
-                        type="submit"
-                        variant="contained"
-                        size="large"
-                        sx={{ mt: 3, mb: 2, height: 48 }}
-                    >
+                    <Button fullWidth type="submit" variant="contained" size="large" sx={authButtonSx}>
                         登录
                     </Button>
                 </form>
             ) : (
-                <Box sx={{ mt: 2 }}>
-                    <PhoneCodeInput
-                        phone={phone}
-                        setPhone={setPhone}
-                        code={code}
-                        setCode={setCode}
-                        type="login"
-                    />
-                    <Button
-                        fullWidth
-                        variant="contained"
-                        size="large"
-                        onClick={handlePhoneLogin}
-                        disabled={phoneLoading}
-                        sx={{ mt: 3, mb: 2, height: 48 }}
-                    >
+                <Box>
+                    <PhoneCodeInput phone={phone} setPhone={setPhone} code={code} setCode={setCode} type="login" />
+                    <Button fullWidth variant="contained" size="large" onClick={handlePhoneLogin} disabled={phoneLoading} sx={authButtonSx}>
                         {phoneLoading ? '登录中...' : '登录'}
                     </Button>
                 </Box>
             )}
 
-            <Box sx={{ textAlign: 'center', mt: 2 }}>
-                <Typography variant="body2">
+            <Box sx={{ textAlign: 'center', mt: 2.5 }}>
+                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.45)' }}>
                     还没有账号？{' '}
-                    <Link component={RouterLink} to="/register" underline="hover">
-                        立即注册
-                    </Link>
+                    <Link component={RouterLink} to="/register" sx={authLinkSx}>立即注册</Link>
                 </Typography>
-                <Typography variant="body2" sx={{ mt: 1 }}>
-                    <Link component={RouterLink} to="/reset-password" underline="hover">
-                        忘记密码？
-                    </Link>
+                <Typography variant="body2" sx={{ mt: 1, color: 'rgba(255,255,255,0.45)' }}>
+                    <Link component={RouterLink} to="/reset-password" sx={authLinkSx}>忘记密码？</Link>
                 </Typography>
             </Box>
         </Box>

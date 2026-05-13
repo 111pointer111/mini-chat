@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Box, TextField, Button } from '@mui/material';
 import api from '../services/api';
+import { authInputSx } from '../styles/authStyles';
 
 interface PhoneCodeInputProps {
     phone: string;
@@ -36,7 +37,6 @@ const PhoneCodeInput: React.FC<PhoneCodeInputProps> = ({
     const handleSendCode = async () => {
         if (!phone || countdown > 0 || sending) return;
 
-        // Validate phone format
         const phoneRegex = /^1[3-9]\d{9}$/;
         if (!phoneRegex.test(phone)) {
             setSendError('请输入正确的手机号');
@@ -68,12 +68,28 @@ const PhoneCodeInput: React.FC<PhoneCodeInputProps> = ({
                     error={!!phoneError || !!sendError}
                     helperText={phoneError || sendError}
                     placeholder="请输入手机号"
+                    sx={authInputSx}
                 />
                 <Button
                     variant="outlined"
                     onClick={handleSendCode}
                     disabled={countdown > 0 || sending || !phone}
-                    sx={{ minWidth: 120, whiteSpace: 'nowrap' }}
+                    sx={{
+                        minWidth: 120,
+                        whiteSpace: 'nowrap',
+                        borderRadius: '12px',
+                        borderColor: 'rgba(255, 255, 255, 0.2)',
+                        color: '#a5b4fc',
+                        fontWeight: 600,
+                        '&:hover': {
+                            borderColor: 'rgba(255, 255, 255, 0.4)',
+                            backgroundColor: 'rgba(255, 255, 255, 0.06)',
+                        },
+                        '&:disabled': {
+                            borderColor: 'rgba(255, 255, 255, 0.08)',
+                            color: 'rgba(255, 255, 255, 0.2)',
+                        },
+                    }}
                 >
                     {sending ? '发送中...' : countdown > 0 ? `${countdown}s` : '获取验证码'}
                 </Button>
@@ -86,6 +102,7 @@ const PhoneCodeInput: React.FC<PhoneCodeInputProps> = ({
                 error={!!codeError}
                 helperText={codeError}
                 placeholder="请输入验证码"
+                sx={authInputSx}
             />
         </Box>
     );
