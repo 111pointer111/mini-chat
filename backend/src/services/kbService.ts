@@ -17,6 +17,8 @@ import {
 import {
     processAndStoreChunks,
     retrieveRelevantChunks,
+    buildSourcesFromChunks,
+    type Source,
 } from './kbEmbeddingService';
 import { getUserAIConfig } from './aiService';
 import OpenAI from 'openai';
@@ -139,20 +141,12 @@ export async function chatWithKnowledge(
     const sources: Source[] = [];
 
     if (relevantChunks.length > 0) {
+        // 构建引用数据
+        sources.push(...buildSourcesFromChunks(relevantChunks));
+
         // 把检索到的块拼接成上下文
         context = relevantChunks
-            .map((chunk, i) => {
-                const docName = typeof chunk.metadata === 'object' && chunk.metadata !== null
-                    ? ((chunk.metadata as Record<string, unknown>).fileName || (chunk.metadata as Record<string, unknown>).url || '未知来源')
-                    : '未知来源';
-                sources.push({
-                    documentName: String(docName),
-                    chunkIndex: chunk.chunk_index,
-                    content: chunk.content,
-                    similarity: chunk.similarity,
-                });
-                return `[来源 ${i + 1}] ${chunk.content}`;
-            })
+            .map((chunk, i) => `[来源 ${i + 1}] ${chunk.content}`)
             .join('\n\n');
     }
 
@@ -187,9 +181,4 @@ export async function chatWithKnowledge(
     return { answer, sources };
 }
 
-export interface Source {
-    documentName: string;
-    chunkIndex: number;
-    content: string;
-    similarity: number;
-}
+

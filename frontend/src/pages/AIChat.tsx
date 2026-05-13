@@ -34,6 +34,13 @@ import api from '../services/api';
 import AIProviderSelector from '../components/AIProviderSelector';
 import { useSocketStore } from '../store/socketStore';
 
+interface MessageSource {
+    documentName: string;
+    chunkIndex: number;
+    content: string;
+    similarity: number;
+}
+
 interface Message {
     id: string;
     role: 'user' | 'assistant';
@@ -42,6 +49,7 @@ interface Message {
     thinking?: string;
     pendingTask?: boolean;
     taskCreated?: boolean;
+    sources?: MessageSource[];
     createdAt?: string;
 }
 
@@ -96,6 +104,7 @@ const AIChat: React.FC = () => {
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [convToDelete, setConvToDelete] = useState<string | null>(null);
     const [expandedThink, setExpandedThink] = useState<Record<string, boolean>>({});
+    const [expandedSources, setExpandedSources] = useState<Record<string, boolean>>({});
     const [isStreaming, setIsStreaming] = useState(false);
     const [pendingImages, setPendingImages] = useState<File[]>([]); // 待发送的图片
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -170,7 +179,7 @@ const AIChat: React.FC = () => {
             socketRef.current = socket;
         }
 
-                socket.on('ai_stream', (data: { content: string; done: boolean }) => {
+                socket.on('ai_stream', (data: { content: string; done: boolean; sources?: MessageSource[] }) => {
             if (data.done) {
                 // 流式结束：用完整原始内容更新 message，确保 thinking 正确解析
                 if (streamingMessageIdRef.current && streamingRawRef.current) {
@@ -178,7 +187,7 @@ const AIChat: React.FC = () => {
                     setMessages((prev) =>
                         prev.map((msg) => {
                             if (msg.id !== streamingMessageIdRef.current) return msg;
-                            return { ...msg, content: main, thinking };
+                            return { ...msg, content: main, thinking, sources: data.sources || msg.sources };
                         })
                     );
                 }
@@ -449,6 +458,7 @@ const AIChat: React.FC = () => {
                             thinking,
                             pendingTask: res.data.pendingTask,
                             taskCreated: res.data.taskCreated,
+                            sources: res.data.sources || [],
                             createdAt: new Date().toISOString(),
                         },
                     ];
@@ -812,6 +822,73 @@ const AIChat: React.FC = () => {
                                                         onClick={() => window.open(imgUrl, '_blank')}
                                                     />
                                                 ))}
+                                            </Box>
+                                        )}
+                                        {/* 引用来源面板 */}
+                                        {message.role === 'assistant' && message.sources && message.sources.length > 0 && (
+                                            <Box sx={{ mt: 1.5 }}>
+                                                <Box
+                                                    onClick={() => setExpandedSources((prev) => ({ ...prev, [message.id]: !prev[message.id] }))}
+                                                    sx={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: 0.5,
+                                                        cursor: 'pointer',
+                                                        py: 0.5,
+                                                        px: 1,
+                                                        borderRadius: 1,
+                                                        bgcolor: alpha(theme.palette.info.main, 0.06),
+                                                        '&:hover': { bgcolor: alpha(theme.palette.info.main, 0.12) },
+                                                    }}
+                                                >
+                                                    {expandedSources[message.id] ? <ExpandLess sx={{ fontSize: 18 }} /> : <ExpandMore sx={{ fontSize: 18 }} />}
+                                                    <Typography variant="caption" sx={{ fontWeight: 600, color: 'info.main', fontSize: '0.75rem' }}>
+                                                        📚 参考来源 ({message.sources.length})
+                                                    </Typography>
+                                                </Box>
+                                                <Collapse in={expandedSources[message.id]}>
+                                                    <Box sx={{ mt: 0.5 }}>
+                                                        {message.sources.map((src, idx) => (
+                                                            <Box
+                                                                key={idx}
+                                                                sx={{
+                                                                    py: 1,
+                                                                    px: 1.5,
+                                                                    borderBottom: idx < message.sources!.length - 1 ? '1px solid' : 'none',
+                                                                    borderColor: 'divider',
+                                                                }}
+                                                            >
+                                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                                                                    <Chip
+                                                                        label={`[${idx + 1}]`}
+                                                                        size="small"
+                                                                        sx={{ height: 18, fontSize: '0.65rem', minWidth: 28 }}
+                                                                    />
+                                                                    <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.7rem', color: 'text.primary' }}>
+                                                                        {src.documentName}
+                                                                    </Typography>
+                                                                    <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'text.secondary', ml: 'auto' }}>
+                                                                        {Math.round((1 - src.similarity) * 100)}% 匹配
+                                                                    </Typography>
+                                                                </Box>
+                                                                <Typography
+                                                                    variant="caption"
+                                                                    sx={{
+                                                                        color: 'text.secondary',
+                                                                        fontSize: '0.7rem',
+                                                                        display: '-webkit-box',
+                                                                        WebkitLineClamp: 3,
+                                                                        WebkitBoxOrient: 'vertical',
+                                                                        overflow: 'hidden',
+                                                                        lineHeight: 1.5,
+                                                                    }}
+                                                                >
+                                                                    {src.content}
+                                                                </Typography>
+                                                            </Box>
+                                                        ))}
+                                                    </Box>
+                                                </Collapse>
                                             </Box>
                                         )}
                                         {message.createdAt && (

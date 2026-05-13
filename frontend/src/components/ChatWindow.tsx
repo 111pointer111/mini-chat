@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Drawer, IconButton, List, ListItem, ListItemSecondaryAction, ListItemText, Paper, Stack, TextField, Tooltip, Typography, Avatar } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import { GitHub, MenuBook, Translate, AutoAwesome, ChatBubbleOutline, Groups, LibraryBooks, Upload, Link as LinkIcon, Delete, Refresh } from '@mui/icons-material';
@@ -99,7 +99,7 @@ const ChatWindow: React.FC = () => {
         };
     }, [socket, selectedGroup, addMessage]);
 
-    const loadGroupDocuments = async () => {
+    const loadGroupDocuments = useCallback(async () => {
         if (!selectedGroup) return;
         setKbLoading(true);
         try {
@@ -112,13 +112,13 @@ const ChatWindow: React.FC = () => {
         } finally {
             setKbLoading(false);
         }
-    };
+    }, [selectedGroup]);
 
     useEffect(() => {
         if (kbDrawerOpen && selectedGroup) {
             loadGroupDocuments();
         }
-    }, [kbDrawerOpen, selectedGroup?._id]);
+    }, [kbDrawerOpen, selectedGroup, loadGroupDocuments]);
 
     const handleGroupKbUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];

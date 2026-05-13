@@ -6,9 +6,10 @@
  * 因为不同 provider（Minimax 等）的 embedding 接口可能有差异，
  * 直接发 HTTP 请求更灵活可控。
  */
-import { getUserAIConfig } from './aiService';
+import { getUserAIConfig, getClient } from './aiService';
 import { insertChunks, vectorSearch, textSearch, type SearchResult } from '../utils/kbDb';
 import type { TextChunk } from './kbFileService';
+import OpenAI from 'openai';
 
 const DEFAULT_EMBEDDING_BATCH_SIZE = 2;
 
@@ -83,6 +84,60 @@ async function generateEmbedding(text: string, userId: string): Promise<number[]
     }
 
     return embedding;
+}
+
+export interface Source {
+    documentName: string;
+    chunkIndex: number;
+    content: string;
+    similarity: number;
+}
+
+/**
+ * 将检索结果转为 Source 数组（供引用标注使用）
+ */
+export function buildSourcesFromChunks(chunks: SearchResult[]): Source[] {
+    return chunks.map(chunk => {
+        const metadata = typeof chunk.metadata === 'object' && chunk.metadata !== null
+            ? chunk.metadata as Record<string, unknown>
+            : {};
+        const docName = metadata.fileName || metadata.url || '未知来源';
+        return {
+            documentName: String(docName),
+            chunkIndex: chunk.chunk_index,
+            content: chunk.content,
+            similarity: chunk.similarity,
+        };
+    });
+}
+
+/**
+ * HyDE（Hypothetical Document Embeddings）
+ * 用 LLM 根据用户问题生成一段"假设性文档"，再用其 embedding 做检索
+ * 假设文档的措辞更接近知识库文档，召回率更高
+ */
+const HYDE_SYSTEM_PROMPT = `你是一个知识库检索助手。给定用户的问题，生成一段可能包含答案的文档片段。
+要求：
+- 模拟知识库文档的正式写作风格
+- 包含与问题相关的关键信息和术语
+- 长度 100-200 字
+- 只输出文档内容本身，不要解释`;
+
+async function generateHypotheticalDocument(query: string, userId: string): Promise<string> {
+    const config = await getUserAIConfig(userId);
+    const client = getClient(config);
+
+    const response = await client.chat.completions.create({
+        model: config.model,
+        messages: [
+            { role: 'system', content: HYDE_SYSTEM_PROMPT },
+            { role: 'user', content: query },
+        ],
+        temperature: 0.3,
+        max_tokens: 300,
+    });
+
+    return response.choices[0]?.message?.content || query;
 }
 
 /**
@@ -170,7 +225,14 @@ export async function retrieveRelevantChunks(
     const RRF_K = 60;
     const MMR_LAMBDA = 0.7;
 
-    const queryEmbedding = await generateEmbedding(query, userId);
+    // HyDE：先用 LLM 生成假设性文档，再用其 embedding 检索
+    let searchQuery = query;
+    try {
+        searchQuery = await generateHypotheticalDocument(query, userId);
+    } catch (err) {
+        console.warn('HyDE fallback to original query:', err instanceof Error ? err.message : err);
+    }
+    const queryEmbedding = await generateEmbedding(searchQuery, userId);
 
     const [vectorResults, textResults] = await Promise.all([
         vectorSearch(queryEmbedding, userId, OVERFETCH, scope),

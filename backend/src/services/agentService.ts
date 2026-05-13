@@ -7,7 +7,7 @@
 import { getWeather, weatherToolDefinition, ToolResult } from './getWeather';
 import { createScheduledTask, scheduledTaskToolDefinition } from './createScheduledTaskTool';
 import { ChatMessage, getUserAIConfig, getClient } from './aiService';
-import { retrieveRelevantChunks } from './kbEmbeddingService';
+import { retrieveRelevantChunks, buildSourcesFromChunks, type Source } from './kbEmbeddingService';
 import { executeMcpTool, getMcpToolDefinitions } from './mcpService';
 import OpenAI from 'openai';
 
@@ -166,16 +166,18 @@ async function buildSystemPrompt(
     userId: string | undefined,
     query: string,
     knowledgeScope: { type?: 'user' | 'group'; id?: string } = {}
-): Promise<string> {
+): Promise<{ systemPrompt: string; sources: Source[] }> {
     if (!userId || !query.trim()) {
-        return SYSTEM_PROMPT;
+        return { systemPrompt: SYSTEM_PROMPT, sources: [] };
     }
 
     try {
         const chunks = await retrieveRelevantChunks(query, userId, 5, knowledgeScope);
         if (chunks.length === 0) {
-            return SYSTEM_PROMPT;
+            return { systemPrompt: SYSTEM_PROMPT, sources: [] };
         }
+
+        const sources = buildSourcesFromChunks(chunks);
 
         const context = chunks
             .map((chunk, index) => {
@@ -187,14 +189,16 @@ async function buildSystemPrompt(
             })
             .join('\n\n');
 
-        return `${SYSTEM_PROMPT}
+        const systemPrompt = `${SYSTEM_PROMPT}
 
 以下是从用户知识库中检索到的相关文档片段。回答时优先参考这些内容；如果片段与问题无关，请忽略片段并正常回答。不要编造知识库中不存在的信息。
 
 ${context}`;
+
+        return { systemPrompt, sources };
     } catch (err) {
         console.warn('Knowledge retrieval skipped:', err instanceof Error ? err.message : err);
-        return SYSTEM_PROMPT;
+        return { systemPrompt: SYSTEM_PROMPT, sources: [] };
     }
 }
 
@@ -210,7 +214,7 @@ export async function runAgent(
     const { userId } = options;
     const config = await getUserAIConfig(userId);
     const client = getClient(config);
-    const systemPrompt = await buildSystemPrompt(userId, getMessageText(newMessage), options.knowledgeScope);
+    const { systemPrompt } = await buildSystemPrompt(userId, getMessageText(newMessage), options.knowledgeScope);
 
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
         { role: 'system', content: systemPrompt },
@@ -283,7 +287,7 @@ export async function runAgentStream(
     newMessage: UserMessageInput | string,
     options: RunAgentOptions & {
         onChunk?: (chunk: string) => void;
-        onDone?: () => void;
+        onDone?: (sources?: Source[]) => void;
         onError?: (err: string) => void;
     } = {}
 ) {
@@ -292,7 +296,7 @@ export async function runAgentStream(
     try {
         const config = await getUserAIConfig(userId);
         const client = getClient(config);
-        const systemPrompt = await buildSystemPrompt(userId, getMessageText(newMessage), options.knowledgeScope);
+        const { systemPrompt, sources } = await buildSystemPrompt(userId, getMessageText(newMessage), options.knowledgeScope);
 
         const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
             { role: 'system', content: systemPrompt },
@@ -376,7 +380,7 @@ export async function runAgentStream(
                     });
                 }
             } else {
-                if (onDone) onDone();
+                if (onDone) onDone(sources);
                 return;
             }
         }

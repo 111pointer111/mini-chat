@@ -218,7 +218,7 @@ export const setupSocket = (io: Server) => {
                         onChunk: (chunk) => {
                             fullContent += chunk;
                         },
-                        onDone: async () => {
+                        onDone: async (_sources) => {
                             if (!fullContent.trim()) return;
                             const assistantMessage = await Message.create({
                                 sender: AI_ASSISTANT_ID,
@@ -325,8 +325,8 @@ export const setupSocket = (io: Server) => {
                         fullContent += chunk;
                         socket.emit('ai_stream', { content: chunk, done: false });
                     },
-                    onDone: async () => {
-                        socket.emit('ai_stream', { content: '', done: true });
+                    onDone: async (sources) => {
+                        socket.emit('ai_stream', { content: '', done: true, sources: sources || [] });
                         if (fullContent) {
                             await saveStreamMessage(userId, aiConversation._id as mongoose.Types.ObjectId, fullContent);
                             const convId = aiConversation._id.toString();

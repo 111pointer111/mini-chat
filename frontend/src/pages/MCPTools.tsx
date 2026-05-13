@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     Alert,
     Avatar,
@@ -122,7 +122,7 @@ const MCPTools: React.FC = () => {
     const enabledCount = servers.filter((server) => server.enabled).length;
     const toolCount = servers.reduce((count, server) => count + (server.cachedTools?.length || 0), 0);
 
-    const loadServers = async () => {
+    const loadServers = useCallback(async () => {
         setLoading(true);
         try {
             const res = await getMCPServers();
@@ -137,11 +137,11 @@ const MCPTools: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [selectedId]);
 
     useEffect(() => {
         loadServers();
-    }, []);
+    }, [loadServers]);
 
     const openCreateDialog = () => {
         setEditingServer(null);

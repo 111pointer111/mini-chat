@@ -207,9 +207,11 @@ export const chat = async (req: Request, res: Response) => {
 
         // Normal chat response with history context and knowledge-base augmentation.
         let normalReply: string;
+        let sources: import('../services/kbEmbeddingService').Source[] = [];
         try {
             const ragResult = await chatWithKnowledge(userId, message, history);
             normalReply = ragResult.answer;
+            sources = ragResult.sources;
         } catch (err) {
             console.warn('RAG chat fallback to normal chat:', err instanceof Error ? err.message : err);
             normalReply = await aiService.chatWithHistory(history, message, userId);
@@ -222,6 +224,7 @@ export const chat = async (req: Request, res: Response) => {
         return res.json({
             reply: normalReply,
             taskCreated: false,
+            sources,
         });
     } catch (error) {
         console.error('AI chat error:', error);
