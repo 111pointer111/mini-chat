@@ -36,6 +36,23 @@ final routerProvider = Provider<GoRouter>((ref) {
 
   return GoRouter(
     initialLocation: '/',
+    errorBuilder: (context, state) => Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 64, color: Colors.grey),
+            const SizedBox(height: 16),
+            const Text('页面加载失败', style: TextStyle(fontSize: 18)),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => context.go('/'),
+              child: const Text('返回首页'),
+            ),
+          ],
+        ),
+      ),
+    ),
     redirect: (context, state) {
       final isLoading = authState.isLoading;
       final isLoggedIn = authState.valueOrNull != null;

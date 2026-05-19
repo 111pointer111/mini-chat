@@ -161,7 +161,29 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
               );
             },
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(child: Text('加载失败: $e')),
+            error: (e, stack) {
+              print('Messages error: $e');
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error_outline, size: 48, color: Colors.grey),
+                    const SizedBox(height: 8),
+                    Text('加载失败', style: TextStyle(color: Colors.grey[600])),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: () {
+                        final selection = ref.read(chatSelectionProvider);
+                        if (selection.type == ChatType.friend && selection.id != null) {
+                          ref.read(messagesProvider.notifier).fetchFriendMessages(selection.id!);
+                        }
+                      },
+                      child: const Text('重试'),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ),
 

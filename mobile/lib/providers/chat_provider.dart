@@ -107,10 +107,16 @@ class MessagesNotifier extends AutoDisposeAsyncNotifier<List<Message>> {
   Future<void> fetchFriendMessages(String friendId) async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
-      final res = await ref.read(messageApiProvider).getMessages(friendId);
-      return (res.data as List<dynamic>)
-          .map((e) => Message.fromJson(e as Map<String, dynamic>))
-          .toList();
+      try {
+        final res = await ref.read(messageApiProvider).getMessages(friendId);
+        final messages = (res.data as List<dynamic>)
+            .map((e) => Message.fromJson(e as Map<String, dynamic>))
+            .toList();
+        return messages;
+      } catch (e) {
+        print('Error fetching messages: $e');
+        rethrow;
+      }
     });
   }
 
