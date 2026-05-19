@@ -55,7 +55,7 @@ const Register: React.FC = () => {
         setSendingCode(true);
         setSendError('');
         try {
-            await api.post('/auth/send-verification', { email });
+            await api.post('/auth/send-verification', { email, type: 'register' });
             setCountdown(60);
             timerRef.current = setInterval(() => {
                 setCountdown((prev) => {

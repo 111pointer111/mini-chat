@@ -36,7 +36,7 @@ export const register = async (req: Request, res: Response) => {
         }
 
         // Verify email code (consumed on success)
-        const isValid = await emailService.verifyCode(email, code, true);
+        const isValid = await emailService.verifyCode(email, code, 'register', true);
         if (!isValid) {
             return res.status(400).json({ message: '验证码错误或已过期' });
         }
@@ -370,10 +370,15 @@ export const resetPasswordByPhone = async (req: Request, res: Response) => {
 // Send verification email
 export const sendVerificationEmail = async (req: Request, res: Response) => {
     try {
-        const { email } = req.body;
+        const { email, type } = req.body;
 
-        if (!email) {
-            return res.status(400).json({ message: '邮箱不能为空' });
+        if (!email || !type) {
+            return res.status(400).json({ message: '邮箱和类型不能为空' });
+        }
+
+        // Validate type
+        if (!['register', 'login', 'bind', 'reset'].includes(type)) {
+            return res.status(400).json({ message: '非法参数' });
         }
 
         // Validate email format
@@ -382,8 +387,24 @@ export const sendVerificationEmail = async (req: Request, res: Response) => {
             return res.status(400).json({ message: '邮箱格式不正确' });
         }
 
+        // Check if email exists for register type
+        if (type === 'register') {
+            const existingUser = await User.findOne({ email });
+            if (existingUser) {
+                return res.status(400).json({ message: '该邮箱已注册' });
+            }
+        }
+
+        // Check if email exists for login type
+        if (type === 'login') {
+            const existingUser = await User.findOne({ email });
+            if (!existingUser) {
+                return res.status(400).json({ message: '该邮箱未注册' });
+            }
+        }
+
         // Send verification email
-        const result = await emailService.sendVerifyEmail(email);
+        const result = await emailService.sendVerifyEmail(email, type);
         if (result.success) {
             res.json({ message: result.message });
         } else {
@@ -395,8 +416,8 @@ export const sendVerificationEmail = async (req: Request, res: Response) => {
     }
 };
 
-// Verify email
-export const verifyEmail = async (req: Request, res: Response) => {
+// Login by email verification code
+export const loginByEmailCode = async (req: Request, res: Response) => {
     try {
         const { email, code } = req.body;
 
@@ -404,8 +425,54 @@ export const verifyEmail = async (req: Request, res: Response) => {
             return res.status(400).json({ message: '邮箱和验证码不能为空' });
         }
 
+        // Verify email code (consumed on success)
+        const isValid = await emailService.verifyCode(email, code, 'login', true);
+        if (!isValid) {
+            return res.status(400).json({ message: '验证码错误或已过期' });
+        }
+
+        // Find user by email
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(400).json({ message: '该邮箱未注册' });
+        }
+
+        // Generate token
+        const token = generateToken(user);
+
+        res.json({
+            message: '登录成功',
+            token,
+            user: {
+                _id: user._id.toString(),
+                username: user.username,
+                email: user.email,
+                role: user.role,
+                avatar: user.avatar
+            }
+        });
+    } catch (error) {
+        console.error('LoginByEmailCode error:', error);
+        res.status(500).json({ message: '服务器错误' });
+    }
+};
+
+// Verify email
+export const verifyEmail = async (req: Request, res: Response) => {
+    try {
+        const { email, code, type } = req.body;
+
+        if (!email || !code || !type) {
+            return res.status(400).json({ message: '邮箱、验证码和类型不能为空' });
+        }
+
+        // Validate type
+        if (!['register', 'login', 'bind', 'reset'].includes(type)) {
+            return res.status(400).json({ message: '非法参数' });
+        }
+
         // Verify code (don't delete - optional pre-check)
-        const isValid = await emailService.verifyCode(email, code, false);
+        const isValid = await emailService.verifyCode(email, code, type, false);
         if (!isValid) {
             return res.status(400).json({ message: '验证码错误或已过期' });
         }

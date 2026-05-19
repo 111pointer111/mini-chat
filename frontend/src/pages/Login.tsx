@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import api from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import PhoneCodeInput from '../components/PhoneCodeInput';
+import EmailCodeInput from '../components/EmailCodeInput';
 import { authInputSx, authTabsSx, authButtonSx, authLinkSx, authAlertSx } from '../styles/authStyles';
 
 const Login: React.FC = () => {
@@ -16,7 +17,10 @@ const Login: React.FC = () => {
     const [tabValue, setTabValue] = useState(0);
     const [phone, setPhone] = useState('');
     const [code, setCode] = useState('');
+    const [emailCodeEmail, setEmailCodeEmail] = useState('');
+    const [emailCode, setEmailCode] = useState('');
     const [phoneLoading, setPhoneLoading] = useState(false);
+    const [emailCodeLoading, setEmailCodeLoading] = useState(false);
     const login = useAuthStore((state) => state.login);
 
     const onSubmit = async (data: FieldValues) => {
@@ -50,6 +54,25 @@ const Login: React.FC = () => {
         }
     };
 
+    const handleEmailCodeLogin = async () => {
+        if (!emailCodeEmail || !emailCode) {
+            setError('请输入邮箱和验证码');
+            return;
+        }
+        setEmailCodeLoading(true);
+        setError('');
+        try {
+            const response = await api.post('/auth/login-email-code', { email: emailCodeEmail, code: emailCode });
+            login(response.data.user, response.data.token);
+            navigate('/');
+        } catch (err: unknown) {
+            const axiosErr = err as { response?: { data?: { message?: string } } };
+            setError(axiosErr.response?.data?.message || '登录失败');
+        } finally {
+            setEmailCodeLoading(false);
+        }
+    };
+
     return (
         <Box
             component={motion.div}
@@ -65,13 +88,14 @@ const Login: React.FC = () => {
             </Typography>
 
             <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)} centered sx={authTabsSx}>
-                <Tab label="邮箱登录" />
-                <Tab label="手机号登录" />
+                <Tab label="密码登录" />
+                <Tab label="邮箱验证码" />
+                <Tab label="手机号" />
             </Tabs>
 
             {error && <Alert severity="error" sx={authAlertSx}>{error}</Alert>}
 
-            {tabValue === 0 ? (
+            {tabValue === 0 && (
                 <form onSubmit={handleSubmit(onSubmit)}>
                     <TextField
                         fullWidth label="邮箱地址" margin="normal"
@@ -89,7 +113,24 @@ const Login: React.FC = () => {
                         登录
                     </Button>
                 </form>
-            ) : (
+            )}
+
+            {tabValue === 1 && (
+                <Box>
+                    <EmailCodeInput
+                        email={emailCodeEmail}
+                        setEmail={setEmailCodeEmail}
+                        code={emailCode}
+                        setCode={setEmailCode}
+                        type="login"
+                    />
+                    <Button fullWidth variant="contained" size="large" onClick={handleEmailCodeLogin} disabled={emailCodeLoading} sx={authButtonSx}>
+                        {emailCodeLoading ? '登录中...' : '登录'}
+                    </Button>
+                </Box>
+            )}
+
+            {tabValue === 2 && (
                 <Box>
                     <PhoneCodeInput phone={phone} setPhone={setPhone} code={code} setCode={setCode} type="login" />
                     <Button fullWidth variant="contained" size="large" onClick={handlePhoneLogin} disabled={phoneLoading} sx={authButtonSx}>

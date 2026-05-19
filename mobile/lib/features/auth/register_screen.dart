@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dio/dio.dart';
 
 import '../../core/theme.dart';
 import '../../data/models/user.dart';
@@ -19,13 +21,17 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
   late TabController _tabController;
   final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _emailCodeController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _phoneController = TextEditingController();
   final _codeController = TextEditingController();
   final _phoneEmailController = TextEditingController();
   final _phonePasswordController = TextEditingController();
+  final _phoneConfirmPasswordController = TextEditingController();
   bool _isLoading = false;
+  int _emailCountdown = 0;
+  Timer? _emailTimer;
 
   @override
   void initState() {
@@ -38,17 +44,24 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     _tabController.dispose();
     _usernameController.dispose();
     _emailController.dispose();
+    _emailCodeController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     _phoneController.dispose();
     _codeController.dispose();
     _phoneEmailController.dispose();
     _phonePasswordController.dispose();
+    _phoneConfirmPasswordController.dispose();
+    _emailTimer?.cancel();
     super.dispose();
   }
 
   bool _isValidPhone(String phone) {
     return RegExp(r'^1[3-9]\d{9}$').hasMatch(phone);
+  }
+
+  bool _isValidEmail(String email) {
+    return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
   }
 
   bool _validateEmailForm() {
@@ -58,6 +71,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     }
     if (_emailController.text.trim().isEmpty) {
       _showError('请输入邮箱');
+      return false;
+    }
+    if (!_isValidEmail(_emailController.text.trim())) {
+      _showError('请输入正确的邮箱地址');
+      return false;
+    }
+    if (_emailCodeController.text.trim().isEmpty) {
+      _showError('请输入邮箱验证码');
       return false;
     }
     if (_passwordController.text.isEmpty) {
@@ -88,10 +109,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
       _showError('请输入验证码');
       return false;
     }
-    // 如果填写了密码，检查确认密码
     if (_phonePasswordController.text.isNotEmpty) {
       if (_phonePasswordController.text.length < 6) {
         _showError('密码长度不能少于6位');
+        return false;
+      }
+      if (_phonePasswordController.text != _phoneConfirmPasswordController.text) {
+        _showError('两次密码不一致');
         return false;
       }
     }
@@ -104,15 +128,67 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     );
   }
 
+  String _extractErrorMessage(Object error) {
+    if (error is DioException) {
+      final data = error.response?.data;
+      if (data is Map<String, dynamic> && data['message'] != null) {
+        return data['message'] as String;
+      }
+      if (error.response?.statusCode == 400) return '请求参数错误';
+      if (error.response?.statusCode == 409) return '用户名或邮箱已存在';
+      if (error.response?.statusCode == 500) return '服务器错误，请稍后重试';
+    }
+    return '注册失败，请稍后重试';
+  }
+
+  void _startEmailCountdown() {
+    setState(() => _emailCountdown = 60);
+    _emailTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_emailCountdown <= 1) {
+        timer.cancel();
+        setState(() => _emailCountdown = 0);
+      } else {
+        setState(() => _emailCountdown--);
+      }
+    });
+  }
+
+  Future<void> _sendEmailCode() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      _showError('请先输入邮箱');
+      return;
+    }
+    if (!_isValidEmail(email)) {
+      _showError('请输入正确的邮箱地址');
+      return;
+    }
+    try {
+      await ref.read(authApiProvider).sendVerificationEmail(email, 'register');
+      _startEmailCountdown();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('验证码已发送')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        _showError(_extractErrorMessage(e));
+      }
+    }
+  }
+
   Future<void> _registerWithEmail() async {
     if (!_validateEmailForm()) return;
 
+    FocusScope.of(context).unfocus();
     setState(() => _isLoading = true);
     try {
       final res = await ref.read(authApiProvider).register(
             _usernameController.text.trim(),
             _emailController.text.trim(),
             _passwordController.text,
+            _emailCodeController.text.trim(),
           );
       final data = res.data;
       final user = User.fromJson(data['user'] as Map<String, dynamic>);
@@ -121,7 +197,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
       if (mounted) context.go('/');
     } catch (e) {
       if (mounted) {
-        _showError('注册失败: ${e.toString()}');
+        _showError(_extractErrorMessage(e));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -131,6 +207,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
   Future<void> _registerWithPhone() async {
     if (!_validatePhoneForm()) return;
 
+    FocusScope.of(context).unfocus();
     setState(() => _isLoading = true);
     try {
       final res = await ref.read(authApiProvider).registerPhone(
@@ -151,7 +228,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
       if (mounted) context.go('/');
     } catch (e) {
       if (mounted) {
-        _showError('注册失败: ${e.toString()}');
+        _showError(_extractErrorMessage(e));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -195,7 +272,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                           ),
                           const SizedBox(height: 20),
                           SizedBox(
-                            height: 380,
+                            height: _tabController.index == 0 ? 420 : 480,
                             child: TabBarView(
                               controller: _tabController,
                               children: [
@@ -224,57 +301,85 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
   }
 
   Widget _buildEmailTab() {
-    return Column(
-      children: [
-        TextField(
-          controller: _usernameController,
-          decoration: const InputDecoration(
-            hintText: '用户名',
-            prefixIcon: Icon(Icons.person_outlined),
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          TextField(
+            controller: _usernameController,
+            decoration: const InputDecoration(
+              hintText: '用户名',
+              prefixIcon: Icon(Icons.person_outlined),
+            ),
           ),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _emailController,
-          decoration: const InputDecoration(
-            hintText: '邮箱地址',
-            prefixIcon: Icon(Icons.email_outlined),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _emailController,
+            decoration: const InputDecoration(
+              hintText: '邮箱地址',
+              prefixIcon: Icon(Icons.email_outlined),
+            ),
+            keyboardType: TextInputType.emailAddress,
           ),
-          keyboardType: TextInputType.emailAddress,
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _passwordController,
-          decoration: const InputDecoration(
-            hintText: '密码（至少6位）',
-            prefixIcon: Icon(Icons.lock_outlined),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _emailCodeController,
+                  decoration: const InputDecoration(
+                    hintText: '邮箱验证码',
+                    prefixIcon: Icon(Icons.mark_email_read_outlined),
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 120,
+                child: OutlinedButton(
+                  onPressed: _emailCountdown > 0 ? null : _sendEmailCode,
+                  child: Text(
+                    _emailCountdown > 0 ? '${_emailCountdown}s' : '发送验证码',
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+              ),
+            ],
           ),
-          obscureText: true,
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _confirmPasswordController,
-          decoration: const InputDecoration(
-            hintText: '确认密码',
-            prefixIcon: Icon(Icons.lock_outlined),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _passwordController,
+            decoration: const InputDecoration(
+              hintText: '密码（至少6位）',
+              prefixIcon: Icon(Icons.lock_outlined),
+            ),
+            obscureText: true,
           ),
-          obscureText: true,
-        ),
-        const SizedBox(height: 20),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: _isLoading ? null : _registerWithEmail,
-            child: _isLoading
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white))
-                : const Text('注册'),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _confirmPasswordController,
+            decoration: const InputDecoration(
+              hintText: '确认密码',
+              prefixIcon: Icon(Icons.lock_outlined),
+            ),
+            obscureText: true,
           ),
-        ),
-      ],
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _isLoading ? null : _registerWithEmail,
+              child: _isLoading
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Text('注册'),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -309,6 +414,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
             controller: _phonePasswordController,
             decoration: const InputDecoration(
               hintText: '密码（可选，至少6位）',
+              prefixIcon: Icon(Icons.lock_outlined),
+            ),
+            obscureText: true,
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _phoneConfirmPasswordController,
+            decoration: const InputDecoration(
+              hintText: '确认密码',
               prefixIcon: Icon(Icons.lock_outlined),
             ),
             obscureText: true,

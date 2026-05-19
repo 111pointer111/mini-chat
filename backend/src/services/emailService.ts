@@ -10,6 +10,17 @@ const RATE_LIMIT_EMAIL_PREFIX = 'rate:email:';
 const CODE_EXPIRE = 300; // 验证码 5 分钟
 const EMAIL_RATE_LIMIT = 60; // 同一邮箱 60 秒内只能发一次
 
+// 验证码类型
+type CodeType = 'register' | 'login' | 'reset' | 'bind';
+
+// 类型对应的中文描述
+const TYPE_LABELS: Record<CodeType, string> = {
+    register: '注册 Mini Chat 账号',
+    login: '登录 Mini Chat 账号',
+    reset: '重置 Mini Chat 密码',
+    bind: '绑定 Mini Chat 邮箱',
+};
+
 class EmailService {
     private transporter: nodemailer.Transporter | null = null;
 
@@ -28,8 +39,8 @@ class EmailService {
         return this.transporter;
     }
 
-    async checkRateLimit(email: string): Promise<{ allowed: boolean; message: string }> {
-        const emailKey = `${RATE_LIMIT_EMAIL_PREFIX}${email}`;
+    async checkRateLimit(email: string, type: CodeType): Promise<{ allowed: boolean; message: string }> {
+        const emailKey = `${RATE_LIMIT_EMAIL_PREFIX}${type}:${email}`;
         if (await redis.exists(emailKey)) {
             const ttl = await redis.ttl(emailKey);
             return { allowed: false, message: `请 ${ttl} 秒后再试` };
@@ -37,18 +48,18 @@ class EmailService {
         return { allowed: true, message: '' };
     }
 
-    async setRateLimit(email: string): Promise<void> {
-        const emailKey = `${RATE_LIMIT_EMAIL_PREFIX}${email}`;
+    async setRateLimit(email: string, type: CodeType): Promise<void> {
+        const emailKey = `${RATE_LIMIT_EMAIL_PREFIX}${type}:${email}`;
         await redis.setex(emailKey, EMAIL_RATE_LIMIT, '1');
     }
 
-    async saveVerifyCode(email: string, code: string): Promise<void> {
-        const key = `${VERIFY_CODE_PREFIX}${email}`;
+    async saveVerifyCode(email: string, code: string, type: CodeType): Promise<void> {
+        const key = `${VERIFY_CODE_PREFIX}${type}:${email}`;
         await redis.setex(key, CODE_EXPIRE, code);
     }
 
-    async verifyCode(email: string, code: string, deleteOnSuccess: boolean = true): Promise<boolean> {
-        const key = `${VERIFY_CODE_PREFIX}${email}`;
+    async verifyCode(email: string, code: string, type: CodeType, deleteOnSuccess: boolean = true): Promise<boolean> {
+        const key = `${VERIFY_CODE_PREFIX}${type}:${email}`;
         const stored = await redis.get(key);
         if (stored && stored === code) {
             if (deleteOnSuccess) {
@@ -59,13 +70,14 @@ class EmailService {
         return false;
     }
 
-    async deleteVerifyCode(email: string): Promise<void> {
-        const key = `${VERIFY_CODE_PREFIX}${email}`;
+    async deleteVerifyCode(email: string, type: CodeType): Promise<void> {
+        const key = `${VERIFY_CODE_PREFIX}${type}:${email}`;
         await redis.del(key);
     }
 
-    async sendEmail(toEmail: string, code: string): Promise<boolean> {
+    async sendEmail(toEmail: string, code: string, type: CodeType): Promise<boolean> {
         const subject = 'Mini Chat - 邮箱验证码';
+        const typeLabel = TYPE_LABELS[type] || '操作';
 
         const htmlBody = `
             <div style="max-width: 480px; margin: 0 auto; padding: 32px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
@@ -73,7 +85,7 @@ class EmailService {
                     <div style="display: inline-block; width: 56px; height: 56px; line-height: 56px; background: #2c2c2c; color: #fff; border-radius: 14px; font-size: 24px; font-weight: bold;">MC</div>
                 </div>
                 <h2 style="text-align: center; color: #2c2c2c; margin-bottom: 8px;">邮箱验证码</h2>
-                <p style="text-align: center; color: #666; margin-bottom: 24px;">您正在注册 Mini Chat 账号</p>
+                <p style="text-align: center; color: #666; margin-bottom: 24px;">您正在${typeLabel}</p>
                 <div style="background: #f5f5f5; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 24px;">
                     <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #2c2c2c;">${code}</span>
                 </div>
@@ -97,9 +109,9 @@ class EmailService {
         }
     }
 
-    async sendVerifyEmail(email: string): Promise<{ success: boolean; message: string }> {
+    async sendVerifyEmail(email: string, type: CodeType): Promise<{ success: boolean; message: string }> {
         // 检查频率限制
-        const { allowed, message } = await this.checkRateLimit(email);
+        const { allowed, message } = await this.checkRateLimit(email, type);
         if (!allowed) {
             return { success: false, message };
         }
@@ -108,20 +120,20 @@ class EmailService {
         const code = generateVerificationCode();
 
         // 先发送邮件，成功后再保存验证码和设置频率限制
-        const success = await this.sendEmail(email, code);
+        const success = await this.sendEmail(email, code, type);
         if (!success) {
             return { success: false, message: '邮件发送失败，请稍后再试' };
         }
 
         // 邮件发送成功后才保存验证码和设置频率限制
-        await this.saveVerifyCode(email, code);
-        await this.setRateLimit(email);
+        await this.saveVerifyCode(email, code, type);
+        await this.setRateLimit(email, type);
 
         return { success: true, message: '验证码已发送' };
     }
 
-    async verifyEmail(email: string, code: string): Promise<boolean> {
-        return this.verifyCode(email, code);
+    async verifyEmail(email: string, code: string, type: CodeType): Promise<boolean> {
+        return this.verifyCode(email, code, type);
     }
 }
 

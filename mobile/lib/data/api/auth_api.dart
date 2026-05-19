@@ -20,11 +20,26 @@ class AuthApi {
     });
   }
 
-  Future<Response> register(String username, String email, String password) {
+  Future<Response> loginByEmailCode(String email, String code) {
+    return _client.dio.post('/auth/login-email-code', data: {
+      'email': email,
+      'code': code,
+    });
+  }
+
+  Future<Response> register(String username, String email, String password, String code) {
     return _client.dio.post('/auth/register', data: {
       'username': username,
       'email': email,
       'password': password,
+      'code': code,
+    });
+  }
+
+  Future<Response> sendVerificationEmail(String email, String type) {
+    return _client.dio.post('/auth/send-verification', data: {
+      'email': email,
+      'type': type,
     });
   }
 

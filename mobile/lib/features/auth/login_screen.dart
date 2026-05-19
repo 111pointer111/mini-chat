@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dio/dio.dart';
 
 import '../../core/theme.dart';
 import '../../data/models/user.dart';
 import '../../providers/auth_provider.dart';
 import '../../shared/widgets/phone_code_input.dart';
+import '../../shared/widgets/email_code_input.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -19,6 +21,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   late TabController _tabController;
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _emailCodeEmailController = TextEditingController();
+  final _emailCodeController = TextEditingController();
   final _phoneController = TextEditingController();
   final _codeController = TextEditingController();
   bool _isLoading = false;
@@ -26,7 +30,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -34,12 +38,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     _tabController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _emailCodeEmailController.dispose();
+    _emailCodeController.dispose();
     _phoneController.dispose();
     _codeController.dispose();
     super.dispose();
   }
 
+  String _extractErrorMessage(Object error) {
+    if (error is DioException) {
+      final data = error.response?.data;
+      if (data is Map<String, dynamic> && data['message'] != null) {
+        return data['message'] as String;
+      }
+      if (error.response?.statusCode == 400) return '请求参数错误';
+      if (error.response?.statusCode == 401) return '邮箱或密码错误';
+      if (error.response?.statusCode == 500) return '服务器错误，请稍后重试';
+    }
+    return '登录失败，请稍后重试';
+  }
+
   Future<void> _loginWithEmail() async {
+    FocusScope.of(context).unfocus();
     setState(() => _isLoading = true);
     try {
       final res = await ref.read(authApiProvider).login(
@@ -54,7 +74,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('登录失败: ${e.toString()}')),
+          SnackBar(content: Text(_extractErrorMessage(e))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loginWithEmailCode() async {
+    final email = _emailCodeEmailController.text.trim();
+    final code = _emailCodeController.text.trim();
+    if (email.isEmpty || code.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请输入邮箱和验证码')),
+      );
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    setState(() => _isLoading = true);
+    try {
+      final res = await ref.read(authApiProvider).loginByEmailCode(email, code);
+      final data = res.data;
+      final user = User.fromJson(data['user'] as Map<String, dynamic>);
+      final token = data['token'] as String;
+      await ref.read(authStateProvider.notifier).login(user, token);
+      if (mounted) context.go('/');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_extractErrorMessage(e))),
         );
       }
     } finally {
@@ -63,6 +112,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   }
 
   Future<void> _loginWithPhone() async {
+    FocusScope.of(context).unfocus();
     setState(() => _isLoading = true);
     try {
       final res = await ref.read(authApiProvider).loginPhone(
@@ -77,7 +127,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('登录失败: ${e.toString()}')),
+          SnackBar(content: Text(_extractErrorMessage(e))),
         );
       }
     } finally {
@@ -127,8 +177,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             unselectedLabelColor: AppTheme.textSecondary,
                             indicatorColor: AppTheme.primary,
                             tabs: const [
-                              Tab(text: '邮箱登录'),
-                              Tab(text: '手机登录'),
+                              Tab(text: '密码登录'),
+                              Tab(text: '邮箱验证码'),
+                              Tab(text: '手机号'),
                             ],
                           ),
                           const SizedBox(height: 20),
@@ -137,7 +188,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             child: TabBarView(
                               controller: _tabController,
                               children: [
-                                _buildEmailTab(),
+                                _buildPasswordTab(),
+                                _buildEmailCodeTab(),
                                 _buildPhoneTab(),
                               ],
                             ),
@@ -166,7 +218,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     );
   }
 
-  Widget _buildEmailTab() {
+  Widget _buildPasswordTab() {
     return Column(
       children: [
         TextField(
@@ -191,6 +243,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           width: double.infinity,
           child: ElevatedButton(
             onPressed: _isLoading ? null : _loginWithEmail,
+            child: _isLoading
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
+                : const Text('登录'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmailCodeTab() {
+    return Column(
+      children: [
+        EmailCodeInput(
+          emailController: _emailCodeEmailController,
+          codeController: _emailCodeController,
+          codeType: 'login',
+        ),
+        const SizedBox(height: 20),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _isLoading ? null : _loginWithEmailCode,
             child: _isLoading
                 ? const SizedBox(
                     height: 20,
