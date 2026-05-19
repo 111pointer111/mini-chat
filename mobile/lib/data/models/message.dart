@@ -31,11 +31,12 @@ class Message {
   User? get senderUser => sender is User ? sender as User : null;
 
   factory Message.fromJson(Map<String, dynamic> json) {
+    final senderData = json['sender'];
     return Message(
       id: json['_id'] as String,
-      sender: json['sender'] is Map<String, dynamic>
-          ? User.fromJson(json['sender'] as Map<String, dynamic>)
-          : json['sender'] as String,
+      sender: senderData is Map<String, dynamic>
+          ? User.fromJson(senderData)
+          : senderData as String? ?? 'unknown',
       receiver: json['receiver'] as String?,
       groupId: json['groupId'] as String?,
       content: json['content'] as String? ?? '',

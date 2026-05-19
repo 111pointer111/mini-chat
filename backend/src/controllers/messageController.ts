@@ -14,7 +14,8 @@ export const getMessages = async (req: Request, res: Response) => {
         })
         .populate('sender', 'username avatar')
         .sort({ createdAt: 1 })
-        .limit(50);
+        .limit(50)
+        .lean();
 
         res.json(messages);
     } catch (error) {

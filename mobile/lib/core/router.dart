@@ -32,9 +32,7 @@ class LoadingScreen extends StatelessWidget {
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authStateProvider);
-
-  return GoRouter(
+  final router = GoRouter(
     initialLocation: '/',
     errorBuilder: (context, state) => Scaffold(
       body: Center(
@@ -54,6 +52,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
     ),
     redirect: (context, state) {
+      // 在 redirect 内部用 ref.read 获取最新状态，而不是从闭包捕获
+      final authState = ref.read(authStateProvider);
       final isLoading = authState.isLoading;
       final isLoggedIn = authState.valueOrNull != null;
       final isAuthPage = state.matchedLocation == '/login' ||
@@ -143,4 +143,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
     ],
   );
+
+  // 监听 authState 变化，通过 refresh() 触发 redirect 重新执行
+  // 而不是重建 GoRouter 实例
+  ref.listen(authStateProvider, (previous, next) {
+    router.refresh();
+  });
+
+  // provider 销毁时清理 GoRouter
+  ref.onDispose(router.dispose);
+
+  return router;
 });
