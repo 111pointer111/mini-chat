@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -17,22 +18,49 @@ import '../features/group/group_chat_screen.dart';
 import '../features/group/group_settings_screen.dart';
 import '../features/group/group_kb_screen.dart';
 
+class LoadingScreen extends StatelessWidget {
+  const LoadingScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+  }
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateProvider);
 
   return GoRouter(
     initialLocation: '/',
     redirect: (context, state) {
+      final isLoading = authState.isLoading;
       final isLoggedIn = authState.valueOrNull != null;
       final isAuthPage = state.matchedLocation == '/login' ||
           state.matchedLocation == '/register' ||
           state.matchedLocation == '/reset-password';
+      final isLoadingPage = state.matchedLocation == '/loading';
+
+      // 还在加载中，显示加载页面
+      if (isLoading && !isLoadingPage) return '/loading';
+
+      // 加载完成，从 loading 页面跳转
+      if (!isLoading && isLoadingPage) {
+        return isLoggedIn ? '/' : '/login';
+      }
 
       if (!isLoggedIn && !isAuthPage) return '/login';
       if (isLoggedIn && isAuthPage) return '/';
       return null;
     },
     routes: [
+      GoRoute(
+        path: '/loading',
+        builder: (context, state) => const LoadingScreen(),
+      ),
       GoRoute(
         path: '/login',
         builder: (context, state) => const LoginScreen(),

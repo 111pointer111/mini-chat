@@ -23,36 +23,66 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     _setupSocketListeners();
   }
 
+  @override
+  void dispose() {
+    _removeSocketListeners();
+    super.dispose();
+  }
+
   void _setupSocketListeners() {
     final socketService = ref.read(socketServiceProvider);
     final socket = socketService.socket;
     if (socket == null) return;
 
-    socket.on('receive_message', (data) {
-      final message = Message.fromJson(data as Map<String, dynamic>);
-      ref.read(messagesProvider.notifier).addMessage(message);
-    });
+    socket.on('receive_message', _onReceiveMessage);
+    socket.on('receive_group_message', _onReceiveGroupMessage);
+    socket.on('scheduled_task_message', _onScheduledTaskMessage);
+    socket.on('friend_request_accepted', _onFriendRequestAccepted);
+  }
 
-    socket.on('receive_group_message', (data) {
-      final message = Message.fromJson(data as Map<String, dynamic>);
-      ref.read(messagesProvider.notifier).addMessage(message);
-    });
+  void _removeSocketListeners() {
+    final socketService = ref.read(socketServiceProvider);
+    final socket = socketService.socket;
+    if (socket == null) return;
 
-    socket.on('scheduled_task_message', (data) {
-      final selection = ref.read(chatSelectionProvider);
-      if (selection.type == ChatType.task) {
-        ref.read(messagesProvider.notifier).fetchTaskMessages(selection.id!);
-      }
-    });
+    socket.off('receive_message', _onReceiveMessage);
+    socket.off('receive_group_message', _onReceiveGroupMessage);
+    socket.off('scheduled_task_message', _onScheduledTaskMessage);
+    socket.off('friend_request_accepted', _onFriendRequestAccepted);
+  }
+
+  void _onReceiveMessage(dynamic data) {
+    final message = Message.fromJson(data as Map<String, dynamic>);
+    ref.read(messagesProvider.notifier).addMessage(message);
+  }
+
+  void _onReceiveGroupMessage(dynamic data) {
+    final message = Message.fromJson(data as Map<String, dynamic>);
+    ref.read(messagesProvider.notifier).addMessage(message);
+  }
+
+  void _onScheduledTaskMessage(dynamic data) {
+    final selection = ref.read(chatSelectionProvider);
+    if (selection.type == ChatType.task) {
+      ref.read(messagesProvider.notifier).fetchTaskMessages(selection.id!);
+    }
+  }
+
+  void _onFriendRequestAccepted(dynamic data) {
+    ref.read(friendsProvider.notifier).refresh();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${data['accepterName'] ?? '好友'} 已接受你的好友请求'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
   }
 
   void _logout() {
     ref.read(authStateProvider.notifier).logout();
     context.go('/login');
-  }
-
-  void _onFriendSelected() {
-    setState(() {});
   }
 
   @override

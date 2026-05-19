@@ -11,7 +11,10 @@ export const getMessages = async (req: Request, res: Response) => {
                 { sender: myId, receiver: otherUserId },
                 { sender: otherUserId, receiver: myId }
             ]
-        }).sort({ createdAt: 1 }).limit(50); // Simple limit for now, pagination can be added later
+        })
+        .populate('sender', 'username avatar')
+        .sort({ createdAt: 1 })
+        .limit(50);
 
         res.json(messages);
     } catch (error) {

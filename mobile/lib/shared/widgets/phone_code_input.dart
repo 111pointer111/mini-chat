@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart';
 
 import '../../providers/auth_provider.dart';
 
@@ -36,6 +37,18 @@ class _PhoneCodeInputState extends ConsumerState<PhoneCodeInput> {
     });
   }
 
+  String _extractErrorMessage(Object error) {
+    if (error is DioException) {
+      final data = error.response?.data;
+      if (data is Map<String, dynamic> && data['message'] != null) {
+        return data['message'] as String;
+      }
+      if (error.response?.statusCode == 400) return '请求参数错误';
+      if (error.response?.statusCode == 500) return '服务器错误，请稍后重试';
+    }
+    return '发送失败，请稍后重试';
+  }
+
   Future<void> _sendCode() async {
     try {
       await ref.read(authApiProvider).sendCode(
@@ -51,7 +64,7 @@ class _PhoneCodeInputState extends ConsumerState<PhoneCodeInput> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('发送失败: ${e.toString()}')),
+          SnackBar(content: Text(_extractErrorMessage(e))),
         );
       }
     }

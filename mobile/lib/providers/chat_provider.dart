@@ -140,4 +140,10 @@ class MessagesNotifier extends AutoDisposeAsyncNotifier<List<Message>> {
     final current = state.valueOrNull ?? [];
     state = AsyncValue.data([...current, message]);
   }
+
+  void replaceTempMessage(String tempId, Message serverMessage) {
+    final current = state.valueOrNull ?? [];
+    final updated = current.map((m) => m.id == tempId ? serverMessage : m).toList();
+    state = AsyncValue.data(updated);
+  }
 }

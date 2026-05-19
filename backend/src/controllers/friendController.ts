@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import Friendship from '../models/Friendship';
 import User from '../models/User';
+import { getIO } from '../socket/socketHandler';
 
 export const sendFriendRequest = async (req: Request, res: Response) => {
     try {
@@ -60,6 +61,20 @@ export const acceptFriendRequest = async (req: Request, res: Response) => {
 
         friendship.status = 'accepted';
         await friendship.save();
+
+        // Notify the requester that their request was accepted
+        try {
+            const io = getIO();
+            const accepter = await User.findById(userId).select('username').lean();
+            io.to(friendship.requester.toString()).emit('friend_request_accepted', {
+                friendshipId: friendship._id.toString(),
+                accepterId: userId,
+                accepterName: accepter?.username || '用户',
+            });
+        } catch (socketError) {
+            console.error('Socket notification error:', socketError);
+            // Don't fail the request if socket notification fails
+        }
 
         res.json({ message: 'Friend request accepted', friendship });
     } catch (error) {

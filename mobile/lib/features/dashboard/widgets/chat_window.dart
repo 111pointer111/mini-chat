@@ -47,8 +47,9 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
 
     if (selection.type == ChatType.friend && selection.id != null) {
       // Optimistic UI
+      final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
       final tempMessage = Message(
-        id: 'temp_${DateTime.now().millisecondsSinceEpoch}',
+        id: tempId,
         sender: currentUser?.id ?? '',
         receiver: selection.id,
         content: content,
@@ -65,13 +66,13 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
         if (ack != null && ack is Map<String, dynamic>) {
           // Replace temp message with server ack
           final serverMessage = Message.fromJson(ack);
-          // Simple approach: just add the server message
-          ref.read(messagesProvider.notifier).addMessage(serverMessage);
+          ref.read(messagesProvider.notifier).replaceTempMessage(tempId, serverMessage);
         }
       });
     } else if (selection.type == ChatType.group && selection.id != null) {
+      final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
       final tempMessage = Message(
-        id: 'temp_${DateTime.now().millisecondsSinceEpoch}',
+        id: tempId,
         sender: currentUser?.id ?? '',
         groupId: selection.id,
         content: content,
@@ -87,7 +88,7 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
       }, (ack) {
         if (ack != null && ack is Map<String, dynamic>) {
           final serverMessage = Message.fromJson(ack);
-          ref.read(messagesProvider.notifier).addMessage(serverMessage);
+          ref.read(messagesProvider.notifier).replaceTempMessage(tempId, serverMessage);
         }
       });
     }
