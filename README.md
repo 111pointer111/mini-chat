@@ -55,6 +55,14 @@
 - 多时区支持
 - 推送历史去重
 
+### 监控告警
+- 内存滑动窗口指标收集（5 分钟窗口，30 秒清理）
+- HTTP 请求自动采集：状态码、响应延迟、错误率
+- 告警状态机：normal → pending → firing → resolved（防抖动）
+- 通知渠道：前端实时弹窗（Socket.IO）、邮件（SMTP）、控制台
+- 前端监控面板：请求数、错误率、P95 延迟、内存、Socket 连接数
+- 健康检查端点：/health（存活）、/api/ready（依赖检查：MongoDB、Redis、PostgreSQL）
+
 ## 技术栈
 
 | 层级 | 技术 |
@@ -67,6 +75,7 @@
 | 知识库向量存储 | PostgreSQL + pgvector |
 | AI 集成 | OpenAI SDK, LangChain, @modelcontextprotocol/sdk |
 | 文档解析 | textract, Tesseract.js, Cheerio |
+| 监控 | 自研指标收集器 + 告警状态机 + 邮件/WebSocket 通知 |
 | 部署 | Docker, Docker Compose, Nginx, GitHub Actions |
 
 ## 项目结构
@@ -86,6 +95,7 @@ mini-chat/
 │   │   ├── routes/             # Express 路由
 │   │   ├── services/           # AI、知识库、任务、MCP 等业务逻辑
 │   │   ├── socket/             # Socket.io 实时通讯
+│   │   ├── monitoring/         # 指标收集、告警管理、通知渠道
 │   │   ├── scripts/            # 初始化脚本
 │   │   └── utils/              # PostgreSQL / Redis / schema 工具
 │   ├── scripts/                # 种子用户脚本
@@ -250,6 +260,9 @@ KB_EMBEDDING_BATCH_SIZE=2
 # CORS 源（逗号分隔，可选）
 CORS_ORIGINS=http://localhost:5173,http://localhost:5174,http://localhost:5175
 
+# 告警邮件接收人（通过 GitHub Secrets 注入，不写在文件里）
+# ALERT_EMAIL=admin@example.com
+
 # 运行环境（production 时强制要求 JWT_SECRET）
 NODE_ENV=development
 ```
@@ -345,7 +358,27 @@ docker build -t your_dockerhub_username/minichat-frontend:latest .
 docker push your_dockerhub_username/minichat-frontend:latest
 ```
 
-### 3. 使用生产编排启动
+### 3. 配置 GitHub Secrets
+
+push 到 `main` 分支会自动触发 CI（类型检查）和部署（构建镜像 + SSH 部署）。
+
+需要在 repo → Settings → Secrets → Actions 中配置：
+
+| Secret | 说明 |
+|--------|------|
+| `DOCKERHUB_USERNAME` | Docker Hub 用户名 |
+| `DOCKERHUB_TOKEN` | Docker Hub Access Token |
+| `SERVER_HOST` | 服务器 IP / 域名 |
+| `SERVER_USER` | SSH 用户名 |
+| `SERVER_SSH_KEY` | SSH 私钥 |
+| `JWT_SECRET` | JWT 签名密钥 |
+| `MONGO_USER` / `MONGO_PASSWORD` | MongoDB 凭据 |
+| `ALIYUN_SMTP_PASS` | 阿里云 SMTP 密码 |
+| `ALERT_EMAIL` | 告警邮件接收人 |
+| `AI_BASE_URL` / `AI_API_KEY` / `AI_MODEL` | AI Provider 配置 |
+| `ALIYUN_*` | 短信服务配置（可选） |
+
+### 4. 使用生产编排启动
 
 ```bash
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d
@@ -432,13 +465,18 @@ docker compose -f docker-compose.prod.yml --env-file .env.production up -d
 ### 文件上传
 - `POST /api/upload`
 
+### 监控
+- `GET /health` — 存活检查（无认证）
+- `GET /api/ready` — 就绪检查（无认证，检查 MongoDB、Redis、PostgreSQL）
+- `GET /api/metrics` — 指标快照（admin）
+- `GET /api/alerts` — 告警规则状态（admin）
+
 ## 当前已知情况
 
-- `frontend` 目前 `TypeScript build` 可以通过，但 `npm run lint` 还有历史遗留问题，集中在 `FriendList.tsx`、`ProtectedLayout.tsx`、`ScheduledTasks.tsx`
-- 后端 CORS 已支持通过 `CORS_ORIGINS` 环境变量配置（逗号分隔），默认放行本地开发端口 `5173-5175`
-- 没有配置测试框架（`test: echo "Error: no test specified"`），验证方式为 `npm run build` + `npm run lint`
+- 没有配置测试框架（`test: echo "Error: no test specified"`），验证方式为 `npm run build` + `npm run lint` + CI
 - 后端 Dockerfile 安装了系统依赖用于文档解析（antiword, catdoc, poppler-utils, unrtf），这些是知识库功能所需的
 - 生产环境必须设置 `JWT_SECRET`，否则服务启动失败
+- 告警阈值（错误率、延迟、内存）目前硬编码在代码中，暂不支持通过环境变量配置
 
 ## 开发建议
 
