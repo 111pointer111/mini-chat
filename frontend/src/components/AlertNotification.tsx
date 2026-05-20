@@ -23,6 +23,8 @@ const AlertNotification: React.FC = () => {
     useEffect(() => {
         if (!socket || user?.role !== 'admin') return;
 
+        const timers = timersRef.current;
+
         const handleAlert = (data: Omit<AlertData, 'id'>) => {
             const alert: AlertData = {
                 ...data,
@@ -34,16 +36,16 @@ const AlertNotification: React.FC = () => {
             const duration = alert.severity === 'critical' ? 15_000 : 8_000;
             const timer = setTimeout(() => {
                 setAlerts(prev => prev.filter(a => a.id !== alert.id));
-                timersRef.current.delete(alert.id);
+                timers.delete(alert.id);
             }, duration);
-            timersRef.current.set(alert.id, timer);
+            timers.set(alert.id, timer);
         };
 
         socket.on('alert', handleAlert);
         return () => {
             socket.off('alert', handleAlert);
-            timersRef.current.forEach(timer => clearTimeout(timer));
-            timersRef.current.clear();
+            timers.forEach(timer => clearTimeout(timer));
+            timers.clear();
         };
     }, [socket, user?.role]);
 

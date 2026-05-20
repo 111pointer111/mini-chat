@@ -209,7 +209,7 @@ const MonitoringDashboard: React.FC = () => {
                                             <Chip label={severityLabel(alert.severity)} size="small" color={alert.severity === 'critical' ? 'error' : 'warning'} variant="outlined" />
                                         </Box>
                                         <Box component="td" sx={{ p: 1 }}>
-                                            <Chip label={alert.status} size="small" color={statusColor(alert.status) as any} />
+                                            <Chip label={alert.status} size="small" color={statusColor(alert.status) as 'error' | 'warning' | 'success' | 'default'} />
                                         </Box>
                                         <Box component="td" sx={{ p: 1 }}>{renderDescription(alert.description, metrics)}</Box>
                                     </Box>
