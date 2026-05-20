@@ -1,9 +1,14 @@
-name: CI/CD Pipeline
+name: Deploy
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
+
+# 防止同时运行多个部署
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false  # 部署不要取消，等上一次完成
 
 jobs:
   build-and-push:
@@ -77,6 +82,7 @@ jobs:
             sed -i '/^ALIYUN_SMTP_USER=/d' .env.production 2>/dev/null || true
             sed -i '/^ALIYUN_SMTP_PASS=/d' .env.production 2>/dev/null || true
             sed -i '/^ALIYUN_SMTP_SENDER_NAME=/d' .env.production 2>/dev/null || true
+            sed -i '/^ALERT_EMAIL=/d' .env.production 2>/dev/null || true
             echo "DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}" >> .env.production
             echo "MONGO_USER=${{ secrets.MONGO_USER || 'admin' }}" >> .env.production
             echo "MONGO_PASSWORD=${{ secrets.MONGO_PASSWORD }}" >> .env.production
@@ -93,6 +99,7 @@ jobs:
             echo "ALIYUN_SMTP_USER=verify@mini-chat.cn" >> .env.production
             echo "ALIYUN_SMTP_PASS=${{ secrets.ALIYUN_SMTP_PASS }}" >> .env.production
             echo "ALIYUN_SMTP_SENDER_NAME=微聊天智能助手" >> .env.production
+            echo "ALERT_EMAIL=${{ secrets.ALERT_EMAIL }}" >> .env.production
             docker compose -f docker-compose.prod.yml --env-file .env.production pull
             docker compose -f docker-compose.prod.yml --env-file .env.production up -d --force-recreate
             docker image prune -f

@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import api from '../services/api';
+import AlertNotification from '../components/AlertNotification';
 
 const ProtectedLayout: React.FC = () => {
     const { isAuthenticated, login, logout, token } = useAuthStore();
@@ -40,7 +41,12 @@ const ProtectedLayout: React.FC = () => {
         return <Navigate to="/login" replace />;
     }
 
-    return <Outlet />;
+    return (
+        <>
+            <AlertNotification />
+            <Outlet />
+        </>
+    );
 };
 
 export default ProtectedLayout;

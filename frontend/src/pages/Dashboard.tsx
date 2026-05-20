@@ -8,6 +8,7 @@ import SmartToyIcon from '@mui/icons-material/SmartToy';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import HubIcon from '@mui/icons-material/Hub';
+import MonitorIcon from '@mui/icons-material/Monitor';
 import { useNavigate } from 'react-router-dom';
 import FriendList from '../components/FriendList';
 import ChatWindow from '../components/ChatWindow';
@@ -79,11 +80,18 @@ const Dashboard: React.FC = () => {
                         </IconButton>
                     </Tooltip>
                     {user?.role === 'admin' && (
-                        <Tooltip title="AI 模型管理">
-                            <IconButton onClick={() => navigate('/admin/ai-providers')} size="small" color="secondary">
-                                <AdminPanelSettingsIcon />
-                            </IconButton>
-                        </Tooltip>
+                        <>
+                            <Tooltip title="AI 模型管理">
+                                <IconButton onClick={() => navigate('/admin/ai-providers')} size="small" color="secondary">
+                                    <AdminPanelSettingsIcon />
+                                </IconButton>
+                            </Tooltip>
+                            <Tooltip title="系统监控">
+                                <IconButton onClick={() => navigate('/admin/monitoring')} size="small" color="info">
+                                    <MonitorIcon />
+                                </IconButton>
+                            </Tooltip>
+                        </>
                     )}
                     <Avatar src={user?.avatar} sx={{ width: 32, height: 32 }} />
                     <Typography sx={{ display: { xs: 'none', sm: 'block' } }}>{user?.username}</Typography>

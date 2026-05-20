@@ -8,6 +8,7 @@ import { runAgentStream, UserMessageInput } from '../services/agentService';
 import { AI_ASSISTANT_ID } from '../scripts/initAdmin';
 import GroupMember from '../models/GroupMember';
 import Group from '../models/Group';
+import { metrics } from '../monitoring/metrics';
 
 interface DecodedToken {
     id: string;
@@ -87,8 +88,19 @@ export const setupSocket = (io: Server) => {
         const userId = socket.data.user.id;
         console.log(`User connected: ${userId}`);
 
+        // 记录 Socket.IO 连接数
+        metrics.recordSocketConnections(io.engine.clientsCount);
+
         // Join a room based on user ID for personal notifications
         socket.join(userId);
+
+        // Admin 加入 alerts room（接收告警推送）
+        socket.on('join_alerts', () => {
+            if (socket.data.user?.role === 'admin') {
+                socket.join('alerts');
+                console.log(`Admin ${userId} joined alerts room`);
+            }
+        });
 
         GroupMember.find({ userId: new mongoose.Types.ObjectId(userId) })
             .select('groupId')
@@ -353,6 +365,7 @@ export const setupSocket = (io: Server) => {
 
         socket.on('disconnect', () => {
             streamContentMap.delete(userId);
+            metrics.recordSocketConnections(io.engine.clientsCount);
             console.log('User disconnected:', userId);
         });
     });

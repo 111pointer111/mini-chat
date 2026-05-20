@@ -7,6 +7,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     antiword \
     catdoc \
+    curl \
     poppler-utils \
     unrtf \
  && rm -rf /var/lib/apt/lists/*

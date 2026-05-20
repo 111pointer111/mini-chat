@@ -9,6 +9,11 @@ services:
     environment:
       - MONGO_INITDB_ROOT_USERNAME=${MONGO_USER:-admin}
       - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD:-changeme}
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - minichat-network
 
@@ -19,6 +24,11 @@ services:
     restart: always
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - minichat-network
 
@@ -33,6 +43,11 @@ services:
       - POSTGRES_DB=${POSTGRES_DB:-minichat}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - minichat-network
 
@@ -73,10 +88,20 @@ services:
       - AI_EMBEDDING_API_KEY=${AI_EMBEDDING_API_KEY}
       - AI_EMBEDDING_MODEL=${AI_EMBEDDING_MODEL}
       - AI_EMBEDDING_DIMENSIONS=${AI_EMBEDDING_DIMENSIONS}
+      - ALERT_EMAIL=${ALERT_EMAIL}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
     depends_on:
-      - mongodb
-      - redis
-      - postgres
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     networks:
       - minichat-network
 

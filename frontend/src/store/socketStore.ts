@@ -30,6 +30,12 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         newSocket.on('connect', () => {
             console.log('Socket connected:', newSocket.id);
             set({ isConnected: true });
+
+            // Admin 用户自动加入 alerts room
+            const { user } = useAuthStore.getState();
+            if (user?.role === 'admin') {
+                newSocket.emit('join_alerts');
+            }
         });
 
         newSocket.on('disconnect', () => {

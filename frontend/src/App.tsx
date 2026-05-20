@@ -9,10 +9,12 @@ import Dashboard from './pages/Dashboard';
 import ScheduledTasks from './pages/ScheduledTasks';
 import AIChat from './pages/AIChat';
 import AdminAIProviders from './pages/AdminAIProviders';
+import MonitoringDashboard from './pages/MonitoringDashboard';
 import KnowledgeBase from './pages/KnowledgeBase';
 import MCPTools from './pages/MCPTools';
 import AuthLayout from './layouts/AuthLayout';
 import ProtectedLayout from './layouts/ProtectedLayout';
+import AdminRoute from './components/AdminRoute';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 const queryClient = new QueryClient();
@@ -40,7 +42,8 @@ function App() {
               <Route path="/ai-chat" element={<AIChat />} />
               <Route path="/knowledge-base" element={<KnowledgeBase />} />
               <Route path="/mcp-tools" element={<MCPTools />} />
-              <Route path="/admin/ai-providers" element={<AdminAIProviders />} />
+              <Route path="/admin/ai-providers" element={<AdminRoute><AdminAIProviders /></AdminRoute>} />
+              <Route path="/admin/monitoring" element={<AdminRoute><MonitoringDashboard /></AdminRoute>} />
             </Route>
 
             {/* Fallback */}

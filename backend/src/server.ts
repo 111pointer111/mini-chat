@@ -18,12 +18,16 @@ import uploadRoutes from './routes/uploadRoutes';
 import kbRoutes from './routes/kbRoutes';
 import groupRoutes from './routes/groupRoutes';
 import mcpRoutes from './routes/mcpRoutes';
+import { createMonitoringRoutes } from './routes/monitoringRoutes';
 import path from 'path';
-import { setupSocket } from './socket/socketHandler';
+import { setupSocket, getIO } from './socket/socketHandler';
 import { startTaskScheduler } from './services/taskScheduler';
 import { createTaskWorker } from './services/taskQueue';
 import { initAdmin } from './scripts/initAdmin';
 import { ensureKnowledgeBaseSchema } from './utils/kbSchema';
+import redis from './utils/redis';
+import { Pool } from 'pg';
+import { setupMonitoring, errorHandlerMiddleware } from './monitoring';
 
 dotenv.config();
 
@@ -56,6 +60,20 @@ app.use(cors({ origin: corsOrigins }));
 app.use(helmet());
 app.use(morgan('dev'));
 
+// 初始化监控系统 — 必须在 rate limiter 之前，否则 429 响应不会被记录
+const monitoring = setupMonitoring(app, {
+    minSeverity: 'warning',
+    alertEmail: process.env.ALERT_EMAIL,
+    smtpHost: process.env.ALIYUN_SMTP_HOST,
+    smtpPort: process.env.ALIYUN_SMTP_PORT,
+    smtpUser: process.env.ALIYUN_SMTP_USER,
+    smtpPass: process.env.ALIYUN_SMTP_PASS,
+    smtpSender: process.env.ALIYUN_SMTP_SENDER_NAME,
+    enableConsole: true,
+    enableWebSocket: true,
+    getIO,
+});
+
 // 静态文件服务（上传的图片）
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
@@ -80,6 +98,15 @@ const globalLimiter = rateLimit({
 app.use('/api/auth/send-code', authLimiter);
 app.use('/api/auth', authLimiter); // Apply to all auth endpoints
 app.use('/api', globalLimiter);
+
+// PostgreSQL 连接池（/ready 健康检查和关闭时使用）
+const pgPool = new Pool({
+    host: process.env.POSTGRES_HOST || 'localhost',
+    port: parseInt(process.env.POSTGRES_PORT || '5432'),
+    user: process.env.POSTGRES_USER || 'postgres',
+    password: process.env.POSTGRES_PASSWORD || 'postgres',
+    database: process.env.POSTGRES_DB || 'minichat',
+});
 
 // Database Connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/mini-chat';
@@ -111,12 +138,19 @@ app.use('/api/kb', kbRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/mcp', mcpRoutes);
 
-app.get('/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date() });
+// Liveness probe — 进程是否存活（不检查依赖）
+app.get('/health', (_req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// 监控端点（/api/ready, /api/metrics, /api/alerts）
+app.use('/api', createMonitoringRoutes({ redis, pgPool, monitoring }));
 
 // Setup Socket.io
 setupSocket(io);
+
+// 错误处理中间件（必须放在所有路由之后）
+app.use(errorHandlerMiddleware);
 
 // Start task scheduler and worker
 startTaskScheduler();
@@ -126,3 +160,36 @@ const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
 });
+
+// ==================== 优雅关闭 ====================
+const shutdown = async (signal: string) => {
+    console.log(`\n${signal} received, shutting down gracefully...`);
+
+    // 1. 停止接受新连接
+    httpServer.close(() => console.log('HTTP server closed'));
+
+    // 2. 清理监控定时器
+    monitoring.destroy();
+
+    // 3. 关闭 Socket.IO
+    try {
+        getIO().close(() => console.log('Socket.IO closed'));
+    } catch { /* socket 未初始化时忽略 */ }
+
+    // 4. 关闭 MongoDB
+    await mongoose.connection.close();
+    console.log('MongoDB connection closed');
+
+    // 5. 关闭 Redis
+    await redis.quit();
+    console.log('Redis connection closed');
+
+    // 6. 关闭 PostgreSQL
+    await pgPool.end();
+    console.log('PostgreSQL connection closed');
+
+    process.exit(0);
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

@@ -102,4 +102,9 @@ export const refreshMCPServerTools = (id: string) =>
 export const getMCPTools = () =>
     api.get('/mcp/tools');
 
+// ==================== 监控 API ====================
+
+export const getMetrics = () => api.get('/metrics');
+export const getAlerts = () => api.get('/alerts');
+
 export default api;
