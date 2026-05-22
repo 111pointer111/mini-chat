@@ -17,12 +17,27 @@ class ChatWindow extends ConsumerStatefulWidget {
 class _ChatWindowState extends ConsumerState<ChatWindow> {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
+  int _previousMessageCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
 
   @override
   void dispose() {
     _messageController.dispose();
+    _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    // 滚动到顶部时加载更多历史消息
+    if (_scrollController.position.pixels <= 50) {
+      ref.read(messagesProvider.notifier).loadMore();
+    }
   }
 
   void _scrollToBottom() {
@@ -58,15 +73,14 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
       );
       ref.read(messagesProvider.notifier).addMessage(tempMessage);
 
-      socketService.emit('send_message', {
+      socketService.emitWithAck('send_message', {
         'receiverId': selection.id,
         'content': content,
         'type': 'text',
-      }, (ack) {
-        if (ack != null && ack is Map<String, dynamic>) {
-          // Replace temp message with server ack
-          final serverMessage = Message.fromJson(ack);
-          ref.read(messagesProvider.notifier).replaceTempMessage(tempId, serverMessage);
+      }, ack: (ack) {
+        if (ack != null && ack is Map<String, dynamic> && ack['success'] == true) {
+          final realId = ack['messageId'] as String? ?? tempId;
+          ref.read(messagesProvider.notifier).updateMessageId(tempId, realId);
         }
       });
     } else if (selection.type == ChatType.group && selection.id != null) {
@@ -81,14 +95,14 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
       );
       ref.read(messagesProvider.notifier).addMessage(tempMessage);
 
-      socketService.emit('send_group_message', {
+      socketService.emitWithAck('send_group_message', {
         'groupId': selection.id,
         'content': content,
         'type': 'text',
-      }, (ack) {
-        if (ack != null && ack is Map<String, dynamic>) {
-          final serverMessage = Message.fromJson(ack);
-          ref.read(messagesProvider.notifier).replaceTempMessage(tempId, serverMessage);
+      }, ack: (ack) {
+        if (ack != null && ack is Map<String, dynamic> && ack['success'] == true) {
+          final realId = ack['messageId'] as String? ?? tempId;
+          ref.read(messagesProvider.notifier).updateMessageId(tempId, realId);
         }
       });
     }
@@ -101,6 +115,7 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
   Widget build(BuildContext context) {
     final selection = ref.watch(chatSelectionProvider);
     final messagesAsync = ref.watch(messagesProvider);
+    final messagesNotifier = ref.read(messagesProvider.notifier);
 
     if (selection.type == ChatType.none) {
       return const Center(
@@ -149,20 +164,72 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
           child: messagesAsync.when(
             data: (messages) {
               if (messages.isEmpty) {
-                return const Center(child: Text('暂无消息'));
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.chat_bubble_outline,
+                          size: 48, color: Colors.grey[300]),
+                      const SizedBox(height: 12),
+                      Text('暂无消息',
+                          style: TextStyle(
+                              fontSize: 14, color: Colors.grey[500])),
+                      const SizedBox(height: 4),
+                      Text('发送第一条消息开始对话',
+                          style: TextStyle(
+                              fontSize: 12, color: Colors.grey[400])),
+                    ],
+                  ),
+                );
               }
-              _scrollToBottom();
+
+              // 新消息到来时自动滚动到底部
+              if (messages.length > _previousMessageCount) {
+                _scrollToBottom();
+              }
+              _previousMessageCount = messages.length;
+
               return ListView.builder(
                 controller: _scrollController,
                 padding: const EdgeInsets.all(16),
-                itemCount: messages.length,
-                itemBuilder: (context, index) =>
-                    _buildMessageBubble(messages[index]),
+                itemCount: messages.length + (messagesNotifier.hasMore || messagesNotifier.loadError != null ? 1 : 0),
+                itemBuilder: (context, index) {
+                  // 第一项：加载更多指示器 / 错误提示
+                  if (index == 0 && (messagesNotifier.hasMore || messagesNotifier.loadError != null)) {
+                    if (messagesNotifier.isLoadingMore) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: Center(
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                      );
+                    }
+                    if (messagesNotifier.loadError != null) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Center(
+                          child: TextButton.icon(
+                            onPressed: () => ref.read(messagesProvider.notifier).loadMore(),
+                            icon: const Icon(Icons.refresh, size: 16),
+                            label: Text(messagesNotifier.loadError!,
+                                style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+                          ),
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  }
+                  final msgIndex = messagesNotifier.hasMore ? index - 1 : index;
+                  return _buildMessageBubble(messages[msgIndex]);
+                },
               );
             },
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, stack) {
-              print('Messages error: $e');
               return Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -173,9 +240,11 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
                     const SizedBox(height: 8),
                     TextButton(
                       onPressed: () {
-                        final selection = ref.read(chatSelectionProvider);
-                        if (selection.type == ChatType.friend && selection.id != null) {
-                          ref.read(messagesProvider.notifier).fetchFriendMessages(selection.id!);
+                        final sel = ref.read(chatSelectionProvider);
+                        if (sel.type == ChatType.friend && sel.id != null) {
+                          ref.read(messagesProvider.notifier).fetchFriendMessages(sel.id!);
+                        } else if (sel.type == ChatType.group && sel.id != null) {
+                          ref.read(messagesProvider.notifier).fetchGroupMessages(sel.id!);
                         }
                       },
                       child: const Text('重试'),
@@ -196,7 +265,9 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
               border: Border(
                   top: BorderSide(color: Colors.grey.shade200, width: 0.5)),
             ),
-            child: Row(
+            child: SafeArea(
+              top: false,
+              child: Row(
               children: [
                 Expanded(
                   child: TextField(
@@ -223,7 +294,8 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
                     onPressed: _sendMessage,
                   ),
                 ),
-              ],
+                ],
+              ),
             ),
           ),
       ],
@@ -231,7 +303,7 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
   }
 
   Widget _buildMessageBubble(Message message) {
-    final currentUser = ref.watch(authStateProvider).valueOrNull;
+    final currentUser = ref.read(authStateProvider).valueOrNull;
     final isMe = message.senderId == currentUser?.id;
     final isSystem = message.type == 'system';
 

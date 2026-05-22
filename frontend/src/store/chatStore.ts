@@ -104,7 +104,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         try {
             set({ isLoading: true, messages: [] });
             const res = await api.get(`/messages/${friendId}`);
-            set({ messages: res.data, isLoading: false });
+            set({ messages: res.data.messages ?? res.data, isLoading: false });
         } catch (err) {
             console.error(err);
             set({ isLoading: false });
@@ -115,7 +115,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         try {
             set({ isLoading: true, messages: [] });
             const res = await api.get(`/groups/${groupId}/messages`);
-            set({ messages: res.data, isLoading: false });
+            set({ messages: res.data.messages ?? res.data, isLoading: false });
         } catch (err) {
             console.error(err);
             set({ isLoading: false });

@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/api/friend_api.dart';
@@ -18,11 +19,11 @@ final messageApiProvider = Provider<MessageApi>((ref) {
 });
 
 final groupApiProvider = Provider<GroupApi>((ref) {
-  return GroupApi(ref.read(apiClientProvider));
+  return GroupApi(ref.watch(apiClientProvider));
 });
 
 final scheduledTaskApiProvider = Provider<ScheduledTaskApi>((ref) {
-  return ScheduledTaskApi(ref.read(apiClientProvider));
+  return ScheduledTaskApi(ref.watch(apiClientProvider));
 });
 
 final friendsProvider = AsyncNotifierProvider.autoDispose<FriendsNotifier, List<User>>(() {
@@ -101,36 +102,61 @@ final messagesProvider =
 });
 
 class MessagesNotifier extends AutoDisposeAsyncNotifier<List<Message>> {
+  bool _hasMore = true;
+  bool _isLoadingMore = false;
+  String? _loadError;
+  String? _currentFriendId;
+  String? _currentGroupId;
+
+  bool get hasMore => _hasMore;
+  bool get isLoadingMore => _isLoadingMore;
+  String? get loadError => _loadError;
+
   @override
   List<Message> build() => [];
 
   Future<void> fetchFriendMessages(String friendId) async {
+    _currentFriendId = friendId;
+    _currentGroupId = null;
+    _hasMore = true;
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
-      try {
-        final res = await ref.read(messageApiProvider).getMessages(friendId);
-        final messages = (res.data as List<dynamic>)
-            .map((e) => Message.fromJson(e as Map<String, dynamic>))
-            .toList();
-        return messages;
-      } catch (e) {
-        print('Error fetching messages: $e');
-        rethrow;
-      }
+      final res = await ref.read(messageApiProvider).getMessages(friendId);
+      final data = res.data;
+      final messagesList = data is Map<String, dynamic>
+          ? (data['messages'] as List<dynamic>? ?? [])
+          : data as List<dynamic>;
+      _hasMore = data is Map<String, dynamic>
+          ? (data['hasMore'] as bool? ?? false)
+          : false;
+      return messagesList
+          .map((e) => Message.fromJson(e as Map<String, dynamic>))
+          .toList();
     });
   }
 
   Future<void> fetchGroupMessages(String groupId) async {
+    _currentGroupId = groupId;
+    _currentFriendId = null;
+    _hasMore = true;
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       final res = await ref.read(groupApiProvider).getGroupMessages(groupId);
-      return (res.data as List<dynamic>)
+      final data = res.data;
+      final messagesList = data is Map<String, dynamic>
+          ? (data['messages'] as List<dynamic>? ?? [])
+          : data as List<dynamic>;
+      _hasMore = data is Map<String, dynamic>
+          ? (data['hasMore'] as bool? ?? false)
+          : false;
+      return messagesList
           .map((e) => Message.fromJson(e as Map<String, dynamic>))
           .toList();
     });
   }
 
   Future<void> fetchTaskMessages(String taskType) async {
+    _hasMore = false;
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       final res =
@@ -142,6 +168,48 @@ class MessagesNotifier extends AutoDisposeAsyncNotifier<List<Message>> {
     });
   }
 
+  /// 加载更多历史消息（上滑触发）
+  Future<void> loadMore() async {
+    if (!_hasMore || _isLoadingMore) return;
+    final currentMessages = state.valueOrNull;
+    if (currentMessages == null || currentMessages.isEmpty) return;
+
+    _loadError = null;
+    _isLoadingMore = true;
+    try {
+      final oldest = currentMessages.first;
+      final before = oldest.createdAt;
+
+      Response res;
+      if (_currentFriendId != null) {
+        res = await ref.read(messageApiProvider)
+            .getMessages(_currentFriendId!, before: before);
+      } else if (_currentGroupId != null) {
+        res = await ref.read(groupApiProvider)
+            .getGroupMessages(_currentGroupId!, before: before);
+      } else {
+        return;
+      }
+
+      final data = res.data;
+      final messagesList = data is Map<String, dynamic>
+          ? (data['messages'] as List<dynamic>? ?? [])
+          : data as List<dynamic>;
+      _hasMore = data is Map<String, dynamic>
+          ? (data['hasMore'] as bool? ?? false)
+          : false;
+      final olderMessages = messagesList
+          .map((e) => Message.fromJson(e as Map<String, dynamic>))
+          .toList();
+
+      state = AsyncValue.data([...olderMessages, ...currentMessages]);
+    } catch (e) {
+      _loadError = '加载历史消息失败，点击重试';
+    } finally {
+      _isLoadingMore = false;
+    }
+  }
+
   void addMessage(Message message) {
     final current = state.valueOrNull ?? [];
     state = AsyncValue.data([...current, message]);
@@ -150,6 +218,27 @@ class MessagesNotifier extends AutoDisposeAsyncNotifier<List<Message>> {
   void replaceTempMessage(String tempId, Message serverMessage) {
     final current = state.valueOrNull ?? [];
     final updated = current.map((m) => m.id == tempId ? serverMessage : m).toList();
+    state = AsyncValue.data(updated);
+  }
+
+  void updateMessageId(String tempId, String realId) {
+    final current = state.valueOrNull ?? [];
+    final updated = current.map((m) {
+      if (m.id == tempId) {
+        return Message(
+          id: realId,
+          sender: m.sender,
+          receiver: m.receiver,
+          groupId: m.groupId,
+          content: m.content,
+          type: m.type,
+          createdAt: m.createdAt,
+          mentionAssistant: m.mentionAssistant,
+          images: m.images,
+        );
+      }
+      return m;
+    }).toList();
     state = AsyncValue.data(updated);
   }
 }
