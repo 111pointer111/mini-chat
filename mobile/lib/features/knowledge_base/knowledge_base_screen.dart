@@ -393,9 +393,11 @@ class _KnowledgeBaseScreenState extends ConsumerState<KnowledgeBaseScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppThemeHelper.isDark(context)
+            ? AppColors.surfaceDark
+            : Colors.white,
         border: Border(
-          top: BorderSide(color: Colors.grey[200]!),
+          top: BorderSide(color: AppThemeHelper.divider(context)),
         ),
       ),
       child: Row(

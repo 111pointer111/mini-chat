@@ -299,7 +299,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                         ? AppTheme.primary
                         : isAssistant
                             ? Colors.indigo.shade50
-                            : Colors.white,
+                            : (AppThemeHelper.isDark(context)
+                                ? AppColors.surfaceDark
+                                : Colors.white),
                     borderRadius: BorderRadius.circular(16).copyWith(
                       bottomRight:
                           isMe ? const Radius.circular(4) : null,

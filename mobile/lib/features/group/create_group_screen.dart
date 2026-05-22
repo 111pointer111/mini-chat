@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/theme.dart';
 import '../../providers/chat_provider.dart';
@@ -80,13 +81,18 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
           // 群名称输入
           Container(
             padding: const EdgeInsets.all(16),
-            color: Colors.white,
+            color: AppThemeHelper.isDark(context)
+                ? AppColors.surfaceDark
+                : Colors.white,
             child: TextField(
               controller: _nameController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: '输入群名称',
-                prefixIcon: Icon(Icons.group_outlined),
-                border: OutlineInputBorder(),
+                hintStyle: GoogleFonts.inter(
+                  color: AppThemeHelper.textSecondary(context),
+                ),
+                prefixIcon: const Icon(Icons.group_outlined),
+                border: const OutlineInputBorder(),
               ),
             ),
           ),

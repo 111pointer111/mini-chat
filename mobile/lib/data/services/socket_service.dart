@@ -164,6 +164,13 @@ class SocketService {
     }
   }
 
+  /// 重新连接 Socket（如果未连接）
+  void reconnect() {
+    if (_socket == null || !_socket!.connected) {
+      _socket?.connect();
+    }
+  }
+
   void dispose() {
     _socket?.clearListeners();
     _socket?.disconnect();

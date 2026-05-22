@@ -1,6 +1,8 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/theme.dart';
 import '../../providers/auth_provider.dart';
@@ -95,78 +97,217 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
         child: Container(
           decoration: const BoxDecoration(gradient: AppTheme.backgroundGradient),
           child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text(
-                    '重置密码',
-                    style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white),
-                  ),
-                  const SizedBox(height: 32),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        children: [
-                          PhoneCodeInput(
-                            phoneController: _phoneController,
-                            codeController: _codeController,
-                            codeType: 'reset',
-                          ),
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: _newPasswordController,
-                            decoration: const InputDecoration(
-                              hintText: '新密码（至少6位）',
-                              prefixIcon: Icon(Icons.lock_outlined),
-                            ),
-                            obscureText: true,
-                          ),
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: _confirmPasswordController,
-                            decoration: const InputDecoration(
-                              hintText: '确认密码',
-                              prefixIcon: Icon(Icons.lock_outlined),
-                            ),
-                            obscureText: true,
-                          ),
-                          const SizedBox(height: 20),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: _isLoading ? null : _resetPassword,
-                              child: _isLoading
-                                  ? const SizedBox(
-                                      height: 20,
-                                      width: 20,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.white))
-                                  : const Text('重置密码'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextButton(
-                    onPressed: () => context.go('/login'),
-                    child: const Text('返回登录',
-                        style: TextStyle(color: Colors.white)),
-                  ),
-                ],
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.xxl),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildHeader(),
+                    const SizedBox(height: AppSpacing.xxxl),
+                    _buildResetCard(),
+                    const SizedBox(height: AppSpacing.xl),
+                    _buildFooterLink(),
+                  ],
+                ),
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          decoration: BoxDecoration(
+            color: Colors.white.withAlpha(51),
+            borderRadius: AppRadius.xxlAll,
+            border: Border.all(color: Colors.white.withAlpha(77)),
+          ),
+          child: const Icon(
+            Icons.lock_reset_rounded,
+            size: 56,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        Text(
+          '重置密码',
+          style: GoogleFonts.poppins(
+            fontSize: 32,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          '通过手机号验证重置密码',
+          style: GoogleFonts.inter(
+            fontSize: 16,
+            color: Colors.white70,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildResetCard() {
+    return ClipRRect(
+      borderRadius: AppRadius.xxlAll,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppThemeHelper.isDark(context)
+                ? AppColors.surfaceDark.withAlpha(230)
+                : Colors.white.withAlpha(204),
+            borderRadius: AppRadius.xxlAll,
+            border: Border.all(
+              color: AppThemeHelper.isDark(context)
+                  ? AppColors.borderDark
+                  : Colors.white.withAlpha(128),
+            ),
+            boxShadow: AppShadows.lg,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.xxl),
+            child: Column(
+              children: [
+                PhoneCodeInput(
+                  phoneController: _phoneController,
+                  codeController: _codeController,
+                  codeType: 'reset',
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                _buildTextField(
+                  controller: _newPasswordController,
+                  hintText: '新密码（至少6位）',
+                  icon: Icons.lock_outlined,
+                  obscureText: true,
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                _buildTextField(
+                  controller: _confirmPasswordController,
+                  hintText: '确认密码',
+                  icon: Icons.lock_outlined,
+                  obscureText: true,
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                _buildResetButton(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String hintText,
+    required IconData icon,
+    bool obscureText = false,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppThemeHelper.isDark(context)
+            ? AppColors.surfaceDark
+            : Colors.white,
+        borderRadius: AppRadius.mdAll,
+        boxShadow: AppShadows.sm,
+      ),
+      child: TextField(
+        controller: controller,
+        obscureText: obscureText,
+        style: GoogleFonts.inter(
+          fontSize: 15,
+          color: AppThemeHelper.textPrimary(context),
+        ),
+        decoration: InputDecoration(
+          hintText: hintText,
+          hintStyle: GoogleFonts.inter(
+            color: AppThemeHelper.textSecondary(context),
+          ),
+          prefixIcon: Icon(icon, color: AppColors.primary),
+          border: OutlineInputBorder(
+            borderRadius: AppRadius.mdAll,
+            borderSide: BorderSide.none,
+          ),
+          filled: true,
+          fillColor: AppThemeHelper.isDark(context)
+              ? AppColors.surfaceDark
+              : Colors.white,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.lg,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResetButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [AppColors.primary, AppColors.accent],
+          ),
+          borderRadius: AppRadius.mdAll,
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withAlpha(102),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ElevatedButton(
+          onPressed: _isLoading ? null : _resetPassword,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: AppRadius.mdAll,
+            ),
+          ),
+          child: _isLoading
+              ? const SizedBox(
+                  height: 24,
+                  width: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: Colors.white,
+                  ),
+                )
+              : Text(
+                  '重置密码',
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFooterLink() {
+    return TextButton(
+      onPressed: () => context.go('/login'),
+      child: Text(
+        '返回登录',
+        style: GoogleFonts.inter(
+          color: Colors.white,
+          fontWeight: FontWeight.w600,
+          fontSize: 15,
         ),
       ),
     );

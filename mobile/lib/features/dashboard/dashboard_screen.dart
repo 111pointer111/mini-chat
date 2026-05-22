@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/theme.dart';
 import '../../providers/auth_provider.dart';
@@ -67,7 +68,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('${data['accepterName'] ?? '好友'} 已接受你的好友请求'),
-              backgroundColor: Colors.green,
+              backgroundColor: AppColors.success,
             ),
           );
         }
@@ -87,198 +88,254 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final hasChat = selection.type != ChatType.none;
 
     return Scaffold(
-      appBar: hasChat
-          ? AppBar(
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () {
-                  ref.read(chatSelectionProvider.notifier).state =
-                      const ChatSelection();
-                },
-              ),
-              title: Text(selection.name ?? ''),
-              actions: [
-                PopupMenuButton<String>(
-                  icon: CircleAvatar(
-                    radius: 16,
-                    backgroundColor: AppTheme.primary.withAlpha(25),
-                    child: Text(
-                      (user?.username ?? 'U')[0].toUpperCase(),
-                      style: const TextStyle(
-                          color: AppTheme.primary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14),
-                    ),
-                  ),
-                  onSelected: (value) {
-                    switch (value) {
-                      case 'ai':
-                        context.push('/ai-chat');
-                        break;
-                      case 'tasks':
-                        context.push('/scheduled-tasks');
-                        break;
-                      case 'kb':
-                        context.push('/knowledge-base');
-                        break;
-                      case 'mcp':
-                        context.push('/mcp-tools');
-                        break;
-                      case 'admin':
-                        context.push('/admin/ai-providers');
-                        break;
-                      case 'logout':
-                        _logout();
-                        break;
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    PopupMenuItem(
-                      value: 'profile',
-                      enabled: false,
-                      child: Text(
-                          '${user?.username ?? "用户"} (${user?.email ?? ""})'),
-                    ),
-                    const PopupMenuDivider(),
-                    const PopupMenuItem(
-                      value: 'ai',
-                      child: ListTile(
-                          leading: Icon(Icons.smart_toy_outlined),
-                          title: Text('AI 对话'),
-                          dense: true),
-                    ),
-                    const PopupMenuItem(
-                      value: 'tasks',
-                      child: ListTile(
-                          leading: Icon(Icons.schedule_outlined),
-                          title: Text('定时任务'),
-                          dense: true),
-                    ),
-                    const PopupMenuItem(
-                      value: 'kb',
-                      child: ListTile(
-                          leading: Icon(Icons.menu_book),
-                          title: Text('知识库'),
-                          dense: true),
-                    ),
-                    const PopupMenuItem(
-                      value: 'mcp',
-                      child: ListTile(
-                          leading: Icon(Icons.build_outlined),
-                          title: Text('MCP 工具'),
-                          dense: true),
-                    ),
-                    if (user?.role == 'admin')
-                      const PopupMenuItem(
-                        value: 'admin',
-                        child: ListTile(
-                            leading: Icon(Icons.admin_panel_settings),
-                            title: Text('管理后台'),
-                            dense: true),
-                      ),
-                    const PopupMenuDivider(),
-                    const PopupMenuItem(
-                      value: 'logout',
-                      child: ListTile(
-                          leading: Icon(Icons.logout, color: Colors.red),
-                          title: Text('退出登录',
-                              style: TextStyle(color: Colors.red)),
-                          dense: true),
-                    ),
-                  ],
-                ),
-              ],
-            )
-          : AppBar(
-              title: const Text('Mini-Chat'),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.smart_toy_outlined),
-                  tooltip: 'AI 对话',
-                  onPressed: () => context.push('/ai-chat'),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.group_outlined),
-                  tooltip: '群组',
-                  onPressed: () => context.push('/groups'),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.schedule_outlined),
-                  tooltip: '定时任务',
-                  onPressed: () => context.push('/scheduled-tasks'),
-                ),
-                PopupMenuButton<String>(
-                  icon: CircleAvatar(
-                    radius: 16,
-                    backgroundColor: AppTheme.primary.withAlpha(25),
-                    child: Text(
-                      (user?.username ?? 'U')[0].toUpperCase(),
-                      style: const TextStyle(
-                          color: AppTheme.primary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14),
-                    ),
-                  ),
-                  onSelected: (value) {
-                    switch (value) {
-                      case 'kb':
-                        context.push('/knowledge-base');
-                        break;
-                      case 'mcp':
-                        context.push('/mcp-tools');
-                        break;
-                      case 'admin':
-                        context.push('/admin/ai-providers');
-                        break;
-                      case 'logout':
-                        _logout();
-                        break;
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    PopupMenuItem(
-                      value: 'profile',
-                      enabled: false,
-                      child: Text(
-                          '${user?.username ?? "用户"} (${user?.email ?? ""})'),
-                    ),
-                    const PopupMenuDivider(),
-                    const PopupMenuItem(
-                      value: 'kb',
-                      child: ListTile(
-                          leading: Icon(Icons.menu_book),
-                          title: Text('知识库'),
-                          dense: true),
-                    ),
-                    const PopupMenuItem(
-                      value: 'mcp',
-                      child: ListTile(
-                          leading: Icon(Icons.build_outlined),
-                          title: Text('MCP 工具'),
-                          dense: true),
-                    ),
-                    if (user?.role == 'admin')
-                      const PopupMenuItem(
-                        value: 'admin',
-                        child: ListTile(
-                            leading: Icon(Icons.admin_panel_settings),
-                            title: Text('管理后台'),
-                            dense: true),
-                      ),
-                    const PopupMenuDivider(),
-                    const PopupMenuItem(
-                      value: 'logout',
-                      child: ListTile(
-                          leading: Icon(Icons.logout, color: Colors.red),
-                          title: Text('退出登录',
-                              style: TextStyle(color: Colors.red)),
-                          dense: true),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: hasChat ? _buildChatAppBar(user, selection) : _buildMainAppBar(user),
       body: hasChat ? const ChatWindow() : const FriendList(),
+    );
+  }
+
+  PreferredSizeWidget _buildMainAppBar(dynamic user) {
+    return AppBar(
+      title: Text(
+        'Mini-Chat',
+        style: GoogleFonts.poppins(
+          fontWeight: FontWeight.w700,
+          fontSize: 22,
+        ),
+      ),
+      actions: [
+        _buildAppBarIcon(
+          icon: Icons.smart_toy_outlined,
+          tooltip: 'AI 对话',
+          onPressed: () => context.push('/ai-chat'),
+        ),
+        _buildAppBarIcon(
+          icon: Icons.group_outlined,
+          tooltip: '群组',
+          onPressed: () => context.push('/groups'),
+        ),
+        _buildAppBarIcon(
+          icon: Icons.schedule_outlined,
+          tooltip: '定时任务',
+          onPressed: () => context.push('/scheduled-tasks'),
+        ),
+        const SizedBox(width: 4),
+        _buildUserMenu(user),
+        const SizedBox(width: 8),
+      ],
+    );
+  }
+
+  PreferredSizeWidget _buildChatAppBar(dynamic user, ChatSelection selection) {
+    return AppBar(
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+        onPressed: () {
+          ref.read(chatSelectionProvider.notifier).state = const ChatSelection();
+        },
+      ),
+      title: Text(
+        selection.name ?? '',
+        style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+      ),
+      actions: [
+        _buildUserMenu(user),
+        const SizedBox(width: 8),
+      ],
+    );
+  }
+
+  Widget _buildAppBarIcon({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onPressed,
+  }) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 2),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withAlpha(13),
+        borderRadius: AppRadius.smAll,
+      ),
+      child: IconButton(
+        icon: Icon(icon, size: 22),
+        tooltip: tooltip,
+        onPressed: onPressed,
+        color: AppColors.primary,
+      ),
+    );
+  }
+
+  Widget _buildUserMenu(dynamic user) {
+    return PopupMenuButton<String>(
+      offset: const Offset(0, 48),
+      shape: RoundedRectangleBorder(
+        borderRadius: AppRadius.lgAll,
+      ),
+      icon: Container(
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [AppColors.primary, AppColors.accent],
+          ),
+          borderRadius: AppRadius.fullAll,
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withAlpha(77),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: CircleAvatar(
+          radius: 16,
+          backgroundColor: Colors.white,
+          child: Text(
+            (user?.username ?? 'U')[0].toUpperCase(),
+            style: GoogleFonts.inter(
+              color: AppColors.primary,
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
+        ),
+      ),
+      onSelected: (value) {
+        switch (value) {
+          case 'ai':
+            context.push('/ai-chat');
+            break;
+          case 'tasks':
+            context.push('/scheduled-tasks');
+            break;
+          case 'kb':
+            context.push('/knowledge-base');
+            break;
+          case 'mcp':
+            context.push('/mcp-tools');
+            break;
+          case 'groups':
+            context.push('/groups');
+            break;
+          case 'admin':
+            context.push('/admin/ai-providers');
+            break;
+          case 'logout':
+            _logout();
+            break;
+        }
+      },
+      itemBuilder: (context) => [
+        PopupMenuItem(
+          value: 'profile',
+          enabled: false,
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [AppColors.primary, AppColors.accent],
+                  ),
+                  borderRadius: AppRadius.smAll,
+                ),
+                child: const Icon(Icons.person, color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user?.username ?? '用户',
+                      style: GoogleFonts.inter(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    Text(
+                      user?.email ?? '',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: AppColors.textSecondaryLight,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(),
+        _buildMenuItem(
+          value: 'ai',
+          icon: Icons.smart_toy_outlined,
+          title: 'AI 对话',
+        ),
+        _buildMenuItem(
+          value: 'groups',
+          icon: Icons.group_outlined,
+          title: '群组',
+        ),
+        _buildMenuItem(
+          value: 'tasks',
+          icon: Icons.schedule_outlined,
+          title: '定时任务',
+        ),
+        _buildMenuItem(
+          value: 'kb',
+          icon: Icons.menu_book,
+          title: '知识库',
+        ),
+        _buildMenuItem(
+          value: 'mcp',
+          icon: Icons.build_outlined,
+          title: 'MCP 工具',
+        ),
+        if (user?.role == 'admin')
+          _buildMenuItem(
+            value: 'admin',
+            icon: Icons.admin_panel_settings,
+            title: '管理后台',
+          ),
+        const PopupMenuDivider(),
+        PopupMenuItem(
+          value: 'logout',
+          child: ListTile(
+            leading: const Icon(Icons.logout, color: AppColors.error, size: 22),
+            title: Text(
+              '退出登录',
+              style: GoogleFonts.inter(
+                color: AppColors.error,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+          ),
+        ),
+      ],
+    );
+  }
+
+  PopupMenuItem<String> _buildMenuItem({
+    required String value,
+    required IconData icon,
+    required String title,
+  }) {
+    return PopupMenuItem(
+      value: value,
+      child: ListTile(
+        leading: Icon(icon, color: AppColors.primary, size: 22),
+        title: Text(
+          title,
+          style: GoogleFonts.inter(
+            fontWeight: FontWeight.w500,
+            fontSize: 14,
+          ),
+        ),
+        dense: true,
+        contentPadding: EdgeInsets.zero,
+      ),
     );
   }
 }

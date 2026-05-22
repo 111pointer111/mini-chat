@@ -40,7 +40,9 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
           // 群信息卡片
           Container(
             padding: const EdgeInsets.all(24),
-            color: Colors.white,
+            color: AppThemeHelper.isDark(context)
+                ? AppColors.surfaceDark
+                : Colors.white,
             child: Column(
               children: [
                 Container(
@@ -56,8 +58,10 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
                 const SizedBox(height: 16),
                 Text(
                   group?.name ?? '群组',
-                  style: const TextStyle(
-                      fontSize: 20, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: AppThemeHelper.textPrimary(context)),
                 ),
                 if (group?.assistantEnabled == true) ...[
                   const SizedBox(height: 8),

@@ -50,13 +50,17 @@ final routerProvider = Provider<GoRouter>((ref) {
       final authState = ref.read(authStateProvider);
       final isLoading = authState.isLoading;
       final isLoggedIn = authState.valueOrNull != null;
+      final hasCachedUser = authState.valueOrNull != null;
       final isAuthPage = state.matchedLocation == '/login' ||
           state.matchedLocation == '/register' ||
           state.matchedLocation == '/reset-password';
       final isLoadingPage = state.matchedLocation == '/loading';
 
-      // 还在加载中，显示加载页面
-      if (isLoading && !isLoadingPage) return '/loading';
+      // 如果已有缓存用户，不显示加载页面，直接跳转到首页
+      if (hasCachedUser && isLoadingPage) return '/';
+
+      // 只有在真正加载时（没有缓存用户）才显示加载页面
+      if (isLoading && !isLoadingPage && !hasCachedUser) return '/loading';
 
       // 加载完成，从 loading 页面跳转
       if (!isLoading && isLoadingPage) {

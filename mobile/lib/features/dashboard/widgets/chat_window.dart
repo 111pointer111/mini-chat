@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/theme.dart';
 import '../../../providers/auth_provider.dart';
@@ -34,7 +35,6 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
   }
 
   void _onScroll() {
-    // 滚动到顶部时加载更多历史消息
     if (_scrollController.position.pixels <= 50) {
       ref.read(messagesProvider.notifier).loadMore();
     }
@@ -61,7 +61,6 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
     final currentUser = ref.read(authStateProvider).valueOrNull;
 
     if (selection.type == ChatType.friend && selection.id != null) {
-      // Optimistic UI
       final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
       final tempMessage = Message(
         id: tempId,
@@ -118,187 +117,324 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
     final messagesNotifier = ref.read(messagesProvider.notifier);
 
     if (selection.type == ChatType.none) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.chat_bubble_outline, size: 64, color: AppTheme.textSecondary),
-            SizedBox(height: 16),
-            Text('选择一个聊天开始对话',
-                style: TextStyle(fontSize: 16, color: AppTheme.textSecondary)),
-          ],
-        ),
-      );
+      return _buildEmptyChat();
     }
 
     return Column(
       children: [
-        // Chat header
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: Colors.white.withAlpha(200),
-            border: Border(
-                bottom: BorderSide(color: Colors.grey.shade200, width: 0.5)),
+        _buildChatHeader(selection),
+        Expanded(child: _buildMessagesList(messagesAsync, messagesNotifier)),
+        if (selection.type != ChatType.task) _buildInputArea(),
+      ],
+    );
+  }
+
+  Widget _buildEmptyChat() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withAlpha(13),
+              borderRadius: AppRadius.xxlAll,
+            ),
+            child: const Icon(
+              Icons.chat_bubble_outline,
+              size: 56,
+              color: AppColors.primary,
+            ),
           ),
-          child: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: AppTheme.primary.withAlpha(25),
-                child: Text(
-                  (selection.name ?? '?')[0].toUpperCase(),
-                  style: const TextStyle(
-                      color: AppTheme.primary, fontWeight: FontWeight.bold),
+          const SizedBox(height: AppSpacing.xl),
+          Text(
+            '选择一个聊天开始对话',
+            style: GoogleFonts.inter(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimaryLight,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            '从左侧好友列表中选择',
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              color: AppColors.textSecondaryLight,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChatHeader(ChatSelection selection) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppThemeHelper.isDark(context)
+            ? AppColors.surfaceDark
+            : Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(5),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [AppColors.primary, AppColors.accent],
+              ),
+              borderRadius: AppRadius.smAll,
+            ),
+            child: CircleAvatar(
+              radius: 18,
+              backgroundColor: AppThemeHelper.isDark(context)
+                  ? AppColors.surfaceDark
+                  : Colors.white,
+              child: Text(
+                (selection.name ?? '?')[0].toUpperCase(),
+                style: GoogleFonts.inter(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
                 ),
               ),
-              const SizedBox(width: 12),
-              Text(selection.name ?? '',
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w600)),
-            ],
+            ),
           ),
-        ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              selection.name ?? '',
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppThemeHelper.textPrimary(context),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-        // Messages
-        Expanded(
-          child: messagesAsync.when(
-            data: (messages) {
-              if (messages.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.chat_bubble_outline,
-                          size: 48, color: Colors.grey[300]),
-                      const SizedBox(height: 12),
-                      Text('暂无消息',
-                          style: TextStyle(
-                              fontSize: 14, color: Colors.grey[500])),
-                      const SizedBox(height: 4),
-                      Text('发送第一条消息开始对话',
-                          style: TextStyle(
-                              fontSize: 12, color: Colors.grey[400])),
-                    ],
+  Widget _buildMessagesList(AsyncValue<List<Message>> messagesAsync, MessagesNotifier messagesNotifier) {
+    return messagesAsync.when(
+      data: (messages) {
+        if (messages.isEmpty) {
+          return _buildEmptyMessages();
+        }
+
+        if (messages.length > _previousMessageCount) {
+          _scrollToBottom();
+        }
+        _previousMessageCount = messages.length;
+
+        return ListView.builder(
+          controller: _scrollController,
+          padding: const EdgeInsets.all(16),
+          itemCount: messages.length + (messagesNotifier.hasMore || messagesNotifier.loadError != null ? 1 : 0),
+          itemBuilder: (context, index) {
+            if (index == 0 && (messagesNotifier.hasMore || messagesNotifier.loadError != null)) {
+              if (messagesNotifier.isLoadingMore) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.primary,
+                      ),
+                    ),
                   ),
                 );
               }
-
-              // 新消息到来时自动滚动到底部
-              if (messages.length > _previousMessageCount) {
-                _scrollToBottom();
-              }
-              _previousMessageCount = messages.length;
-
-              return ListView.builder(
-                controller: _scrollController,
-                padding: const EdgeInsets.all(16),
-                itemCount: messages.length + (messagesNotifier.hasMore || messagesNotifier.loadError != null ? 1 : 0),
-                itemBuilder: (context, index) {
-                  // 第一项：加载更多指示器 / 错误提示
-                  if (index == 0 && (messagesNotifier.hasMore || messagesNotifier.loadError != null)) {
-                    if (messagesNotifier.isLoadingMore) {
-                      return const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        child: Center(
-                          child: SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        ),
-                      );
-                    }
-                    if (messagesNotifier.loadError != null) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Center(
-                          child: TextButton.icon(
-                            onPressed: () => ref.read(messagesProvider.notifier).loadMore(),
-                            icon: const Icon(Icons.refresh, size: 16),
-                            label: Text(messagesNotifier.loadError!,
-                                style: TextStyle(fontSize: 12, color: Colors.grey[500])),
-                          ),
-                        ),
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  }
-                  final msgIndex = messagesNotifier.hasMore ? index - 1 : index;
-                  return _buildMessageBubble(messages[msgIndex]);
-                },
-              );
-            },
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, stack) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.error_outline, size: 48, color: Colors.grey),
-                    const SizedBox(height: 8),
-                    Text('加载失败', style: TextStyle(color: Colors.grey[600])),
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: () {
-                        final sel = ref.read(chatSelectionProvider);
-                        if (sel.type == ChatType.friend && sel.id != null) {
-                          ref.read(messagesProvider.notifier).fetchFriendMessages(sel.id!);
-                        } else if (sel.type == ChatType.group && sel.id != null) {
-                          ref.read(messagesProvider.notifier).fetchGroupMessages(sel.id!);
-                        }
-                      },
-                      child: const Text('重试'),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-
-        // Input area
-        if (selection.type != ChatType.task)
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withAlpha(200),
-              border: Border(
-                  top: BorderSide(color: Colors.grey.shade200, width: 0.5)),
-            ),
-            child: SafeArea(
-              top: false,
-              child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _messageController,
-                    decoration: InputDecoration(
-                      hintText: '输入消息...',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide.none,
+              if (messagesNotifier.loadError != null) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Center(
+                    child: TextButton.icon(
+                      onPressed: () => ref.read(messagesProvider.notifier).loadMore(),
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: Text(
+                        messagesNotifier.loadError!,
+                        style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondaryLight),
                       ),
-                      filled: true,
-                      fillColor: Colors.grey.shade100,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 10),
                     ),
-                    onSubmitted: (_) => _sendMessage(),
                   ),
+                );
+              }
+              return const SizedBox.shrink();
+            }
+            final msgIndex = messagesNotifier.hasMore ? index - 1 : index;
+            return _buildMessageBubble(messages[msgIndex]);
+          },
+        );
+      },
+      loading: () => const Center(
+        child: CircularProgressIndicator(color: AppColors.primary),
+      ),
+      error: (e, stack) => _buildErrorState(),
+    );
+  }
+
+  Widget _buildEmptyMessages() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withAlpha(13),
+              borderRadius: AppRadius.xlAll,
+            ),
+            child: const Icon(
+              Icons.waving_hand_outlined,
+              size: 40,
+              color: AppColors.primary,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            '暂无消息',
+            style: GoogleFonts.inter(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimaryLight,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            '发送第一条消息开始对话',
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              color: AppColors.textSecondaryLight,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.error_outline, size: 48, color: AppColors.error),
+          const SizedBox(height: 8),
+          Text(
+            '加载失败',
+            style: GoogleFonts.inter(color: AppColors.textSecondaryLight),
+          ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: () {
+              final sel = ref.read(chatSelectionProvider);
+              if (sel.type == ChatType.friend && sel.id != null) {
+                ref.read(messagesProvider.notifier).fetchFriendMessages(sel.id!);
+              } else if (sel.type == ChatType.group && sel.id != null) {
+                ref.read(messagesProvider.notifier).fetchGroupMessages(sel.id!);
+              }
+            },
+            child: Text(
+              '重试',
+              style: GoogleFonts.inter(color: AppColors.primary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInputArea() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppThemeHelper.isDark(context)
+            ? AppColors.surfaceDark
+            : Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(5),
+            blurRadius: 4,
+            offset: const Offset(0, -1),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppThemeHelper.isDark(context)
+                      ? AppColors.surfaceDark.withAlpha(153)
+                      : AppColors.backgroundLight,
+                  borderRadius: AppRadius.xlAll,
                 ),
-                const SizedBox(width: 8),
-                CircleAvatar(
-                  backgroundColor: AppTheme.primary,
-                  child: IconButton(
-                    icon: const Icon(Icons.send, color: Colors.white, size: 20),
-                    onPressed: _sendMessage,
+                child: TextField(
+                  controller: _messageController,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    color: AppThemeHelper.textPrimary(context),
                   ),
+                  decoration: InputDecoration(
+                    hintText: '输入消息...',
+                    hintStyle: GoogleFonts.inter(
+                      color: AppThemeHelper.textSecondary(context),
+                      fontSize: 14,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: AppRadius.xlAll,
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: AppThemeHelper.isDark(context)
+                        ? AppColors.surfaceDark.withAlpha(153)
+                        : AppColors.backgroundLight,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 10,
+                    ),
+                  ),
+                  onSubmitted: (_) => _sendMessage(),
                 ),
-                ],
               ),
             ),
-          ),
-      ],
+            const SizedBox(width: 10),
+            Container(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppColors.primary, AppColors.accent],
+                ),
+                borderRadius: AppRadius.fullAll,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withAlpha(77),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                onPressed: _sendMessage,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -310,14 +446,19 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
     if (isSystem) {
       return Center(
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           margin: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
-            color: Colors.grey.shade200,
-            borderRadius: BorderRadius.circular(12),
+            color: AppColors.textSecondaryLight.withAlpha(20),
+            borderRadius: AppRadius.mdAll,
           ),
-          child: Text(message.content,
-              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+          child: Text(
+            message.content,
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: AppColors.textSecondaryLight,
+            ),
+          ),
         ),
       );
     }
@@ -326,52 +467,76 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.6,
-        ),
-        decoration: BoxDecoration(
-          color: isMe ? AppTheme.primary : Colors.white,
-          borderRadius: BorderRadius.circular(16).copyWith(
-            bottomRight: isMe ? const Radius.circular(4) : null,
-            bottomLeft: !isMe ? const Radius.circular(4) : null,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(10),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          maxWidth: MediaQuery.of(context).size.width * 0.7,
         ),
         child: Column(
-          crossAxisAlignment:
-              isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             if (!isMe && message.senderUser != null)
               Padding(
-                padding: const EdgeInsets.only(bottom: 4),
+                padding: const EdgeInsets.only(left: 12, bottom: 4),
                 child: Text(
                   message.senderUser!.username,
-                  style: TextStyle(
-                      fontSize: 11,
-                      color: AppTheme.textSecondary,
-                      fontWeight: FontWeight.w600),
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: AppColors.textSecondaryLight,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
-            Text(
-              message.content,
-              style: TextStyle(
-                color: isMe ? Colors.white : AppTheme.textPrimary,
-                fontSize: 14,
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                gradient: isMe
+                    ? const LinearGradient(
+                        colors: [AppColors.primary, AppColors.accent],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                    : null,
+                color: isMe
+                    ? null
+                    : (AppThemeHelper.isDark(context)
+                        ? AppColors.surfaceDark
+                        : Colors.white),
+                borderRadius: BorderRadius.circular(16).copyWith(
+                  bottomRight: isMe ? const Radius.circular(4) : null,
+                  bottomLeft: !isMe ? const Radius.circular(4) : null,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: isMe
+                        ? AppColors.primary.withAlpha(51)
+                        : Colors.black.withAlpha(10),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              formatMessageTime(message.createdAt),
-              style: TextStyle(
-                fontSize: 10,
-                color: isMe ? Colors.white70 : AppTheme.textSecondary,
+              child: Column(
+                crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    message.content,
+                    style: GoogleFonts.inter(
+                      color: isMe
+                          ? Colors.white
+                          : AppThemeHelper.textPrimary(context),
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    formatMessageTime(message.createdAt),
+                    style: GoogleFonts.inter(
+                      fontSize: 10,
+                      color: isMe
+                          ? Colors.white70
+                          : AppThemeHelper.textSecondary(context),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
