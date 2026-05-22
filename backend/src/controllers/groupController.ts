@@ -140,18 +140,30 @@ export const getGroupMessages = async (req: Request, res: Response) => {
     try {
         const userId = req.user!.id;
         const groupId = getParam(req.params.groupId);
+        const { before, limit: limitStr } = req.query;
+        const limit = Math.min(parseInt(limitStr as string) || 50, 100);
         const membership = await ensureGroupMember(groupId, userId);
         if (!membership) {
             return res.status(403).json({ message: '无权访问该群组' });
         }
 
-        const messages = await Message.find({ groupId: new mongoose.Types.ObjectId(groupId) })
+        const query: any = { groupId: new mongoose.Types.ObjectId(groupId) };
+        if (before) {
+            query.createdAt = { $lt: new Date(before as string) };
+        }
+
+        const messages = await Message.find(query)
             .populate('sender', 'username avatar')
-            .sort({ createdAt: 1 })
-            .limit(100)
+            .sort({ createdAt: -1 })
+            .limit(limit)
             .lean();
 
-        res.json(messages);
+        messages.reverse();
+
+        res.json({
+            messages,
+            hasMore: messages.length === limit,
+        });
     } catch (error) {
         console.error('Get group messages error:', error);
         res.status(500).json({ message: '获取群消息失败' });
