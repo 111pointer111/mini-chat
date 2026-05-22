@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -13,6 +15,8 @@ import '../../data/models/conversation.dart';
 import '../../providers/ai_chat_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../shared/widgets/ai_provider_selector.dart';
+import '../../shared/utils/error_utils.dart';
+import '../../shared/utils/toast_utils.dart';
 
 class AIChatScreen extends ConsumerStatefulWidget {
   const AIChatScreen({super.key});
@@ -29,6 +33,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   List<XFile> _pendingImages = [];
   bool _isUploading = false;
+  final List<StreamSubscription> _subscriptions = [];
 
   @override
   void initState() {
@@ -40,6 +45,9 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
 
   @override
   void dispose() {
+    for (final sub in _subscriptions) {
+      sub.cancel();
+    }
     _messageController.dispose();
     _scrollController.dispose();
     _renameController.dispose();
@@ -52,46 +60,47 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
 
   void _setupSocketListeners() {
     final socketService = ref.read(socketServiceProvider);
-    final socket = socketService.socket;
-    if (socket == null) return;
 
-    socket.on('ai_stream', (data) {
-      if (data is! Map<String, dynamic>) return;
-      final content = data['content'] as String? ?? '';
-      final done = data['done'] as bool? ?? false;
+    _subscriptions.add(
+      socketService.onAIStream.listen((data) {
+        final content = data['content'] as String? ?? '';
+        final done = data['done'] as bool? ?? false;
 
-      if (content.isNotEmpty) {
-        ref.read(aiMessagesProvider.notifier).appendToLastMessage(content);
-      }
-      if (done) {
+        if (content.isNotEmpty) {
+          ref.read(aiMessagesProvider.notifier).appendToLastMessage(content);
+        }
+        if (done) {
+          ref.read(aiMessagesProvider.notifier).markStreamDone();
+          ref.read(isStreamingProvider.notifier).state = false;
+          _loadConversations();
+        }
+        _scrollToBottom();
+      }),
+    );
+
+    _subscriptions.add(
+      socketService.onAIStreamError.listen((data) {
+        String errorMsg = 'AI 响应出错';
+        if (data is Map<String, dynamic>) {
+          errorMsg =
+              data['error'] as String? ?? data['message'] as String? ?? errorMsg;
+        } else if (data is String) {
+          errorMsg = data;
+        }
+        ref
+            .read(aiMessagesProvider.notifier)
+            .appendToLastMessage('\n\n❌ $errorMsg');
         ref.read(aiMessagesProvider.notifier).markStreamDone();
         ref.read(isStreamingProvider.notifier).state = false;
-        _loadConversations();
-      }
-      _scrollToBottom();
-    });
+        _scrollToBottom();
+      }),
+    );
 
-    socket.on('ai_stream_error', (data) {
-      String errorMsg = 'AI 响应出错';
-      if (data is Map<String, dynamic>) {
-        errorMsg =
-            data['error'] as String? ?? data['message'] as String? ?? errorMsg;
-      } else if (data is String) {
-        errorMsg = data;
-      }
-      ref
-          .read(aiMessagesProvider.notifier)
-          .appendToLastMessage('\n\n❌ $errorMsg');
-      ref.read(aiMessagesProvider.notifier).markStreamDone();
-      ref.read(isStreamingProvider.notifier).state = false;
-      _scrollToBottom();
-    });
-
-    socket.on('conversation_renamed', (data) {
-      if (data is Map<String, dynamic>) {
+    _subscriptions.add(
+      socketService.onConversationRenamed.listen((data) {
         ref.read(conversationsProvider.notifier).refresh();
-      }
-    });
+      }),
+    );
   }
 
   void _scrollToBottom() {
@@ -135,9 +144,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
       return urls;
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('图片上传失败: $e')),
-        );
+        showErrorToast(context, extractErrorMessage(e, fallback: '图片上传失败'));
       }
       return [];
     } finally {
@@ -166,15 +173,14 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
     _scrollToBottom();
 
     final socketService = ref.read(socketServiceProvider);
-    final socket = socketService.socket;
     final conversationId = ref.read(currentConversationIdProvider);
     final now = DateTime.now();
     final timezoneOffset = now.timeZoneOffset.inMinutes;
 
     // 检查 Socket 连接状态
-    if (socket != null && socket.connected) {
+    if (socketService.isConnected) {
       // Socket 连接正常 → 使用 Socket 流式传输
-      socketService.emit('ai_chat_stream', {
+      socketService.emitAIChatStream({
         'message': content,
         if (imageUrls.isNotEmpty) 'images': imageUrls,
         'timezone': timezoneOffset,
@@ -280,9 +286,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
       _scrollToBottom();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('加载历史消息失败: $e')),
-        );
+        showErrorToast(context, extractErrorMessage(e, fallback: '加载历史消息失败'));
       }
     }
   }
@@ -294,14 +298,31 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
       _selectConversation(conv.id);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('创建会话失败: $e')),
-        );
+        showErrorToast(context, extractErrorMessage(e, fallback: '创建会话失败'));
       }
     }
   }
 
   Future<void> _deleteConversation(String convId) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除会话'),
+        content: const Text('确定要删除这个会话吗？删除后无法恢复。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
     try {
       await ref.read(conversationsProvider.notifier).delete(convId);
       final currentId = ref.read(currentConversationIdProvider);
@@ -311,9 +332,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('删除会话失败: $e')),
-        );
+        showErrorToast(context, extractErrorMessage(e, fallback: '删除会话失败'));
       }
     }
   }
@@ -726,12 +745,12 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
                             : '${AppConstants.uploadsBaseUrl}$url';
                         return ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: Image.network(
-                            fullUrl,
+                          child: CachedNetworkImage(
+                            imageUrl: fullUrl,
                             width: 120,
                             height: 120,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
+                            errorWidget: (_, __, ___) => Container(
                               width: 120,
                               height: 120,
                               color: Colors.grey.shade200,
@@ -817,62 +836,63 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
   }
 
   Widget _buildInputBar(bool isStreaming) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withAlpha(200),
-        border: Border(
-            top: BorderSide(color: Colors.grey.shade200, width: 0.5)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (_pendingImages.isNotEmpty)
-            Container(
-              height: 80,
-              margin: const EdgeInsets.only(bottom: 8),
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: _pendingImages.length,
-                itemBuilder: (context, index) {
-                  return Stack(
-                    children: [
-                      Container(
-                        margin: const EdgeInsets.only(right: 8),
-                        width: 72,
-                        height: 72,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          image: DecorationImage(
-                            image: FileImage(
-                                File(_pendingImages[index].path)),
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        top: 2,
-                        right: 10,
-                        child: GestureDetector(
-                          onTap: () => _removePendingImage(index),
-                          child: Container(
-                            padding: const EdgeInsets.all(2),
-                            decoration: const BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white.withAlpha(200),
+          border: Border(
+              top: BorderSide(color: Colors.grey.shade200, width: 0.5)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_pendingImages.isNotEmpty)
+              Container(
+                height: 80,
+                margin: const EdgeInsets.only(bottom: 8),
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _pendingImages.length,
+                  itemBuilder: (context, index) {
+                    return Stack(
+                      children: [
+                        Container(
+                          margin: const EdgeInsets.only(right: 8),
+                          width: 72,
+                          height: 72,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            image: DecorationImage(
+                              image: FileImage(
+                                  File(_pendingImages[index].path)),
+                              fit: BoxFit.cover,
                             ),
-                            child: const Icon(Icons.close,
-                                size: 14, color: Colors.white),
                           ),
                         ),
-                      ),
-                    ],
-                  );
-                },
+                        Positioned(
+                          top: 2,
+                          right: 10,
+                          child: GestureDetector(
+                            onTap: () => _removePendingImage(index),
+                            child: Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: const BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.close,
+                                  size: 14, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ),
-            ),
-          SafeArea(
-            child: Row(
+            Row(
               children: [
                 IconButton(
                   icon: _isUploading
@@ -931,8 +951,8 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
                 ),
               ],
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

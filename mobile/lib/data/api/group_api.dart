@@ -17,8 +17,11 @@ class GroupApi {
     });
   }
 
-  Future<Response> getGroupMessages(String groupId) {
-    return _client.dio.get('/groups/$groupId/messages');
+  Future<Response> getGroupMessages(String groupId, {String? before, int limit = 50}) {
+    return _client.dio.get('/groups/$groupId/messages', queryParameters: {
+      'limit': limit,
+      if (before != null) 'before': before,
+    });
   }
 
   Future<Response> getGroupMembers(String groupId) {

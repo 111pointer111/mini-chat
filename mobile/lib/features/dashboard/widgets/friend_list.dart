@@ -5,6 +5,7 @@ import '../../../core/theme.dart';
 import '../../../data/models/user.dart';
 import '../../../providers/chat_provider.dart';
 import '../../../providers/scheduled_task_provider.dart';
+import '../../../shared/utils/error_utils.dart';
 import 'user_search.dart';
 
 class FriendList extends ConsumerStatefulWidget {
@@ -196,7 +197,7 @@ class _FriendListState extends ConsumerState<FriendList> {
               );
             },
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(child: Text('加载失败: $e')),
+            error: (e, _) => Center(child: Text(extractErrorMessage(e, fallback: '加载好友列表失败'))),
           ),
         ),
       ],

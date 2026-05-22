@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +8,7 @@ import 'package:dio/dio.dart';
 import '../../core/theme.dart';
 import '../../data/models/kb_document.dart';
 import '../../providers/kb_provider.dart';
+import '../../shared/utils/error_utils.dart';
 import '../../shared/utils/toast_utils.dart';
 
 class KnowledgeBaseScreen extends ConsumerStatefulWidget {
@@ -21,25 +23,31 @@ class _KnowledgeBaseScreenState extends ConsumerState<KnowledgeBaseScreen> {
   bool _uploading = false;
   final _searchController = TextEditingController();
   bool _isSearching = false;
+  Timer? _searchDebounce;
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
   void _onSearchChanged(String query) {
+    _searchDebounce?.cancel();
     if (query.trim().isEmpty) {
       setState(() => _isSearching = false);
       ref.read(kbSearchResultsProvider.notifier).clear();
       ref.read(kbDocumentsProvider.notifier).refresh();
     } else {
       setState(() => _isSearching = true);
-      ref.read(kbSearchResultsProvider.notifier).search(query);
+      _searchDebounce = Timer(const Duration(milliseconds: 400), () {
+        ref.read(kbSearchResultsProvider.notifier).search(query);
+      });
     }
   }
 
   void _clearSearch() {
+    _searchDebounce?.cancel();
     _searchController.clear();
     setState(() => _isSearching = false);
     ref.read(kbSearchResultsProvider.notifier).clear();
@@ -74,7 +82,7 @@ class _KnowledgeBaseScreenState extends ConsumerState<KnowledgeBaseScreen> {
         ref.read(kbDocumentsProvider.notifier).refresh();
       }
     } catch (e) {
-      if (mounted) showErrorToast(context, '上传失败');
+      if (mounted) showErrorToast(context, extractErrorMessage(e, fallback: '上传失败'));
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
@@ -140,7 +148,7 @@ class _KnowledgeBaseScreenState extends ConsumerState<KnowledgeBaseScreen> {
           ref.read(kbDocumentsProvider.notifier).refresh();
         }
       } catch (e) {
-        if (mounted) showErrorToast(context, '导入失败');
+        if (mounted) showErrorToast(context, extractErrorMessage(e, fallback: '导入失败'));
       }
     }
   }
@@ -169,7 +177,7 @@ class _KnowledgeBaseScreenState extends ConsumerState<KnowledgeBaseScreen> {
         await ref.read(kbDocumentsProvider.notifier).deleteDocument(doc.id);
         if (mounted) showSuccessToast(context, '已删除');
       } catch (e) {
-        if (mounted) showErrorToast(context, '删除失败');
+        if (mounted) showErrorToast(context, extractErrorMessage(e, fallback: '删除失败'));
       }
     }
   }

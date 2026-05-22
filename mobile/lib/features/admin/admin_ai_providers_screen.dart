@@ -6,6 +6,7 @@ import '../../core/theme.dart';
 import '../../data/models/ai_provider.dart';
 import '../../providers/ai_provider_provider.dart';
 import '../../shared/utils/toast_utils.dart';
+import '../../shared/utils/error_utils.dart';
 
 class AdminAIProvidersScreen extends ConsumerStatefulWidget {
   const AdminAIProvidersScreen({super.key});
@@ -226,7 +227,7 @@ class _AdminAIProvidersScreenState
           showSuccessToast(context, existing != null ? '已更新' : '已创建');
         }
       } catch (e) {
-        if (mounted) showErrorToast(context, '操作失败');
+        if (mounted) showErrorToast(context, extractErrorMessage(e, fallback: '保存失败'));
       }
     }
   }
@@ -257,7 +258,7 @@ class _AdminAIProvidersScreenState
             .delete(provider.id);
         if (mounted) showSuccessToast(context, '已删除');
       } catch (e) {
-        if (mounted) showErrorToast(context, '删除失败');
+        if (mounted) showErrorToast(context, extractErrorMessage(e, fallback: '删除失败'));
       }
     }
   }

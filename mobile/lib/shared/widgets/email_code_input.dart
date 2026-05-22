@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:dio/dio.dart';
 
 import '../../providers/auth_provider.dart';
+import '../utils/error_utils.dart';
 
 class EmailCodeInput extends ConsumerStatefulWidget {
   final TextEditingController emailController;
@@ -41,18 +41,6 @@ class _EmailCodeInputState extends ConsumerState<EmailCodeInput> {
     return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
   }
 
-  String _extractErrorMessage(Object error) {
-    if (error is DioException) {
-      final data = error.response?.data;
-      if (data is Map<String, dynamic> && data['message'] != null) {
-        return data['message'] as String;
-      }
-      if (error.response?.statusCode == 400) return '请求参数错误';
-      if (error.response?.statusCode == 500) return '服务器错误，请稍后重试';
-    }
-    return '发送失败，请稍后重试';
-  }
-
   Future<void> _sendCode() async {
     final email = widget.emailController.text.trim();
     if (email.isEmpty) {
@@ -73,7 +61,7 @@ class _EmailCodeInputState extends ConsumerState<EmailCodeInput> {
     }
     try {
       await ref.read(authApiProvider).sendVerificationEmail(email, widget.codeType);
-      _startCountdown();
+      if (mounted) _startCountdown();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('验证码已发送')),
@@ -82,7 +70,7 @@ class _EmailCodeInputState extends ConsumerState<EmailCodeInput> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_extractErrorMessage(e))),
+          SnackBar(content: Text(extractErrorMessage(e, fallback: '发送验证码失败'))),
         );
       }
     }

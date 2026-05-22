@@ -14,8 +14,7 @@ final secureStorageProvider = Provider<FlutterSecureStorage>((ref) {
 final tokenProvider = StateProvider<String?>((ref) => null);
 
 final apiClientProvider = Provider<ApiClient>((ref) {
-  final token = ref.watch(tokenProvider);
-  return ApiClient(token);
+  return ApiClient(ref);
 });
 
 final authApiProvider = Provider<AuthApi>((ref) {
@@ -23,7 +22,9 @@ final authApiProvider = Provider<AuthApi>((ref) {
 });
 
 final socketServiceProvider = Provider<SocketService>((ref) {
-  return SocketService();
+  final service = SocketService();
+  ref.onDispose(() => service.dispose());
+  return service;
 });
 
 final authStateProvider = AsyncNotifierProvider<AuthNotifier, User?>(() {

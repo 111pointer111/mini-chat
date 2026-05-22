@@ -3,9 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme.dart';
-import '../../data/models/group.dart';
-import '../../data/models/user.dart';
 import '../../providers/group_provider.dart';
+import '../../shared/utils/error_utils.dart';
 
 class GroupSettingsScreen extends ConsumerStatefulWidget {
   final String groupId;
@@ -145,7 +144,7 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
             error: (e, _) => Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
-                child: Text('加载失败: ${e.toString()}'),
+                child: Text(extractErrorMessage(e, fallback: '加载群成员失败')),
               ),
             ),
             data: (members) => Column(
@@ -189,24 +188,27 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
     );
   }
 
-  Widget _buildMemberTile(User member) {
+  Widget _buildMemberTile(GroupMember member) {
     return Container(
       color: Colors.white,
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: AppTheme.primary.withAlpha(25),
           child: Text(
-            member.username.isNotEmpty
-                ? member.username[0].toUpperCase()
+            member.user.username.isNotEmpty
+                ? member.user.username[0].toUpperCase()
                 : '?',
             style: const TextStyle(color: AppTheme.primary),
           ),
         ),
-        title: Text(member.username),
-        subtitle: member.id == 'owner'
+        title: Text(member.user.username),
+        subtitle: member.role == 'owner'
             ? const Text('群主',
                 style: TextStyle(fontSize: 12, color: Colors.orange))
-            : null,
+            : member.role == 'admin'
+                ? const Text('管理员',
+                    style: TextStyle(fontSize: 12, color: Colors.blue))
+                : null,
       ),
     );
   }

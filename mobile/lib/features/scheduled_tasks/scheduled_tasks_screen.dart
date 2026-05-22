@@ -5,6 +5,7 @@ import '../../core/theme.dart';
 import '../../data/models/scheduled_task.dart';
 import '../../providers/scheduled_task_provider.dart';
 import '../../shared/utils/toast_utils.dart';
+import '../../shared/utils/error_utils.dart';
 
 class ScheduledTasksScreen extends ConsumerStatefulWidget {
   const ScheduledTasksScreen({super.key});
@@ -54,22 +55,43 @@ class _ScheduledTasksScreenState extends ConsumerState<ScheduledTasksScreen> {
     if (picked != null) {
       final timeStr =
           '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
-      await ref
-          .read(tasksProvider.notifier)
-          .updatePresetTask(task.taskType, task.enabled, timeStr);
+      try {
+        await ref
+            .read(tasksProvider.notifier)
+            .updatePresetTask(task.taskType, task.enabled, timeStr);
+        if (mounted) showSuccessToast(context, '时间已更新');
+      } catch (e) {
+        if (mounted) {
+          showErrorToast(context, extractErrorMessage(e, fallback: '更新时间失败'));
+        }
+      }
     }
   }
 
   Future<void> _togglePreset(PresetTask task, bool enabled) async {
-    await ref
-        .read(tasksProvider.notifier)
-        .updatePresetTask(task.taskType, enabled, task.pushTime);
+    try {
+      await ref
+          .read(tasksProvider.notifier)
+          .updatePresetTask(task.taskType, enabled, task.pushTime);
+      if (mounted) showSuccessToast(context, enabled ? '任务已启用' : '任务已关闭');
+    } catch (e) {
+      if (mounted) {
+        showErrorToast(context, extractErrorMessage(e, fallback: '操作失败'));
+      }
+    }
   }
 
   Future<void> _toggleCustom(CustomTask task, bool enabled) async {
-    await ref
-        .read(tasksProvider.notifier)
-        .updateCustomTask(task.id, enabled, task.pushTime);
+    try {
+      await ref
+          .read(tasksProvider.notifier)
+          .updateCustomTask(task.id, enabled, task.pushTime);
+      if (mounted) showSuccessToast(context, enabled ? '任务已启用' : '任务已关闭');
+    } catch (e) {
+      if (mounted) {
+        showErrorToast(context, extractErrorMessage(e, fallback: '操作失败'));
+      }
+    }
   }
 
   Future<void> _pickCustomTime(CustomTask task) async {
@@ -85,9 +107,16 @@ class _ScheduledTasksScreenState extends ConsumerState<ScheduledTasksScreen> {
     if (picked != null) {
       final timeStr =
           '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
-      await ref
-          .read(tasksProvider.notifier)
-          .updateCustomTask(task.id, task.enabled, timeStr);
+      try {
+        await ref
+            .read(tasksProvider.notifier)
+            .updateCustomTask(task.id, task.enabled, timeStr);
+        if (mounted) showSuccessToast(context, '时间已更新');
+      } catch (e) {
+        if (mounted) {
+          showErrorToast(context, extractErrorMessage(e, fallback: '更新时间失败'));
+        }
+      }
     }
   }
 
@@ -111,8 +140,14 @@ class _ScheduledTasksScreenState extends ConsumerState<ScheduledTasksScreen> {
       ),
     );
     if (confirm == true && mounted) {
-      await ref.read(tasksProvider.notifier).deleteCustomTask(task.id);
-      if (mounted) showSuccessToast(context, '已删除');
+      try {
+        await ref.read(tasksProvider.notifier).deleteCustomTask(task.id);
+        if (mounted) showSuccessToast(context, '已删除');
+      } catch (e) {
+        if (mounted) {
+          showErrorToast(context, extractErrorMessage(e, fallback: '删除失败'));
+        }
+      }
     }
   }
 

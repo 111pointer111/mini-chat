@@ -2,11 +2,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:dio/dio.dart';
 
 import '../../core/theme.dart';
 import '../../data/models/user.dart';
 import '../../providers/auth_provider.dart';
+import '../../shared/utils/error_utils.dart';
+import '../../shared/utils/toast_utils.dart';
 import '../../shared/widgets/phone_code_input.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
@@ -37,6 +38,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) {
+        setState(() {});
+      }
+    });
   }
 
   @override
@@ -123,22 +129,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
-    );
-  }
-
-  String _extractErrorMessage(Object error) {
-    if (error is DioException) {
-      final data = error.response?.data;
-      if (data is Map<String, dynamic> && data['message'] != null) {
-        return data['message'] as String;
-      }
-      if (error.response?.statusCode == 400) return '请求参数错误';
-      if (error.response?.statusCode == 409) return '用户名或邮箱已存在';
-      if (error.response?.statusCode == 500) return '服务器错误，请稍后重试';
-    }
-    return '注册失败，请稍后重试';
+    showErrorToast(context, message);
   }
 
   void _startEmailCountdown() {
@@ -173,7 +164,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
       }
     } catch (e) {
       if (mounted) {
-        _showError(_extractErrorMessage(e));
+        _showError(extractErrorMessage(e, fallback: '发送验证码失败'));
       }
     }
   }
@@ -197,7 +188,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
       if (mounted) context.go('/');
     } catch (e) {
       if (mounted) {
-        _showError(_extractErrorMessage(e));
+        _showError(extractErrorMessage(e, fallback: '注册失败，请稍后重试'));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -228,7 +219,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
       if (mounted) context.go('/');
     } catch (e) {
       if (mounted) {
-        _showError(_extractErrorMessage(e));
+        _showError(extractErrorMessage(e, fallback: '注册失败，请稍后重试'));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -238,21 +229,23 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(gradient: AppTheme.backgroundGradient),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text(
-                    '创建账号',
-                    style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white),
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: Container(
+          decoration: const BoxDecoration(gradient: AppTheme.backgroundGradient),
+          child: SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text(
+                      '创建账号',
+                      style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white),
                   ),
                   const SizedBox(height: 32),
                   Card(
@@ -295,6 +288,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
               ),
             ),
           ),
+        ),
         ),
       ),
     );

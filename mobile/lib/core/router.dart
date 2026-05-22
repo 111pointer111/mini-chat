@@ -34,23 +34,17 @@ class LoadingScreen extends StatelessWidget {
 final routerProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
     initialLocation: '/',
-    errorBuilder: (context, state) => Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, size: 64, color: Colors.grey),
-            const SizedBox(height: 16),
-            const Text('页面加载失败', style: TextStyle(fontSize: 18)),
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: () => context.go('/'),
-              child: const Text('返回首页'),
-            ),
-          ],
-        ),
-      ),
-    ),
+    errorBuilder: (context, state) {
+      // 自动恢复：延迟后跳转到首页，避免用户看到错误页面
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (context.mounted) {
+          GoRouter.of(context).go('/');
+        }
+      });
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    },
     redirect: (context, state) {
       // 在 redirect 内部用 ref.read 获取最新状态，而不是从闭包捕获
       final authState = ref.read(authStateProvider);

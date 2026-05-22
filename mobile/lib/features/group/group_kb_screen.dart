@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:dio/dio.dart';
 
@@ -9,6 +8,7 @@ import '../../data/models/kb_document.dart';
 import '../../providers/group_provider.dart';
 import '../../providers/chat_provider.dart';
 import '../../shared/utils/toast_utils.dart';
+import '../../shared/utils/error_utils.dart';
 
 class GroupKBScreen extends ConsumerStatefulWidget {
   final String groupId;
@@ -62,7 +62,7 @@ class _GroupKBScreenState extends ConsumerState<GroupKBScreen> {
             .refresh(widget.groupId);
       }
     } catch (e) {
-      if (mounted) showErrorToast(context, '上传失败');
+      if (mounted) showErrorToast(context, extractErrorMessage(e, fallback: '上传失败'));
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
@@ -131,7 +131,7 @@ class _GroupKBScreenState extends ConsumerState<GroupKBScreen> {
               .refresh(widget.groupId);
         }
       } catch (e) {
-        if (mounted) showErrorToast(context, '导入失败');
+        if (mounted) showErrorToast(context, extractErrorMessage(e, fallback: '导入失败'));
       }
     }
   }
@@ -162,7 +162,7 @@ class _GroupKBScreenState extends ConsumerState<GroupKBScreen> {
             .deleteDocument(widget.groupId, doc.id);
         if (mounted) showSuccessToast(context, '已删除');
       } catch (e) {
-        if (mounted) showErrorToast(context, '删除失败');
+        if (mounted) showErrorToast(context, extractErrorMessage(e, fallback: '删除失败'));
       }
     }
   }

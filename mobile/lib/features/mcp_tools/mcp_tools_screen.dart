@@ -6,6 +6,7 @@ import '../../core/theme.dart';
 import '../../data/models/mcp_server.dart';
 import '../../providers/mcp_provider.dart';
 import '../../shared/utils/toast_utils.dart';
+import '../../shared/utils/error_utils.dart';
 
 class MCPToolsScreen extends ConsumerStatefulWidget {
   const MCPToolsScreen({super.key});
@@ -214,7 +215,7 @@ class _MCPToolsScreenState extends ConsumerState<MCPToolsScreen> {
           showSuccessToast(context, existing != null ? '已更新' : '已添加');
         }
       } catch (e) {
-        if (mounted) showErrorToast(context, '操作失败');
+        if (mounted) showErrorToast(context, extractErrorMessage(e, fallback: '操作失败'));
       }
     }
   }
@@ -235,7 +236,7 @@ class _MCPToolsScreenState extends ConsumerState<MCPToolsScreen> {
                 : '连接失败');
       }
     } catch (e) {
-      if (mounted) showErrorToast(context, '测试失败');
+      if (mounted) showErrorToast(context, extractErrorMessage(e, fallback: '连接测试失败'));
     } finally {
       if (mounted) setState(() => _actionLoading = null);
     }
@@ -247,7 +248,7 @@ class _MCPToolsScreenState extends ConsumerState<MCPToolsScreen> {
       await ref.read(mcpServersProvider.notifier).refreshTools(server.id);
       if (mounted) showSuccessToast(context, '工具列表已刷新');
     } catch (e) {
-      if (mounted) showErrorToast(context, '刷新失败');
+      if (mounted) showErrorToast(context, extractErrorMessage(e, fallback: '刷新工具列表失败'));
     } finally {
       if (mounted) setState(() => _actionLoading = null);
     }
@@ -268,7 +269,7 @@ class _MCPToolsScreenState extends ConsumerState<MCPToolsScreen> {
         }
       }
     } catch (e) {
-      if (mounted) showErrorToast(context, '更新失败');
+      if (mounted) showErrorToast(context, extractErrorMessage(e, fallback: '更新失败'));
     }
   }
 
@@ -300,7 +301,7 @@ class _MCPToolsScreenState extends ConsumerState<MCPToolsScreen> {
         }
         if (mounted) showSuccessToast(context, '已删除');
       } catch (e) {
-        if (mounted) showErrorToast(context, '删除失败');
+        if (mounted) showErrorToast(context, extractErrorMessage(e, fallback: '删除失败'));
       }
     }
   }

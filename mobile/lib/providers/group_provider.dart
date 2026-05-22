@@ -1,10 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../data/api/group_api.dart';
 import '../data/models/group.dart';
+import '../data/models/message.dart';
 import '../data/models/user.dart';
 import '../data/models/kb_document.dart';
-import 'auth_provider.dart';
 import 'chat_provider.dart';
 
 // 群组列表
@@ -36,19 +35,30 @@ class GroupsNotifier extends AutoDisposeAsyncNotifier<List<Group>> {
   }
 }
 
-// 群成员
+// 群成员（带群内角色）
+class GroupMember {
+  final User user;
+  final String role; // 'owner', 'admin', 'member'
+
+  GroupMember({required this.user, required this.role});
+}
+
 final groupMembersProvider = AsyncNotifierProvider.autoDispose.family<
-    GroupMembersNotifier, List<User>, String>(() {
+    GroupMembersNotifier, List<GroupMember>, String>(() {
   return GroupMembersNotifier();
 });
 
-class GroupMembersNotifier extends AutoDisposeFamilyAsyncNotifier<List<User>, String> {
+class GroupMembersNotifier extends AutoDisposeFamilyAsyncNotifier<List<GroupMember>, String> {
   @override
-  Future<List<User>> build(String groupId) async {
+  Future<List<GroupMember>> build(String groupId) async {
     final res = await ref.read(groupApiProvider).getGroupMembers(groupId);
-    return (res.data as List<dynamic>)
-        .map((e) => User.fromJson(e as Map<String, dynamic>))
-        .toList();
+    return (res.data as List<dynamic>).map((e) {
+      final map = e as Map<String, dynamic>;
+      return GroupMember(
+        user: User.fromJson(map['user'] as Map<String, dynamic>),
+        role: map['role'] as String? ?? 'member',
+      );
+    }).toList();
   }
 
   Future<void> refresh(String groupId) async {
@@ -64,16 +74,34 @@ class GroupMembersNotifier extends AutoDisposeFamilyAsyncNotifier<List<User>, St
 
 // 群消息
 final groupMessagesProvider = AsyncNotifierProvider.autoDispose.family<
-    GroupMessagesNotifier, List<dynamic>, String>(() {
+    GroupMessagesNotifier, List<Message>, String>(() {
   return GroupMessagesNotifier();
 });
 
 class GroupMessagesNotifier
-    extends AutoDisposeFamilyAsyncNotifier<List<dynamic>, String> {
+    extends AutoDisposeFamilyAsyncNotifier<List<Message>, String> {
+  bool _hasMore = true;
+  bool _isLoadingMore = false;
+  String? _loadError;
+
+  bool get hasMore => _hasMore;
+  bool get isLoadingMore => _isLoadingMore;
+  String? get loadError => _loadError;
+
   @override
-  Future<List<dynamic>> build(String groupId) async {
+  Future<List<Message>> build(String groupId) async {
+    _hasMore = true;
     final res = await ref.read(groupApiProvider).getGroupMessages(groupId);
-    return res.data as List<dynamic>? ?? [];
+    final data = res.data;
+    final messagesList = data is Map<String, dynamic>
+        ? (data['messages'] as List<dynamic>? ?? [])
+        : data as List<dynamic>;
+    _hasMore = data is Map<String, dynamic>
+        ? (data['hasMore'] as bool? ?? false)
+        : false;
+    return messagesList
+        .map((e) => Message.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<void> refresh(String groupId) async {
@@ -81,9 +109,34 @@ class GroupMessagesNotifier
     state = await AsyncValue.guard(() => build(groupId));
   }
 
-  void addMessage(Map<String, dynamic> message) {
+  Future<void> loadMore(String groupId) async {
+    if (!_hasMore || _isLoadingMore) return;
+    final currentMessages = state.valueOrNull;
+    if (currentMessages == null || currentMessages.isEmpty) return;
+
+    _loadError = null;
+    _isLoadingMore = true;
+    try {
+      final oldest = currentMessages.first;
+      final res = await ref.read(groupApiProvider)
+          .getGroupMessages(groupId, before: oldest.createdAt);
+      final data = res.data;
+      final messagesList = data['messages'] as List<dynamic>? ?? [];
+      _hasMore = data['hasMore'] as bool? ?? false;
+      final olderMessages = messagesList
+          .map((e) => Message.fromJson(e as Map<String, dynamic>))
+          .toList();
+      state = AsyncValue.data([...olderMessages, ...currentMessages]);
+    } catch (_) {
+      _loadError = '加载历史消息失败，点击重试';
+    } finally {
+      _isLoadingMore = false;
+    }
+  }
+
+  void addMessage(Map<String, dynamic> json) {
     final current = state.valueOrNull ?? [];
-    state = AsyncValue.data([...current, message]);
+    state = AsyncValue.data([...current, Message.fromJson(json)]);
   }
 }
 

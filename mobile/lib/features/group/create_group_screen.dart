@@ -3,10 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme.dart';
-import '../../data/models/user.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/group_provider.dart';
 import '../../shared/utils/toast_utils.dart';
+import '../../shared/utils/error_utils.dart';
 
 class CreateGroupScreen extends ConsumerStatefulWidget {
   const CreateGroupScreen({super.key});
@@ -48,7 +48,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
       }
     } catch (e) {
       if (mounted) {
-        showErrorToast(context, '创建失败: ${e.toString()}');
+        showErrorToast(context, extractErrorMessage(e, fallback: '创建群组失败'));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

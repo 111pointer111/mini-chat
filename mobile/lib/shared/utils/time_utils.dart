@@ -1,7 +1,9 @@
 import 'package:intl/intl.dart';
 
 String formatMessageTime(String isoString) {
-  final date = DateTime.parse(isoString).toLocal();
+  final parsed = DateTime.tryParse(isoString);
+  if (parsed == null) return isoString;
+  final date = parsed.toLocal();
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
   final messageDay = DateTime(date.year, date.month, date.day);
@@ -18,6 +20,8 @@ String formatMessageTime(String isoString) {
 }
 
 String formatTaskTime(String isoString) {
-  final date = DateTime.parse(isoString).toLocal();
+  final parsed = DateTime.tryParse(isoString);
+  if (parsed == null) return isoString;
+  final date = parsed.toLocal();
   return DateFormat('yyyy-MM-dd HH:mm').format(date);
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,10 +7,10 @@ import 'package:intl/intl.dart';
 
 import '../../core/theme.dart';
 import '../../core/constants.dart';
-import '../../data/models/group.dart';
+import '../../data/models/message.dart';
 import '../../providers/group_provider.dart';
 import '../../providers/auth_provider.dart';
-import '../../data/services/socket_service.dart';
+import '../../shared/utils/toast_utils.dart';
 
 class GroupChatScreen extends ConsumerStatefulWidget {
   final String groupId;
@@ -24,6 +25,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
   bool _isSending = false;
+  StreamSubscription? _groupMessageSub;
 
   @override
   void initState() {
@@ -36,6 +38,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
 
   @override
   void dispose() {
+    _groupMessageSub?.cancel();
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -47,15 +50,12 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
 
   void _setupSocketListeners() {
     final socketService = ref.read(socketServiceProvider);
-    final socket = socketService.socket;
-    if (socket == null) return;
 
     // 加入群房间
-    socket.emit('join_group_room', widget.groupId);
+    socketService.joinGroupRoom(widget.groupId);
 
     // 监听群消息
-    socket.on('receive_group_message', (data) {
-      if (data is! Map<String, dynamic>) return;
+    _groupMessageSub = socketService.onReceiveGroupMessage.listen((data) {
       final groupId = data['groupId'] as String?;
       if (groupId == widget.groupId) {
         ref.read(groupMessagesProvider(widget.groupId).notifier).addMessage(data);
@@ -84,13 +84,10 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
     _messageController.clear();
 
     final socketService = ref.read(socketServiceProvider);
-    final socket = socketService.socket;
 
-    if (socket == null || !socket.connected) {
+    if (!socketService.isConnected) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('网络连接已断开，请稍后重试')),
-        );
+        showErrorToast(context, '网络连接已断开，请稍后重试');
       }
       setState(() => _isSending = false);
       return;
@@ -114,7 +111,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
     _scrollToBottom();
 
     // 发送消息
-    socket.emitWithAck('send_group_message', {
+    socketService.emitWithAck('send_group_message', {
       'groupId': widget.groupId,
       'content': content,
       'type': 'text',
@@ -126,13 +123,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
           // 消息会通过 receive_group_message 事件更新
         }
       } else {
-        // 失败：移除临时消息
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content:
-                    Text(response['error'] as String? ?? '发送失败')),
-          );
+          showErrorToast(context, response['error'] as String? ?? '发送失败');
         }
       }
       if (mounted) setState(() => _isSending = false);
@@ -244,24 +236,13 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
     );
   }
 
-  Widget _buildMessageBubble(
-      Map<String, dynamic> message, dynamic currentUser) {
-    final sender = message['sender'];
-    String senderId;
-    String senderName;
-
-    if (sender is Map<String, dynamic>) {
-      senderId = sender['_id'] as String? ?? '';
-      senderName = sender['username'] as String? ?? '成员';
-    } else {
-      senderId = sender as String? ?? '';
-      senderName = '成员';
-    }
-
+  Widget _buildMessageBubble(Message message, dynamic currentUser) {
+    final senderId = message.senderId;
+    final senderName = message.senderUser?.username ?? '成员';
     final isMe = senderId == currentUser?.id;
-    final isAssistant = senderId == '000000000000000000000001';
-    final content = message['content'] as String? ?? '';
-    final createdAt = message['createdAt'] as String?;
+    final isAssistant = senderId == AppConstants.aiAssistantId;
+    final content = message.content;
+    final createdAt = message.createdAt;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -358,7 +339,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                           ),
                         ),
                 ),
-                if (createdAt != null)
+                if (createdAt.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
@@ -391,14 +372,15 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
   }
 
   Widget _buildInputBar() {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withAlpha(200),
-        border: Border(
-            top: BorderSide(color: Colors.grey.shade200, width: 0.5)),
-      ),
-      child: SafeArea(
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white.withAlpha(200),
+          border: Border(
+              top: BorderSide(color: Colors.grey.shade200, width: 0.5)),
+        ),
         child: Row(
           children: [
             Expanded(
@@ -437,7 +419,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                       )
                     : const Icon(Icons.send,
                         color: Colors.white, size: 20),
-                onPressed: _isSending ? null : _sendMessage,
+                  onPressed: _isSending ? null : _sendMessage,
               ),
             ),
           ],

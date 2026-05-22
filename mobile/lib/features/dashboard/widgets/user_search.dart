@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:dio/dio.dart';
 
 import '../../../core/theme.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/chat_provider.dart';
 import '../../../data/api/user_api.dart';
 import '../../../data/models/user.dart';
+import '../../../shared/utils/error_utils.dart';
+import '../../../shared/utils/toast_utils.dart';
 
 class UserSearch extends ConsumerStatefulWidget {
   const UserSearch({super.key});
@@ -38,17 +39,8 @@ class _UserSearchState extends ConsumerState<UserSearch> {
             .toList();
       });
     } catch (e) {
-      String msg = '搜索失败';
-      if (e is DioException && e.response?.data != null) {
-        final data = e.response!.data;
-        if (data is Map<String, dynamic> && data['message'] != null) {
-          msg = data['message'] as String;
-        }
-      }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg)),
-        );
+        showErrorToast(context, extractErrorMessage(e, fallback: '搜索失败'));
       }
     } finally {
       setState(() => _isSearching = false);
@@ -59,22 +51,11 @@ class _UserSearchState extends ConsumerState<UserSearch> {
     try {
       await ref.read(friendsProvider.notifier).sendRequest(userId);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('好友请求已发送')),
-        );
+        showSuccessToast(context, '好友请求已发送');
       }
     } catch (e) {
-      String msg = '发送失败';
-      if (e is DioException && e.response?.data != null) {
-        final data = e.response!.data;
-        if (data is Map<String, dynamic> && data['message'] != null) {
-          msg = data['message'] as String;
-        }
-      }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg)),
-        );
+        showErrorToast(context, extractErrorMessage(e, fallback: '发送失败'));
       }
     }
   }

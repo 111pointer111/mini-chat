@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../shared/widgets/phone_code_input.dart';
+import '../../shared/utils/error_utils.dart';
+import '../../shared/utils/toast_utils.dart';
 
 class ResetPasswordScreen extends ConsumerStatefulWidget {
   const ResetPasswordScreen({super.key});
@@ -59,9 +61,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
-    );
+    showErrorToast(context, message);
   }
 
   Future<void> _resetPassword() async {
@@ -75,14 +75,12 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
             _newPasswordController.text,
           );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('密码重置成功，请重新登录')),
-        );
+        showSuccessToast(context, '密码重置成功，请重新登录');
         context.go('/login');
       }
     } catch (e) {
       if (mounted) {
-        _showError('重置失败: ${e.toString()}');
+        _showError(extractErrorMessage(e, fallback: '重置密码失败'));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -92,9 +90,11 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(gradient: AppTheme.backgroundGradient),
-        child: SafeArea(
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: Container(
+          decoration: const BoxDecoration(gradient: AppTheme.backgroundGradient),
+          child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
@@ -166,6 +166,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
               ),
             ),
           ),
+        ),
         ),
       ),
     );

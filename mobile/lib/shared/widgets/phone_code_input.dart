@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:dio/dio.dart';
 
 import '../../providers/auth_provider.dart';
+import '../utils/error_utils.dart';
 
 class PhoneCodeInput extends ConsumerStatefulWidget {
   final TextEditingController phoneController;
@@ -37,25 +37,30 @@ class _PhoneCodeInputState extends ConsumerState<PhoneCodeInput> {
     });
   }
 
-  String _extractErrorMessage(Object error) {
-    if (error is DioException) {
-      final data = error.response?.data;
-      if (data is Map<String, dynamic> && data['message'] != null) {
-        return data['message'] as String;
-      }
-      if (error.response?.statusCode == 400) return '请求参数错误';
-      if (error.response?.statusCode == 500) return '服务器错误，请稍后重试';
-    }
-    return '发送失败，请稍后重试';
-  }
-
   Future<void> _sendCode() async {
+    final phone = widget.phoneController.text.trim();
+    if (phone.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('请先输入手机号')),
+        );
+      }
+      return;
+    }
+    if (!RegExp(r'^1[3-9]\d{9}$').hasMatch(phone)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('请输入正确的手机号')),
+        );
+      }
+      return;
+    }
     try {
       await ref.read(authApiProvider).sendCode(
             widget.phoneController.text.trim(),
             widget.codeType,
           );
-      _startCountdown();
+      if (mounted) _startCountdown();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('验证码已发送')),
@@ -64,7 +69,7 @@ class _PhoneCodeInputState extends ConsumerState<PhoneCodeInput> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_extractErrorMessage(e))),
+          SnackBar(content: Text(extractErrorMessage(e, fallback: '发送验证码失败'))),
         );
       }
     }
