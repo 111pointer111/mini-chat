@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/api/friend_api.dart';
@@ -40,7 +41,6 @@ class FriendsNotifier extends AutoDisposeAsyncNotifier<List<User>> {
   }
 
   Future<void> refresh() async {
-    state = const AsyncValue.loading();
     state = await AsyncValue.guard(() => build());
   }
 
@@ -64,7 +64,6 @@ class PendingRequestsNotifier extends AutoDisposeAsyncNotifier<List<FriendReques
   }
 
   Future<void> refresh() async {
-    state = const AsyncValue.loading();
     state = await AsyncValue.guard(() => build());
   }
 
@@ -94,14 +93,14 @@ class ChatSelection {
 }
 
 final chatSelectionProvider =
-    StateProvider.autoDispose<ChatSelection>((ref) => const ChatSelection());
+    StateProvider<ChatSelection>((ref) => const ChatSelection());
 
 final messagesProvider =
-    AsyncNotifierProvider.autoDispose<MessagesNotifier, List<Message>>(() {
+    AsyncNotifierProvider<MessagesNotifier, List<Message>>(() {
   return MessagesNotifier();
 });
 
-class MessagesNotifier extends AutoDisposeAsyncNotifier<List<Message>> {
+class MessagesNotifier extends AsyncNotifier<List<Message>> {
   bool _hasMore = true;
   bool _isLoadingMore = false;
   String? _loadError;
@@ -119,7 +118,6 @@ class MessagesNotifier extends AutoDisposeAsyncNotifier<List<Message>> {
     _currentFriendId = friendId;
     _currentGroupId = null;
     _hasMore = true;
-    state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       final res = await ref.read(messageApiProvider).getMessages(friendId);
       final data = res.data;
@@ -139,7 +137,6 @@ class MessagesNotifier extends AutoDisposeAsyncNotifier<List<Message>> {
     _currentGroupId = groupId;
     _currentFriendId = null;
     _hasMore = true;
-    state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       final res = await ref.read(groupApiProvider).getGroupMessages(groupId);
       final data = res.data;
@@ -157,7 +154,6 @@ class MessagesNotifier extends AutoDisposeAsyncNotifier<List<Message>> {
 
   Future<void> fetchTaskMessages(String taskType) async {
     _hasMore = false;
-    state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       final res =
           await ref.read(scheduledTaskApiProvider).getTaskMessages(taskType);
