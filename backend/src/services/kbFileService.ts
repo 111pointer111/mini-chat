@@ -4,6 +4,8 @@
  */
 import fs from 'fs';
 import path from 'path';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import multer from 'multer';
 import textract from 'textract';
 import cheerio from 'cheerio';
@@ -11,6 +13,8 @@ import Tesseract from 'tesseract.js';
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { Document } from '@langchain/core/documents';
 import 'dotenv/config';
+
+const execAsync = promisify(exec);
 
 // ==================== 文件存储 ====================
 
@@ -104,6 +108,14 @@ function extractFromFile(filePath: string, mimeType: string): Promise<string> {
             return;
         }
 
+        // PDF 文件直接调用 pdftotext 命令
+        if (ext === '.pdf') {
+            extractFromPdf(filePath)
+                .then(resolve)
+                .catch(reject);
+            return;
+        }
+
         // 其他文件用 textract
         textract.fromFileWithPath(filePath, (err: Error | null, text: string) => {
             if (err) {
@@ -118,6 +130,25 @@ function extractFromFile(filePath: string, mimeType: string): Promise<string> {
             }
         });
     });
+}
+
+/**
+ * 直接调用 pdftotext 解析 PDF
+ */
+async function extractFromPdf(filePath: string): Promise<string> {
+    try {
+        const { stdout, stderr } = await execAsync(`pdftotext "${filePath}" -`);
+        if (stderr) {
+            console.error('pdftotext stderr:', stderr);
+        }
+        const text = stdout.trim();
+        if (!text) {
+            throw new Error('PDF 文件无法提取文本，可能是扫描件或图片PDF');
+        }
+        return text;
+    } catch (err: any) {
+        throw new Error(`PDF 解析失败: ${err.message}`);
+    }
 }
 
 /**

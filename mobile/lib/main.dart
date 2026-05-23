@@ -3,10 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/theme.dart';
 import 'core/router.dart';
+import 'data/services/database_service.dart';
 import 'providers/auth_provider.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // 初始化 SQLite 数据库
+  await DatabaseService().database;
+  
   runApp(const ProviderScope(child: BoltChatApp()));
 }
 
