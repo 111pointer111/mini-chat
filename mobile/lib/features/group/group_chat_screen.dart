@@ -142,7 +142,13 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
         ?.where((g) => g.id == widget.groupId)
         .firstOrNull;
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        context.go('/');
+      },
+      child: Scaffold(
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -233,6 +239,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
           _buildInputBar(),
         ],
       ),
+    ),
     );
   }
 

@@ -318,13 +318,20 @@ class _MCPToolsScreenState extends ConsumerState<MCPToolsScreen> {
   Widget build(BuildContext context) {
     final serversAsync = ref.watch(mcpServersProvider);
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        context.go('/');
+      },
+      child: Scaffold(
       appBar: _selectedServer != null
           ? _buildDetailAppBar()
           : _buildListAppBar(),
       body: _selectedServer != null
           ? _buildDetailPanel()
           : _buildServerList(serversAsync),
+    ),
     );
   }
 

@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -383,7 +384,13 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
         .firstOrNull
         ?.name;
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        context.go('/');
+      },
+      child: Scaffold(
       key: _scaffoldKey,
       drawer: Drawer(
         child: _buildConversationDrawer(
@@ -497,6 +504,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
           _buildInputBar(isStreaming),
         ],
       ),
+    ),
     );
   }
 

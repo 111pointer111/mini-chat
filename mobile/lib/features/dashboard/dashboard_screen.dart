@@ -87,10 +87,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final selection = ref.watch(chatSelectionProvider);
     final hasChat = selection.type != ChatType.none;
 
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: hasChat ? _buildChatAppBar(user, selection) : _buildMainAppBar(user),
-      body: hasChat ? const ChatWindow() : const FriendList(),
+    return PopScope(
+      canPop: !hasChat,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        ref.read(chatSelectionProvider.notifier).state = const ChatSelection();
+      },
+      child: Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        appBar: hasChat ? _buildChatAppBar(user, selection) : _buildMainAppBar(user),
+        body: hasChat ? const ChatWindow() : const FriendList(),
+      ),
     );
   }
 
@@ -110,9 +117,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           onPressed: () => context.push('/ai-chat'),
         ),
         _buildAppBarIcon(
-          icon: Icons.group_outlined,
-          tooltip: '群组',
-          onPressed: () => context.push('/groups'),
+          icon: Icons.group_add,
+          tooltip: '创建群组',
+          onPressed: () => context.push('/groups/create'),
         ),
         _buildAppBarIcon(
           icon: Icons.schedule_outlined,

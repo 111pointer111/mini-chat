@@ -4,7 +4,9 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/theme.dart';
 import '../../../data/models/user.dart';
+import '../../../data/models/group.dart';
 import '../../../providers/chat_provider.dart';
+import '../../../providers/group_provider.dart';
 import '../../../providers/scheduled_task_provider.dart';
 import '../../../shared/utils/error_utils.dart';
 import 'user_search.dart';
@@ -22,12 +24,14 @@ class _FriendListState extends ConsumerState<FriendList> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() => _loadData());
+    // 只加载定时任务，friends/groups/providers 会自动构建
+    _loadEnabledTasks();
   }
 
-  Future<void> _loadData() async {
+  Future<void> _refreshData() async {
     await ref.read(friendsProvider.notifier).refresh();
     await ref.read(pendingRequestsProvider.notifier).refresh();
+    await ref.read(groupsProvider.notifier).refresh();
     await _loadEnabledTasks();
   }
 
@@ -82,6 +86,7 @@ class _FriendListState extends ConsumerState<FriendList> {
   Widget build(BuildContext context) {
     final friendsAsync = ref.watch(friendsProvider);
     final requestsAsync = ref.watch(pendingRequestsProvider);
+    final groupsAsync = ref.watch(groupsProvider);
     final selection = ref.watch(chatSelectionProvider);
 
     return Column(
@@ -98,30 +103,55 @@ class _FriendListState extends ConsumerState<FriendList> {
         Expanded(
           child: friendsAsync.when(
             data: (friends) {
-              if (friends.isEmpty && _enabledTasks.isEmpty) {
-                return _buildEmptyState();
-              }
-              return RefreshIndicator(
-                onRefresh: _loadData,
-                color: AppColors.primary,
-                child: ListView(
-                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                  children: [
-                    if (_enabledTasks.isNotEmpty) ...[
-                      _buildSectionHeader('定时任务', Icons.schedule_outlined),
-                      ..._enabledTasks.map((t) => _buildTaskTile(t, selection)),
-                      if (friends.isNotEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          child: Divider(height: 1),
-                        ),
-                    ],
-                    if (friends.isNotEmpty) ...[
-                      _buildSectionHeader('好友', Icons.people_outline, count: friends.length),
-                      ...friends.map((f) => _buildFriendTile(f, selection)),
-                    ],
-                    const SizedBox(height: 20),
-                  ],
+              return groupsAsync.when(
+                data: (groups) {
+                  if (friends.isEmpty && groups.isEmpty && _enabledTasks.isEmpty) {
+                    return _buildEmptyState();
+                  }
+                  return RefreshIndicator(
+                    onRefresh: _refreshData,
+                    color: AppColors.primary,
+                    child: ListView(
+                      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                      children: [
+                        // 定时任务
+                        if (_enabledTasks.isNotEmpty) ...[
+                          _buildSectionHeader('定时任务', Icons.schedule_outlined),
+                          ..._enabledTasks.map((t) => _buildTaskTile(t, selection)),
+                          if (friends.isNotEmpty || groups.isNotEmpty)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              child: Divider(height: 1),
+                            ),
+                        ],
+                        // 好友列表
+                        if (friends.isNotEmpty) ...[
+                          _buildSectionHeader('好友', Icons.people_outline, count: friends.length),
+                          ...friends.map((f) => _buildFriendTile(f, selection)),
+                        ],
+                        // 群组列表
+                        if (groups.isNotEmpty) ...[
+                          if (friends.isNotEmpty)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              child: Divider(height: 1),
+                            ),
+                          _buildSectionHeader('群组', Icons.group_outlined, count: groups.length),
+                          ...groups.map((g) => _buildGroupTile(g, selection)),
+                        ],
+                        const SizedBox(height: 20),
+                      ],
+                    ),
+                  );
+                },
+                loading: () => const Center(
+                  child: CircularProgressIndicator(color: AppColors.primary),
+                ),
+                error: (e, _) => Center(
+                  child: Text(
+                    extractErrorMessage(e, fallback: '加载群组列表失败'),
+                    style: GoogleFonts.inter(color: AppColors.textSecondaryLight),
+                  ),
                 ),
               );
             },
@@ -153,7 +183,7 @@ class _FriendListState extends ConsumerState<FriendList> {
         ),
         child: TextField(
           decoration: InputDecoration(
-            hintText: '搜索好友...',
+            hintText: '搜索好友或群组...',
             hintStyle: GoogleFonts.inter(
               color: AppThemeHelper.textSecondary(context),
             ),
@@ -317,7 +347,7 @@ class _FriendListState extends ConsumerState<FriendList> {
           ),
           const SizedBox(height: AppSpacing.xl),
           Text(
-            '暂无好友',
+            '暂无好友和群组',
             style: GoogleFonts.inter(
               fontSize: 18,
               fontWeight: FontWeight.w600,
@@ -326,7 +356,7 @@ class _FriendListState extends ConsumerState<FriendList> {
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            '点击右上角添加好友',
+            '点击右上角添加好友或创建群组',
             style: GoogleFonts.inter(
               fontSize: 14,
               color: AppColors.textSecondaryLight,
@@ -444,6 +474,54 @@ class _FriendListState extends ConsumerState<FriendList> {
             name: friend.username,
           );
           ref.read(messagesProvider.notifier).fetchFriendMessages(friend.id);
+        },
+      ),
+    );
+  }
+
+  Widget _buildGroupTile(Group group, ChatSelection selection) {
+    final isSelected = selection.type == ChatType.group && selection.id == group.id;
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+      decoration: BoxDecoration(
+        color: isSelected ? AppColors.primary.withAlpha(20) : Colors.transparent,
+        borderRadius: AppRadius.mdAll,
+      ),
+      child: ListTile(
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.primary : AppColors.primary.withAlpha(20),
+            borderRadius: AppRadius.smAll,
+          ),
+          child: Icon(
+            Icons.group,
+            size: 18,
+            color: isSelected ? Colors.white : AppColors.primary,
+          ),
+        ),
+        title: Text(
+          group.name,
+          style: GoogleFonts.inter(
+            fontSize: 14,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+          ),
+        ),
+        subtitle: Text(
+          '${group.memberCount ?? 0} 人',
+          style: GoogleFonts.inter(
+            fontSize: 12,
+            color: AppThemeHelper.textSecondary(context),
+          ),
+        ),
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.mdAll),
+        onTap: () {
+          ref.read(chatSelectionProvider.notifier).state = ChatSelection(
+            type: ChatType.group,
+            id: group.id,
+            name: group.name,
+          );
+          ref.read(messagesProvider.notifier).fetchGroupMessages(group.id);
         },
       ),
     );

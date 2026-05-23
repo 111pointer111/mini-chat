@@ -155,7 +155,13 @@ class _ScheduledTasksScreenState extends ConsumerState<ScheduledTasksScreen> {
   Widget build(BuildContext context) {
     final tasksAsync = ref.watch(tasksProvider);
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        context.go('/');
+      },
+      child: Scaffold(
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -230,6 +236,7 @@ class _ScheduledTasksScreenState extends ConsumerState<ScheduledTasksScreen> {
           );
         },
       ),
+    ),
     );
   }
 

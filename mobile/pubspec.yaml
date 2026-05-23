@@ -25,6 +25,8 @@ dependencies:
   # Local storage
   shared_preferences: ^2.2.3
   flutter_secure_storage: ^9.0.0
+  sqflite: ^2.2.8
+  path: ^1.8.0
 
   # UI
   cached_network_image: ^3.3.1

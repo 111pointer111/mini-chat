@@ -5,6 +5,7 @@ class Group {
   final String? avatar;
   final bool assistantEnabled;
   final String? role; // 'owner', 'admin', 'member'
+  final int? memberCount;
   final String createdAt;
 
   Group({
@@ -14,6 +15,7 @@ class Group {
     this.avatar,
     this.assistantEnabled = false,
     this.role,
+    this.memberCount,
     required this.createdAt,
   });
 
@@ -25,6 +27,7 @@ class Group {
       avatar: json['avatar'] as String?,
       assistantEnabled: json['assistantEnabled'] as bool? ?? false,
       role: json['role'] as String?,
+      memberCount: json['memberCount'] as int?,
       createdAt: json['createdAt'] as String? ?? '',
     );
   }
@@ -37,6 +40,7 @@ class Group {
       if (avatar != null) 'avatar': avatar,
       'assistantEnabled': assistantEnabled,
       if (role != null) 'role': role,
+      if (memberCount != null) 'memberCount': memberCount,
       'createdAt': createdAt,
     };
   }

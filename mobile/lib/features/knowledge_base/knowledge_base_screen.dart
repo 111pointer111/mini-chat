@@ -223,7 +223,13 @@ class _KnowledgeBaseScreenState extends ConsumerState<KnowledgeBaseScreen> {
         ? ref.watch(kbSearchResultsProvider)
         : ref.watch(kbDocumentsProvider);
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        context.go('/');
+      },
+      child: Scaffold(
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -386,6 +392,7 @@ class _KnowledgeBaseScreenState extends ConsumerState<KnowledgeBaseScreen> {
           ),
         ],
       ),
+    ),
     );
   }
 
