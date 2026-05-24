@@ -155,6 +155,8 @@ services:
     restart: always
     ports:
       - "8080:80"
+    volumes:
+      - /opt/minichat/downloads:/usr/share/nginx/html/downloads:ro
     depends_on:
       - backend
     networks:

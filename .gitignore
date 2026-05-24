@@ -63,5 +63,10 @@ coverage/
 uploads/
 */uploads/
 
+# Android signing files
+mobile/android/key.properties
+mobile/android/app/*.jks
+mobile/android/app/*.keystore
+
 # Dev logs and docs (personal notes)
 docs/

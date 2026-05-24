@@ -65,6 +65,7 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
             cd /opt/minichat
+            mkdir -p /opt/minichat/downloads
             # Update env vars in .env.production (always update to latest values)
             sed -i '/^DOCKERHUB_USERNAME=/d' .env.production 2>/dev/null || true
             sed -i '/^MONGO_USER=/d' .env.production 2>/dev/null || true
@@ -104,3 +105,173 @@ jobs:
             docker compose -f docker-compose.prod.yml --env-file .env.production up -d --force-recreate
             docker image prune -f
             echo "Deployment completed at $(date)"
+
+  build-android-apk:
+    name: Build and Upload Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read mobile version
+        id: mobile-version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          current_version="$(sed -n 's/^version:[[:space:]]*//p' mobile/pubspec.yaml | head -n 1)"
+          if [[ -z "$current_version" || "$current_version" != *"+"* ]]; then
+            echo "mobile/pubspec.yaml must use version: x.y.z+n"
+            exit 1
+          fi
+
+          should_build="false"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            should_build="true"
+          elif [[ "${{ github.event.before }}" == "0000000000000000000000000000000000000000" ]]; then
+            should_build="true"
+          elif git diff --name-only "${{ github.event.before }}" "$GITHUB_SHA" -- mobile | grep -q .; then
+            should_build="true"
+          fi
+
+          version_name="${current_version%%+*}"
+          pubspec_version_code="${current_version##*+}"
+          if ! [[ "$pubspec_version_code" =~ ^[0-9]+$ ]]; then
+            echo "versionCode must be numeric: $pubspec_version_code"
+            exit 1
+          fi
+          if ! [[ "$GITHUB_RUN_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "GITHUB_RUN_NUMBER must be numeric: $GITHUB_RUN_NUMBER"
+            exit 1
+          fi
+          version_code="$GITHUB_RUN_NUMBER"
+          if (( pubspec_version_code > version_code )); then
+            version_code="$pubspec_version_code"
+          fi
+          version="$version_name+$version_code"
+
+          echo "should_build=$should_build" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "version_name=$version_name" >> "$GITHUB_OUTPUT"
+          echo "version_code=$version_code" >> "$GITHUB_OUTPUT"
+          echo "apk_name=mini-chat-$version.apk" >> "$GITHUB_OUTPUT"
+
+      - name: Skip APK build
+        if: steps.mobile-version.outputs.should_build != 'true'
+        run: echo "No mobile changes detected. Skipping Android APK build."
+
+      - name: Setup Java
+        if: steps.mobile-version.outputs.should_build == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Flutter
+        if: steps.mobile-version.outputs.should_build == 'true'
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.24.5"
+          channel: stable
+          cache: true
+
+      - name: Restore Android signing files
+        if: steps.mobile-version.outputs.should_build == 'true'
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD ANDROID_STORE_PASSWORD; do
+            if [[ -z "${!name}" ]]; then
+              echo "$name is required"
+              exit 1
+            fi
+          done
+
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > mobile/android/app/minichat-release.jks
+          cat > mobile/android/key.properties <<EOF
+          storePassword=$ANDROID_STORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=app/minichat-release.jks
+          EOF
+
+      - name: Build release APK
+        if: steps.mobile-version.outputs.should_build == 'true'
+        working-directory: mobile
+        env:
+          VERSION_NAME: ${{ steps.mobile-version.outputs.version_name }}
+          VERSION_CODE: ${{ steps.mobile-version.outputs.version_code }}
+          MOBILE_API_HOST: ${{ vars.MOBILE_API_HOST || 'mini-chat.cn' }}
+          ANDROID_DOWNLOAD_BASE_URL: ${{ vars.ANDROID_DOWNLOAD_BASE_URL || 'https://mini-chat.cn/downloads' }}
+        run: |
+          set -euo pipefail
+          export GRADLE_OPTS="-Dorg.gradle.java.home=$JAVA_HOME ${GRADLE_OPTS:-}"
+          flutter pub get
+          flutter build apk --release \
+            --build-name="$VERSION_NAME" \
+            --build-number="$VERSION_CODE" \
+            --dart-define=API_HOST="$MOBILE_API_HOST" \
+            --dart-define=USE_HTTPS=true \
+            --dart-define=ANDROID_DOWNLOAD_BASE_URL="$ANDROID_DOWNLOAD_BASE_URL"
+
+      - name: Prepare release files
+        if: steps.mobile-version.outputs.should_build == 'true'
+        shell: bash
+        env:
+          VERSION: ${{ steps.mobile-version.outputs.version }}
+          VERSION_NAME: ${{ steps.mobile-version.outputs.version_name }}
+          VERSION_CODE: ${{ steps.mobile-version.outputs.version_code }}
+          APK_NAME: ${{ steps.mobile-version.outputs.apk_name }}
+          ANDROID_DOWNLOAD_BASE_URL: ${{ vars.ANDROID_DOWNLOAD_BASE_URL || 'https://mini-chat.cn/downloads' }}
+          ANDROID_FORCE_UPDATE: ${{ vars.ANDROID_FORCE_UPDATE || 'false' }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p mobile/build/apk-release
+          download_base="${ANDROID_DOWNLOAD_BASE_URL%/}"
+          force_update="$(printf '%s' "$ANDROID_FORCE_UPDATE" | tr '[:upper:]' '[:lower:]')"
+          if [[ "$force_update" != "true" ]]; then
+            force_update="false"
+          fi
+
+          cp mobile/build/app/outputs/flutter-apk/app-release.apk "mobile/build/apk-release/$APK_NAME"
+          cat > mobile/build/apk-release/version.json <<EOF
+          {
+            "platform": "android",
+            "latestVersionCode": $VERSION_CODE,
+            "latestVersionName": "$VERSION_NAME",
+            "apkUrl": "$download_base/$APK_NAME",
+            "releaseNotes": "更新到 $VERSION",
+            "forceUpdate": $force_update,
+            "publishedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          }
+          EOF
+
+      - name: Ensure download directory exists
+        if: steps.mobile-version.outputs.should_build == 'true'
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: mkdir -p /opt/minichat/downloads
+
+      - name: Upload APK release files
+        if: steps.mobile-version.outputs.should_build == 'true'
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          source: "mobile/build/apk-release/*"
+          target: "/opt/minichat/downloads/"
+          strip_components: 3

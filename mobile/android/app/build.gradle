@@ -4,6 +4,13 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin"
 }
 
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file("key.properties")
+def requiredKeystoreKeys = ["storePassword", "keyPassword", "keyAlias", "storeFile"]
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
     namespace = "com.minichat.mobile"
     compileSdk = 35
@@ -25,11 +32,39 @@ android {
         versionName = flutter.versionName
     }
 
-    buildTypes {
+    signingConfigs {
         release {
-            signingConfig = signingConfigs.debug
+            if (keystorePropertiesFile.exists()) {
+                keyAlias = keystoreProperties["keyAlias"]
+                keyPassword = keystoreProperties["keyPassword"]
+                storeFile = rootProject.file(keystoreProperties["storeFile"])
+                storePassword = keystoreProperties["storePassword"]
+            }
         }
     }
+
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.release
+        }
+    }
+}
+
+tasks.matching { it.name == "validateSigningRelease" }.configureEach {
+    doFirst {
+        if (!keystorePropertiesFile.exists()) {
+            throw new GradleException("Missing android/key.properties for release signing")
+        }
+
+        def missingKeys = requiredKeystoreKeys.findAll { !keystoreProperties[it] }
+        if (!missingKeys.isEmpty()) {
+            throw new GradleException("Missing release signing values: ${missingKeys.join(', ')}")
+        }
+    }
+}
+
+dependencies {
+    implementation "androidx.core:core-ktx:1.13.1"
 }
 
 flutter {

@@ -10,11 +10,18 @@ class AppConstants {
     'USE_HTTPS',
     defaultValue: true,
   );
+  static const String _androidDownloadBaseUrl = String.fromEnvironment(
+    'ANDROID_DOWNLOAD_BASE_URL',
+    defaultValue: '',
+  );
 
   static String get _scheme => _useHttps ? 'https' : 'http';
   static String get apiBaseUrl => '$_scheme://$_apiHost/api';
   static String get socketUrl => '$_scheme://$_apiHost';
   static String get uploadsBaseUrl => '$_scheme://$_apiHost';
+  static String get androidDownloadBaseUrl => _androidDownloadBaseUrl.isNotEmpty
+      ? _androidDownloadBaseUrl
+      : '$uploadsBaseUrl/downloads';
 
   // AI assistant fixed ObjectId
   static const String aiAssistantId = '000000000000000000000001';

@@ -8,6 +8,7 @@ import '../../core/theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/chat_provider.dart';
 import '../../data/models/message.dart';
+import 'widgets/app_update_prompt.dart';
 import 'widgets/friend_list.dart';
 import 'widgets/chat_window.dart';
 
@@ -20,11 +21,15 @@ class DashboardScreen extends ConsumerStatefulWidget {
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   final List<StreamSubscription> _subscriptions = [];
+  bool _didCheckForUpdate = false;
 
   @override
   void initState() {
     super.initState();
     _setupSocketListeners();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_checkForUpdate());
+    });
   }
 
   @override
@@ -81,6 +86,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     context.go('/login');
   }
 
+  Future<void> _checkForUpdate() async {
+    if (_didCheckForUpdate) return;
+    _didCheckForUpdate = true;
+    await AppUpdatePrompt.check(context, ref);
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authStateProvider).valueOrNull;
@@ -95,7 +106,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       },
       child: Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        appBar: hasChat ? _buildChatAppBar(user, selection) : _buildMainAppBar(user),
+        appBar: hasChat
+            ? _buildChatAppBar(user, selection)
+            : _buildMainAppBar(user),
         body: hasChat ? const ChatWindow() : const FriendList(),
       ),
     );
@@ -138,7 +151,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new, size: 20),
         onPressed: () {
-          ref.read(chatSelectionProvider.notifier).state = const ChatSelection();
+          ref.read(chatSelectionProvider.notifier).state =
+              const ChatSelection();
         },
       ),
       title: Text(
