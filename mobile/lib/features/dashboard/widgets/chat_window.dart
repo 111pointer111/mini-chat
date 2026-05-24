@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../core/constants.dart';
 import '../../../core/theme.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/chat_provider.dart';
 import '../../../data/models/message.dart';
 import '../../../shared/utils/time_utils.dart';
+import '../../../shared/widgets/ai_message_content.dart';
 
 class ChatWindow extends ConsumerStatefulWidget {
   const ChatWindow({super.key});
@@ -77,7 +79,9 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
         'content': content,
         'type': 'text',
       }, ack: (ack) {
-        if (ack != null && ack is Map<String, dynamic> && ack['success'] == true) {
+        if (ack != null &&
+            ack is Map<String, dynamic> &&
+            ack['success'] == true) {
           final realId = ack['messageId'] as String? ?? tempId;
           ref.read(messagesProvider.notifier).updateMessageId(tempId, realId);
         }
@@ -99,7 +103,9 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
         'content': content,
         'type': 'text',
       }, ack: (ack) {
-        if (ack != null && ack is Map<String, dynamic> && ack['success'] == true) {
+        if (ack != null &&
+            ack is Map<String, dynamic> &&
+            ack['success'] == true) {
           final realId = ack['messageId'] as String? ?? tempId;
           ref.read(messagesProvider.notifier).updateMessageId(tempId, realId);
         }
@@ -224,7 +230,8 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
     );
   }
 
-  Widget _buildMessagesList(AsyncValue<List<Message>> messagesAsync, MessagesNotifier messagesNotifier) {
+  Widget _buildMessagesList(AsyncValue<List<Message>> messagesAsync,
+      MessagesNotifier messagesNotifier) {
     return messagesAsync.when(
       data: (messages) {
         if (messages.isEmpty) {
@@ -239,9 +246,14 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
         return ListView.builder(
           controller: _scrollController,
           padding: const EdgeInsets.all(16),
-          itemCount: messages.length + (messagesNotifier.hasMore || messagesNotifier.loadError != null ? 1 : 0),
+          itemCount: messages.length +
+              (messagesNotifier.hasMore || messagesNotifier.loadError != null
+                  ? 1
+                  : 0),
           itemBuilder: (context, index) {
-            if (index == 0 && (messagesNotifier.hasMore || messagesNotifier.loadError != null)) {
+            if (index == 0 &&
+                (messagesNotifier.hasMore ||
+                    messagesNotifier.loadError != null)) {
               if (messagesNotifier.isLoadingMore) {
                 return const Padding(
                   padding: EdgeInsets.symmetric(vertical: 12),
@@ -262,11 +274,13 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Center(
                     child: TextButton.icon(
-                      onPressed: () => ref.read(messagesProvider.notifier).loadMore(),
+                      onPressed: () =>
+                          ref.read(messagesProvider.notifier).loadMore(),
                       icon: const Icon(Icons.refresh, size: 16),
                       label: Text(
                         messagesNotifier.loadError!,
-                        style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondaryLight),
+                        style: GoogleFonts.inter(
+                            fontSize: 12, color: AppColors.textSecondaryLight),
                       ),
                     ),
                   ),
@@ -341,7 +355,9 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
             onPressed: () {
               final sel = ref.read(chatSelectionProvider);
               if (sel.type == ChatType.friend && sel.id != null) {
-                ref.read(messagesProvider.notifier).fetchFriendMessages(sel.id!);
+                ref
+                    .read(messagesProvider.notifier)
+                    .fetchFriendMessages(sel.id!);
               } else if (sel.type == ChatType.group && sel.id != null) {
                 ref.read(messagesProvider.notifier).fetchGroupMessages(sel.id!);
               }
@@ -428,7 +444,8 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
                 ],
               ),
               child: IconButton(
-                icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                icon: const Icon(Icons.send_rounded,
+                    color: Colors.white, size: 20),
                 onPressed: _sendMessage,
               ),
             ),
@@ -440,10 +457,13 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
 
   Widget _buildMessageBubble(Message message) {
     final currentUser = ref.read(authStateProvider).valueOrNull;
+    final selection = ref.read(chatSelectionProvider);
     final isMe = message.senderId == currentUser?.id;
     final isSystem = message.type == 'system';
+    final isAIMessage = message.senderId == AppConstants.aiAssistantId ||
+        selection.type == ChatType.task;
 
-    if (isSystem) {
+    if (isSystem && !isAIMessage) {
       return Center(
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -468,10 +488,12 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 4),
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.7,
+          maxWidth: MediaQuery.of(context).size.width *
+              (selection.type == ChatType.task ? 0.9 : 0.7),
         ),
         child: Column(
-          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          crossAxisAlignment:
+              isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             if (!isMe && message.senderUser != null)
               Padding(
@@ -515,17 +537,25 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
                 ],
               ),
               child: Column(
-                crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    message.content,
-                    style: GoogleFonts.inter(
-                      color: isMe
-                          ? Colors.white
-                          : AppThemeHelper.textPrimary(context),
-                      fontSize: 14,
+                  if (isAIMessage)
+                    AIMessageContent(
+                      content: message.content,
+                      textColor: AppThemeHelper.textPrimary(context),
+                      accentColor: AppColors.primary,
+                    )
+                  else
+                    Text(
+                      message.content,
+                      style: GoogleFonts.inter(
+                        color: isMe
+                            ? Colors.white
+                            : AppThemeHelper.textPrimary(context),
+                        fontSize: 14,
+                      ),
                     ),
-                  ),
                   const SizedBox(height: 4),
                   Text(
                     formatMessageTime(message.createdAt),

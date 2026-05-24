@@ -95,6 +95,7 @@ mini-chat/
 │   │   ├── routes/             # Express 路由
 │   │   ├── services/           # AI、知识库、任务、MCP 等业务逻辑
 │   │   ├── socket/             # Socket.io 实时通讯
+│   │   ├── workers/            # BullMQ 后台任务入口
 │   │   ├── monitoring/         # 指标收集、告警管理、通知渠道
 │   │   ├── scripts/            # 初始化脚本
 │   │   └── utils/              # PostgreSQL / Redis / schema 工具
@@ -173,6 +174,11 @@ npm run dev
 ```
 
 后端默认运行在 `http://localhost:5000`。
+定时任务需要另开一个终端启动 Worker：
+
+```bash
+npm run dev:worker
+```
 
 ### 4. 配置前端
 

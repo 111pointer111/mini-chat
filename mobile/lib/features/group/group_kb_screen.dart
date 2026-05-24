@@ -9,6 +9,7 @@ import '../../providers/group_provider.dart';
 import '../../providers/chat_provider.dart';
 import '../../shared/utils/toast_utils.dart';
 import '../../shared/utils/error_utils.dart';
+import '../../shared/utils/picked_file_utils.dart';
 
 class GroupKBScreen extends ConsumerStatefulWidget {
   final String groupId;
@@ -34,22 +35,24 @@ class _GroupKBScreenState extends ConsumerState<GroupKBScreen> {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: [
-        'pdf', 'docx', 'txt', 'md', 'csv', 'xlsx', 'pptx', 'html'
+        'pdf',
+        'docx',
+        'txt',
+        'md',
+        'csv',
+        'xlsx',
+        'pptx',
+        'html'
       ],
-      withData: true,
     );
     if (result == null || result.files.isEmpty) return;
 
     final file = result.files.first;
-    if (file.bytes == null) return;
 
     setState(() => _uploading = true);
     try {
       final formData = FormData.fromMap({
-        'file': MultipartFile.fromBytes(
-          file.bytes!,
-          filename: file.name,
-        ),
+        'file': await multipartFileFromPickedFile(file),
         'title': file.name,
       });
       await ref
@@ -62,7 +65,9 @@ class _GroupKBScreenState extends ConsumerState<GroupKBScreen> {
             .refresh(widget.groupId);
       }
     } catch (e) {
-      if (mounted) showErrorToast(context, extractErrorMessage(e, fallback: '上传失败'));
+      if (mounted) {
+        showErrorToast(context, extractErrorMessage(e, fallback: '上传失败'));
+      }
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
@@ -131,7 +136,9 @@ class _GroupKBScreenState extends ConsumerState<GroupKBScreen> {
               .refresh(widget.groupId);
         }
       } catch (e) {
-        if (mounted) showErrorToast(context, extractErrorMessage(e, fallback: '导入失败'));
+        if (mounted) {
+          showErrorToast(context, extractErrorMessage(e, fallback: '导入失败'));
+        }
       }
     }
   }
@@ -162,7 +169,9 @@ class _GroupKBScreenState extends ConsumerState<GroupKBScreen> {
             .deleteDocument(widget.groupId, doc.id);
         if (mounted) showSuccessToast(context, '已删除');
       } catch (e) {
-        if (mounted) showErrorToast(context, extractErrorMessage(e, fallback: '删除失败'));
+        if (mounted) {
+          showErrorToast(context, extractErrorMessage(e, fallback: '删除失败'));
+        }
       }
     }
   }
@@ -204,8 +213,7 @@ class _GroupKBScreenState extends ConsumerState<GroupKBScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final docsAsync =
-        ref.watch(groupKBDocumentsProvider(widget.groupId));
+    final docsAsync = ref.watch(groupKBDocumentsProvider(widget.groupId));
 
     return Scaffold(
       appBar: AppBar(
@@ -226,22 +234,18 @@ class _GroupKBScreenState extends ConsumerState<GroupKBScreen> {
       body: Stack(
         children: [
           docsAsync.when(
-            loading: () =>
-                const Center(child: CircularProgressIndicator()),
+            loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.error_outline,
-                      size: 48, color: Colors.red[300]),
+                  Icon(Icons.error_outline, size: 48, color: Colors.red[300]),
                   const SizedBox(height: 12),
-                  Text('加载失败',
-                      style: TextStyle(color: Colors.grey[600])),
+                  Text('加载失败', style: TextStyle(color: Colors.grey[600])),
                   const SizedBox(height: 16),
                   ElevatedButton.icon(
                     onPressed: () => ref
-                        .read(groupKBDocumentsProvider(widget.groupId)
-                            .notifier)
+                        .read(groupKBDocumentsProvider(widget.groupId).notifier)
                         .refresh(widget.groupId),
                     icon: const Icon(Icons.refresh),
                     label: const Text('重试'),
@@ -259,27 +263,25 @@ class _GroupKBScreenState extends ConsumerState<GroupKBScreen> {
                           size: 64, color: Colors.grey[300]),
                       const SizedBox(height: 16),
                       Text('暂无文档',
-                          style: TextStyle(
-                              fontSize: 16, color: Colors.grey[500])),
+                          style:
+                              TextStyle(fontSize: 16, color: Colors.grey[500])),
                       const SizedBox(height: 8),
                       Text('点击右上角按钮上传文件或导入 URL',
-                          style: TextStyle(
-                              fontSize: 13, color: Colors.grey[400])),
+                          style:
+                              TextStyle(fontSize: 13, color: Colors.grey[400])),
                     ],
                   ),
                 );
               }
               return RefreshIndicator(
                 onRefresh: () => ref
-                    .read(
-                        groupKBDocumentsProvider(widget.groupId).notifier)
+                    .read(groupKBDocumentsProvider(widget.groupId).notifier)
                     .refresh(widget.groupId),
                 child: ListView.separated(
                   padding: const EdgeInsets.all(16),
                   itemCount: docs.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) =>
-                      _buildDocCard(docs[index]),
+                  itemBuilder: (context, index) => _buildDocCard(docs[index]),
                 ),
               );
             },
@@ -385,8 +387,8 @@ class _GroupKBScreenState extends ConsumerState<GroupKBScreen> {
               ),
             ),
             IconButton(
-              icon: Icon(Icons.delete_outline,
-                  size: 20, color: Colors.red[400]),
+              icon:
+                  Icon(Icons.delete_outline, size: 20, color: Colors.red[400]),
               tooltip: '删除',
               onPressed: () => _deleteDocument(doc),
             ),

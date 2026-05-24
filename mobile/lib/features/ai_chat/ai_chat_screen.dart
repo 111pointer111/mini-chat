@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
@@ -16,7 +15,9 @@ import '../../core/constants.dart';
 import '../../data/models/conversation.dart';
 import '../../providers/ai_chat_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../shared/utils/ai_message_parser.dart';
 import '../../shared/widgets/ai_provider_selector.dart';
+import '../../shared/widgets/ai_message_content.dart';
 import '../../shared/utils/error_utils.dart';
 import '../../shared/utils/toast_utils.dart';
 
@@ -84,8 +85,9 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
       socketService.onAIStreamError.listen((data) {
         String errorMsg = 'AI 响应出错';
         if (data is Map<String, dynamic>) {
-          errorMsg =
-              data['error'] as String? ?? data['message'] as String? ?? errorMsg;
+          errorMsg = data['error'] as String? ??
+              data['message'] as String? ??
+              errorMsg;
         } else if (data is String) {
           errorMsg = data;
         }
@@ -197,46 +199,38 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
           images: imageUrls.isNotEmpty ? imageUrls : null,
           conversationId: conversationId,
         );
-        
+
         final data = res.data;
         if (data != null) {
           final reply = data['reply'] as String? ?? '';
           final newConversationId = data['conversationId'] as String?;
-          
-          // 解析回复内容
-          String mainContent = reply;
-          String? thinkingContent;
-          
-          // 提取 thinking 标签
-          final thinkRegex = RegExp(r'<think>([\s\S]*?)</think>', dotAll: true);
-          final thinkMatch = thinkRegex.firstMatch(reply);
-          if (thinkMatch != null) {
-            thinkingContent = thinkMatch.group(1)?.trim();
-            mainContent = reply.replaceAll(thinkRegex, '').trim();
-          }
-          
+
+          final parsedReply = parseAIMessageContent(reply);
+
           // 更新消息
           final messages = ref.read(aiMessagesProvider);
           if (messages.isNotEmpty) {
             final lastMessage = messages.last;
             ref.read(aiMessagesProvider.notifier).setMessages(
-              messages.sublist(0, messages.length - 1)..add(
-                AIChatMessage(
-                  id: lastMessage.id,
-                  role: 'assistant',
-                  content: mainContent,
-                  thinking: thinkingContent,
-                  createdAt: DateTime.now().toIso8601String(),
-                ),
-              ),
-            );
+                  messages.sublist(0, messages.length - 1)
+                    ..add(
+                      AIChatMessage(
+                        id: lastMessage.id,
+                        role: 'assistant',
+                        content: parsedReply.content,
+                        thinking: parsedReply.thinking,
+                        createdAt: DateTime.now().toIso8601String(),
+                      ),
+                    ),
+                );
           }
-          
+
           // 更新会话 ID
           if (newConversationId != null && conversationId == null) {
-            ref.read(currentConversationIdProvider.notifier).state = newConversationId;
+            ref.read(currentConversationIdProvider.notifier).state =
+                newConversationId;
           }
-          
+
           _loadConversations();
         }
       } catch (e) {
@@ -245,15 +239,16 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
         if (messages.isNotEmpty) {
           final lastMessage = messages.last;
           ref.read(aiMessagesProvider.notifier).setMessages(
-            messages.sublist(0, messages.length - 1)..add(
-              AIChatMessage(
-                id: lastMessage.id,
-                role: 'assistant',
-                content: '❌ 发送失败，请检查网络连接后重试',
-                createdAt: DateTime.now().toIso8601String(),
-              ),
-            ),
-          );
+                messages.sublist(0, messages.length - 1)
+                  ..add(
+                    AIChatMessage(
+                      id: lastMessage.id,
+                      role: 'assistant',
+                      content: '❌ 发送失败，请检查网络连接后重试',
+                      createdAt: DateTime.now().toIso8601String(),
+                    ),
+                  ),
+              );
         }
       } finally {
         ref.read(isStreamingProvider.notifier).state = false;
@@ -281,8 +276,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
           ? (data['messages'] as List<dynamic>? ?? [])
           : (data as List<dynamic>);
       final messages = messagesList
-          .map(
-              (e) => AIChatMessage.fromBackend(e as Map<String, dynamic>))
+          .map((e) => AIChatMessage.fromBackend(e as Map<String, dynamic>))
           .toList();
       ref.read(aiMessagesProvider.notifier).setMessages(messages);
       _scrollToBottom();
@@ -295,8 +289,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
 
   Future<void> _createConversation() async {
     try {
-      final conv =
-          await ref.read(conversationsProvider.notifier).create();
+      final conv = await ref.read(conversationsProvider.notifier).create();
       _selectConversation(conv.id);
     } catch (e) {
       if (mounted) {
@@ -359,9 +352,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
             onPressed: () {
               final name = _renameController.text.trim();
               if (name.isNotEmpty) {
-                ref
-                    .read(conversationsProvider.notifier)
-                    .rename(convId, name);
+                ref.read(conversationsProvider.notifier).rename(convId, name);
               }
               Navigator.pop(ctx);
             },
@@ -391,120 +382,120 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
         context.go('/');
       },
       child: Scaffold(
-      key: _scaffoldKey,
-      drawer: Drawer(
-        child: _buildConversationDrawer(
-            conversationsAsync, currentConvId),
-      ),
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.menu),
-          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+        key: _scaffoldKey,
+        drawer: Drawer(
+          child: _buildConversationDrawer(conversationsAsync, currentConvId),
         ),
-        title: GestureDetector(
-          onTap: () => _scaffoldKey.currentState?.openDrawer(),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Flexible(
-                child: Text(
-                  currentConvName?.isNotEmpty == true
-                      ? currentConvName!
-                      : (currentConvId != null ? '对话中' : 'AI 智能助手'),
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 16),
-                ),
-              ),
-              const Icon(Icons.keyboard_arrow_down, size: 20),
-            ],
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.menu),
+            onPressed: () => _scaffoldKey.currentState?.openDrawer(),
           ),
-        ),
-        actions: [
-          const AIProviderSelector(),
-          const SizedBox(width: 8),
-          IconButton(
-            icon: const Icon(Icons.add_comment_outlined),
-            tooltip: '新对话',
-            onPressed: _createConversation,
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          if (currentConvId == null && messages.isEmpty)
-            Expanded(
-              child: Center(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(28),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [AppColors.primary, AppColors.accent],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.primary.withAlpha(77),
-                              blurRadius: 20,
-                              offset: const Offset(0, 8),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(Icons.auto_awesome,
-                            size: 48, color: Colors.white),
-                      ),
-                      const SizedBox(height: 28),
-                      Text(
-                        'AI 智能助手',
-                        style: GoogleFonts.poppins(
-                            fontSize: 24, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        '发送消息开始对话，支持图片和 Markdown',
-                        style: GoogleFonts.inter(
-                            fontSize: 15, color: AppColors.textSecondaryLight),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 36),
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
-                        alignment: WrapAlignment.center,
-                        children: [
-                          _buildSuggestionChip('帮我写一段代码'),
-                          _buildSuggestionChip('解释一下量子力学'),
-                          _buildSuggestionChip('推荐几本好书'),
-                          _buildSuggestionChip('今天的新闻'),
-                        ],
-                      ),
-                    ],
+          title: GestureDetector(
+            onTap: () => _scaffoldKey.currentState?.openDrawer(),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    currentConvName?.isNotEmpty == true
+                        ? currentConvName!
+                        : (currentConvId != null ? '对话中' : 'AI 智能助手'),
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 16),
                   ),
                 ),
-              ),
-            )
-          else
-            Expanded(
-              child: ListView.builder(
-                controller: _scrollController,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                itemCount: messages.length,
-                itemBuilder: (context, index) => _buildMessageBubble(
-                    messages[index],
-                    isStreaming && index == messages.length - 1),
-              ),
+                const Icon(Icons.keyboard_arrow_down, size: 20),
+              ],
             ),
-          _buildInputBar(isStreaming),
-        ],
+          ),
+          actions: [
+            const AIProviderSelector(),
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(Icons.add_comment_outlined),
+              tooltip: '新对话',
+              onPressed: _createConversation,
+            ),
+          ],
+        ),
+        body: Column(
+          children: [
+            if (currentConvId == null && messages.isEmpty)
+              Expanded(
+                child: Center(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(28),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [AppColors.primary, AppColors.accent],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primary.withAlpha(77),
+                                blurRadius: 20,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(Icons.auto_awesome,
+                              size: 48, color: Colors.white),
+                        ),
+                        const SizedBox(height: 28),
+                        Text(
+                          'AI 智能助手',
+                          style: GoogleFonts.poppins(
+                              fontSize: 24, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          '发送消息开始对话，支持图片和 Markdown',
+                          style: GoogleFonts.inter(
+                              fontSize: 15,
+                              color: AppColors.textSecondaryLight),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 36),
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          alignment: WrapAlignment.center,
+                          children: [
+                            _buildSuggestionChip('帮我写一段代码'),
+                            _buildSuggestionChip('解释一下量子力学'),
+                            _buildSuggestionChip('推荐几本好书'),
+                            _buildSuggestionChip('今天的新闻'),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              )
+            else
+              Expanded(
+                child: ListView.builder(
+                  controller: _scrollController,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  itemCount: messages.length,
+                  itemBuilder: (context, index) => _buildMessageBubble(
+                      messages[index],
+                      isStreaming && index == messages.length - 1),
+                ),
+              ),
+            _buildInputBar(isStreaming),
+          ],
+        ),
       ),
-    ),
     );
   }
 
@@ -515,8 +506,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
       child: Column(
         children: [
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             decoration: BoxDecoration(
               color: AppThemeHelper.isDark(context)
                   ? AppColors.surfaceDark
@@ -555,7 +545,8 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
                     borderRadius: AppRadius.smAll,
                   ),
                   child: IconButton(
-                    icon: const Icon(Icons.add, size: 20, color: AppColors.primary),
+                    icon: const Icon(Icons.add,
+                        size: 20, color: AppColors.primary),
                     onPressed: _createConversation,
                     tooltip: '新建会话',
                   ),
@@ -610,8 +601,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
                             : Colors.transparent,
                         borderRadius: AppRadius.mdAll,
                         border: isSelected
-                            ? Border.all(
-                                color: AppColors.primary.withAlpha(40))
+                            ? Border.all(color: AppColors.primary.withAlpha(40))
                             : null,
                       ),
                       child: ListTile(
@@ -629,9 +619,8 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
                           child: Icon(
                             Icons.chat_bubble_outline,
                             size: 16,
-                            color: isSelected
-                                ? Colors.white
-                                : AppColors.primary,
+                            color:
+                                isSelected ? Colors.white : AppColors.primary,
                           ),
                         ),
                         title: Text(
@@ -640,9 +629,8 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.inter(
                             fontSize: 14,
-                            fontWeight: isSelected
-                                ? FontWeight.w600
-                                : FontWeight.w500,
+                            fontWeight:
+                                isSelected ? FontWeight.w600 : FontWeight.w500,
                             color: isSelected
                                 ? AppColors.primary
                                 : AppColors.textPrimaryLight,
@@ -661,17 +649,14 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
                             : null,
                         onTap: () => _selectConversation(conv.id),
                         trailing: PopupMenuButton<String>(
-                          icon: Icon(Icons.more_horiz,
+                          icon: const Icon(Icons.more_horiz,
                               size: 16, color: AppTheme.textSecondary),
                           padding: EdgeInsets.zero,
                           onSelected: (value) {
                             switch (value) {
                               case 'rename':
-                                _showRenameDialog(
-                                    conv.id,
-                                    conv.name.isEmpty
-                                        ? '新对话'
-                                        : conv.name);
+                                _showRenameDialog(conv.id,
+                                    conv.name.isEmpty ? '新对话' : conv.name);
                                 break;
                               case 'delete':
                                 _deleteConversation(conv.id);
@@ -708,8 +693,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
                   },
                 );
               },
-              loading: () =>
-                  const Center(child: CircularProgressIndicator()),
+              loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -717,8 +701,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
                     const Icon(Icons.error_outline,
                         size: 40, color: Colors.red),
                     const SizedBox(height: 8),
-                    const Text('加载失败',
-                        style: TextStyle(color: Colors.red)),
+                    const Text('加载失败', style: TextStyle(color: Colors.red)),
                     const SizedBox(height: 8),
                     TextButton(
                       onPressed: _loadConversations,
@@ -749,8 +732,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
     );
   }
 
-  Widget _buildMessageBubble(
-      AIChatMessage message, bool isCurrentlyStreaming) {
+  Widget _buildMessageBubble(AIChatMessage message, bool isCurrentlyStreaming) {
     final isUser = message.role == 'user';
 
     return Padding(
@@ -767,25 +749,22 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
                 gradient: AppTheme.primaryGradient,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.auto_awesome,
-                  size: 18, color: Colors.white),
+              child:
+                  const Icon(Icons.auto_awesome, size: 18, color: Colors.white),
             ),
             const SizedBox(width: 10),
           ],
           Flexible(
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               constraints: BoxConstraints(
                 maxWidth: MediaQuery.of(context).size.width * 0.75,
               ),
               decoration: BoxDecoration(
                 color: isUser ? AppTheme.primary : Colors.white,
                 borderRadius: BorderRadius.circular(16).copyWith(
-                  bottomRight:
-                      isUser ? const Radius.circular(4) : null,
-                  bottomLeft:
-                      !isUser ? const Radius.circular(4) : null,
+                  bottomRight: isUser ? const Radius.circular(4) : null,
+                  bottomLeft: !isUser ? const Radius.circular(4) : null,
                 ),
                 boxShadow: [
                   BoxShadow(
@@ -798,8 +777,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (message.images != null &&
-                      message.images!.isNotEmpty) ...[
+                  if (message.images != null && message.images!.isNotEmpty) ...[
                     Wrap(
                       spacing: 6,
                       runSpacing: 6,
@@ -827,53 +805,24 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
                     ),
                     const SizedBox(height: 8),
                   ],
-                  if (message.thinking != null &&
-                      message.thinking!.isNotEmpty)
-                    _ThinkingBlock(thinking: message.thinking!),
                   if (isUser)
                     Text(
                       message.content,
-                      style: const TextStyle(
-                          color: Colors.white, fontSize: 14),
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
                     )
                   else
-                    MarkdownBody(
-                      data: message.content.isEmpty &&
-                              isCurrentlyStreaming
+                    AIMessageContent(
+                      content: message.content.isEmpty && isCurrentlyStreaming
                           ? '▋'
                           : message.content,
-                      styleSheet: MarkdownStyleSheet(
-                        p: const TextStyle(
-                            fontSize: 14, color: AppTheme.textPrimary),
-                        code: TextStyle(
-                          fontSize: 13,
-                          color: AppTheme.primary,
-                          backgroundColor:
-                              AppTheme.primary.withAlpha(15),
-                        ),
-                        codeblockDecoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        blockquoteDecoration: BoxDecoration(
-                          border: Border(
-                              left: BorderSide(
-                                  color: AppTheme.primary, width: 3)),
-                        ),
-                        blockquotePadding:
-                            const EdgeInsets.only(left: 12),
-                        h1: const TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.bold),
-                        h2: const TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold),
-                        h3: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w600),
-                      ),
+                      thinking: message.thinking,
+                      textColor: AppTheme.textPrimary,
+                      accentColor: AppTheme.primary,
                     ),
                   if (!isUser &&
                       message.content.isEmpty &&
                       !isCurrentlyStreaming)
-                    Text(
+                    const Text(
                       '(空回复)',
                       style: TextStyle(
                         fontSize: 14,
@@ -890,8 +839,8 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
             CircleAvatar(
               radius: 18,
               backgroundColor: AppTheme.primary.withAlpha(25),
-              child: const Icon(Icons.person,
-                  size: 20, color: AppTheme.primary),
+              child:
+                  const Icon(Icons.person, size: 20, color: AppTheme.primary),
             ),
           ],
         ],
@@ -936,8 +885,8 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
                           decoration: BoxDecoration(
                             borderRadius: AppRadius.mdAll,
                             image: DecorationImage(
-                              image: FileImage(
-                                  File(_pendingImages[index].path)),
+                              image:
+                                  FileImage(File(_pendingImages[index].path)),
                               fit: BoxFit.cover,
                             ),
                           ),
@@ -982,9 +931,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
                           )
                         : const Icon(Icons.image_outlined,
                             color: AppColors.primary),
-                    onPressed: isStreaming || _isUploading
-                        ? null
-                        : _pickImages,
+                    onPressed: isStreaming || _isUploading ? null : _pickImages,
                     tooltip: '上传图片',
                   ),
                 ),
@@ -1007,8 +954,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
                         color: AppThemeHelper.textPrimary(context),
                       ),
                       decoration: InputDecoration(
-                        hintText:
-                            isStreaming ? 'AI 正在回复...' : '输入消息...',
+                        hintText: isStreaming ? 'AI 正在回复...' : '输入消息...',
                         hintStyle: GoogleFonts.inter(
                           color: AppThemeHelper.textSecondary(context),
                           fontSize: 14,
@@ -1067,78 +1013,6 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _ThinkingBlock extends StatefulWidget {
-  final String thinking;
-
-  const _ThinkingBlock({required this.thinking});
-
-  @override
-  State<_ThinkingBlock> createState() => _ThinkingBlockState();
-}
-
-class _ThinkingBlockState extends State<_ThinkingBlock> {
-  bool _expanded = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: Colors.amber.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.amber.shade200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            onTap: () => setState(() => _expanded = !_expanded),
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(8)),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 6),
-              child: Row(
-                children: [
-                  Icon(
-                    _expanded
-                        ? Icons.keyboard_arrow_down
-                        : Icons.keyboard_arrow_right,
-                    size: 18,
-                    color: Colors.amber.shade800,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '思考过程',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.amber.shade800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (_expanded)
-            Padding(
-              padding: const EdgeInsets.only(
-                  left: 10, right: 10, bottom: 8),
-              child: Text(
-                widget.thinking,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade700,
-                  height: 1.5,
-                ),
-              ),
-            ),
-        ],
       ),
     );
   }

@@ -7,6 +7,7 @@ import Conversation from '../models/Conversation';
 import Message from '../models/Message';
 import redis from '../utils/redis';
 import { AI_ASSISTANT_ID } from '../scripts/initAdmin';
+import { syncTaskScheduler, updateTaskNextRunAt } from '../services/taskScheduleService';
 
 const PENDING_TASK_TTL = 300; // 5 minutes in seconds
 
@@ -124,8 +125,10 @@ export const chat = async (req: Request, res: Response) => {
                     timezone: timezone || 'Asia/Shanghai',
                     conversationId: conversation._id,
                 });
+                updateTaskNextRunAt(task);
 
                 await task.save();
+                await syncTaskScheduler(task);
                 await clearPendingTask(userId);
 
                 const replyContent = `✅ 定时任务创建成功！

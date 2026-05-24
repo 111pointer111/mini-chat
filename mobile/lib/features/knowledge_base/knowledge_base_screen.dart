@@ -9,6 +9,7 @@ import '../../core/theme.dart';
 import '../../data/models/kb_document.dart';
 import '../../providers/kb_provider.dart';
 import '../../shared/utils/error_utils.dart';
+import '../../shared/utils/picked_file_utils.dart';
 import '../../shared/utils/toast_utils.dart';
 
 class KnowledgeBaseScreen extends ConsumerStatefulWidget {
@@ -58,22 +59,24 @@ class _KnowledgeBaseScreenState extends ConsumerState<KnowledgeBaseScreen> {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: [
-        'pdf', 'docx', 'txt', 'md', 'csv', 'xlsx', 'pptx', 'html'
+        'pdf',
+        'docx',
+        'txt',
+        'md',
+        'csv',
+        'xlsx',
+        'pptx',
+        'html'
       ],
-      withData: true,
     );
     if (result == null || result.files.isEmpty) return;
 
     final file = result.files.first;
-    if (file.bytes == null) return;
 
     setState(() => _uploading = true);
     try {
       final formData = FormData.fromMap({
-        'file': MultipartFile.fromBytes(
-          file.bytes!,
-          filename: file.name,
-        ),
+        'file': await multipartFileFromPickedFile(file),
         'title': file.name,
       });
       await ref.read(kbApiProvider).uploadDocument(formData);
@@ -82,7 +85,9 @@ class _KnowledgeBaseScreenState extends ConsumerState<KnowledgeBaseScreen> {
         ref.read(kbDocumentsProvider.notifier).refresh();
       }
     } catch (e) {
-      if (mounted) showErrorToast(context, extractErrorMessage(e, fallback: '上传失败'));
+      if (mounted) {
+        showErrorToast(context, extractErrorMessage(e, fallback: '上传失败'));
+      }
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
@@ -148,7 +153,9 @@ class _KnowledgeBaseScreenState extends ConsumerState<KnowledgeBaseScreen> {
           ref.read(kbDocumentsProvider.notifier).refresh();
         }
       } catch (e) {
-        if (mounted) showErrorToast(context, extractErrorMessage(e, fallback: '导入失败'));
+        if (mounted) {
+          showErrorToast(context, extractErrorMessage(e, fallback: '导入失败'));
+        }
       }
     }
   }
@@ -177,7 +184,9 @@ class _KnowledgeBaseScreenState extends ConsumerState<KnowledgeBaseScreen> {
         await ref.read(kbDocumentsProvider.notifier).deleteDocument(doc.id);
         if (mounted) showSuccessToast(context, '已删除');
       } catch (e) {
-        if (mounted) showErrorToast(context, extractErrorMessage(e, fallback: '删除失败'));
+        if (mounted) {
+          showErrorToast(context, extractErrorMessage(e, fallback: '删除失败'));
+        }
       }
     }
   }
@@ -230,169 +239,165 @@ class _KnowledgeBaseScreenState extends ConsumerState<KnowledgeBaseScreen> {
         context.go('/');
       },
       child: Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/'),
-        ),
-        title: const Text('知识库'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.upload_file),
-            tooltip: '上传文件',
-            onPressed: _uploading ? null : _pickAndUpload,
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => context.go('/'),
           ),
-          IconButton(
-            icon: const Icon(Icons.link),
-            tooltip: '导入 URL',
-            onPressed: _showImportUrlDialog,
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // 搜索栏
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: '搜索文档...',
-                prefixIcon: const Icon(Icons.search, size: 20),
-                suffixIcon: _isSearching
-                    ? IconButton(
-                        icon: const Icon(Icons.clear, size: 20),
-                        onPressed: _clearSearch,
-                      )
-                    : null,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                filled: true,
-                fillColor: Colors.grey[50],
-              ),
-              onChanged: _onSearchChanged,
+          title: const Text('知识库'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.upload_file),
+              tooltip: '上传文件',
+              onPressed: _uploading ? null : _pickAndUpload,
             ),
-          ),
-          // 文档列表
-          Expanded(
-            child: Stack(
-              children: [
-                docsAsync.when(
-                  loading: () =>
-                      const Center(child: CircularProgressIndicator()),
-                  error: (e, _) => Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.error_outline,
-                            size: 48, color: Colors.red[300]),
-                        const SizedBox(height: 12),
-                        Text('加载失败',
-                            style: TextStyle(color: Colors.grey[600])),
-                        const SizedBox(height: 16),
-                        ElevatedButton.icon(
-                          onPressed: _isSearching
-                              ? () => ref
-                                  .read(kbSearchResultsProvider.notifier)
-                                  .search(_searchController.text)
-                              : () => ref
-                                  .read(kbDocumentsProvider.notifier)
-                                  .refresh(),
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('重试'),
-                        ),
-                      ],
-                    ),
+            IconButton(
+              icon: const Icon(Icons.link),
+              tooltip: '导入 URL',
+              onPressed: _showImportUrlDialog,
+            ),
+          ],
+        ),
+        body: Column(
+          children: [
+            // 搜索栏
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: '搜索文档...',
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  suffixIcon: _isSearching
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 20),
+                          onPressed: _clearSearch,
+                        )
+                      : null,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey[300]!),
                   ),
-                  data: (data) {
-                    final docs = _isSearching
-                        ? data as List<KBDocument>
-                        : (data as KBDocumentState).documents;
-                    final pagination =
-                        _isSearching ? null : (data as KBDocumentState).pagination;
-
-                    if (docs.isEmpty) {
-                      return Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.library_books_outlined,
-                                size: 64, color: Colors.grey[300]),
-                            const SizedBox(height: 16),
-                            Text(
-                                _isSearching ? '未找到匹配的文档' : '暂无文档',
-                                style: TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.grey[500])),
-                            const SizedBox(height: 8),
-                            if (!_isSearching)
-                              Text('点击右上角按钮上传文件或导入 URL',
-                                  style: TextStyle(
-                                      fontSize: 13,
-                                      color: Colors.grey[400])),
-                          ],
-                        ),
-                      );
-                    }
-                    return RefreshIndicator(
-                      onRefresh: () => _isSearching
-                          ? ref
-                              .read(kbSearchResultsProvider.notifier)
-                              .search(_searchController.text)
-                          : ref
-                              .read(kbDocumentsProvider.notifier)
-                              .refresh(),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                  filled: true,
+                  fillColor: Colors.grey[50],
+                ),
+                onChanged: _onSearchChanged,
+              ),
+            ),
+            // 文档列表
+            Expanded(
+              child: Stack(
+                children: [
+                  docsAsync.when(
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
+                    error: (e, _) => Center(
                       child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Expanded(
-                            child: ListView.separated(
-                              padding:
-                                  const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                              itemCount: docs.length,
-                              separatorBuilder: (_, __) =>
-                                  const SizedBox(height: 8),
-                              itemBuilder: (context, index) =>
-                                  _buildDocCard(docs[index]),
-                            ),
+                          Icon(Icons.error_outline,
+                              size: 48, color: Colors.red[300]),
+                          const SizedBox(height: 12),
+                          Text('加载失败',
+                              style: TextStyle(color: Colors.grey[600])),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: _isSearching
+                                ? () => ref
+                                    .read(kbSearchResultsProvider.notifier)
+                                    .search(_searchController.text)
+                                : () => ref
+                                    .read(kbDocumentsProvider.notifier)
+                                    .refresh(),
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('重试'),
                           ),
-                          // 分页控件
-                          if (!_isSearching &&
-                              pagination != null &&
-                              pagination.totalPages > 1)
-                            _buildPagination(pagination),
                         ],
                       ),
-                    );
-                  },
-                ),
-                if (_uploading)
-                  Container(
-                    color: Colors.black.withAlpha(80),
-                    child: const Center(
-                      child: Card(
-                        child: Padding(
-                          padding: EdgeInsets.all(24),
+                    ),
+                    data: (data) {
+                      final docs = _isSearching
+                          ? data as List<KBDocument>
+                          : (data as KBDocumentState).documents;
+                      final pagination = _isSearching
+                          ? null
+                          : (data as KBDocumentState).pagination;
+
+                      if (docs.isEmpty) {
+                        return Center(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              CircularProgressIndicator(),
-                              SizedBox(height: 16),
-                              Text('正在上传...'),
+                              Icon(Icons.library_books_outlined,
+                                  size: 64, color: Colors.grey[300]),
+                              const SizedBox(height: 16),
+                              Text(_isSearching ? '未找到匹配的文档' : '暂无文档',
+                                  style: TextStyle(
+                                      fontSize: 16, color: Colors.grey[500])),
+                              const SizedBox(height: 8),
+                              if (!_isSearching)
+                                Text('点击右上角按钮上传文件或导入 URL',
+                                    style: TextStyle(
+                                        fontSize: 13, color: Colors.grey[400])),
                             ],
+                          ),
+                        );
+                      }
+                      return RefreshIndicator(
+                        onRefresh: () => _isSearching
+                            ? ref
+                                .read(kbSearchResultsProvider.notifier)
+                                .search(_searchController.text)
+                            : ref.read(kbDocumentsProvider.notifier).refresh(),
+                        child: Column(
+                          children: [
+                            Expanded(
+                              child: ListView.separated(
+                                padding:
+                                    const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                                itemCount: docs.length,
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(height: 8),
+                                itemBuilder: (context, index) =>
+                                    _buildDocCard(docs[index]),
+                              ),
+                            ),
+                            // 分页控件
+                            if (!_isSearching &&
+                                pagination != null &&
+                                pagination.totalPages > 1)
+                              _buildPagination(pagination),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                  if (_uploading)
+                    Container(
+                      color: Colors.black.withAlpha(80),
+                      child: const Center(
+                        child: Card(
+                          child: Padding(
+                            padding: EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                CircularProgressIndicator(),
+                                SizedBox(height: 16),
+                                Text('正在上传...'),
+                              ],
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
     );
   }
 
@@ -519,8 +524,8 @@ class _KnowledgeBaseScreenState extends ConsumerState<KnowledgeBaseScreen> {
               ),
             ),
             IconButton(
-              icon: Icon(Icons.delete_outline,
-                  size: 20, color: Colors.red[400]),
+              icon:
+                  Icon(Icons.delete_outline, size: 20, color: Colors.red[400]),
               tooltip: '删除',
               onPressed: () => _deleteDocument(doc),
             ),

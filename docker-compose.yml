@@ -89,6 +89,43 @@ services:
     networks:
       - minichat-network
 
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: npm run start:worker
+    volumes:
+      - uploads_data:/app/uploads
+    environment:
+      - NODE_ENV=development
+      - MONGODB_URI=mongodb://admin:password@mongodb:27017/mini-chat?authSource=admin
+      - JWT_SECRET=dev_secret_key
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=minichat
+      - ALIYUN_ACCESS_KEY_ID=
+      - ALIYUN_ACCESS_KEY_SECRET=
+      - ALIYUN_SMS_SIGN_NAME=
+      - ALIYUN_SMS_TEMPLATE_CODE=
+      - AI_BASE_URL=
+      - AI_API_KEY=
+      - AI_MODEL=
+      - AI_EMBEDDING_BASE_URL=
+      - AI_EMBEDDING_API_KEY=
+      - AI_EMBEDDING_MODEL=
+      - AI_EMBEDDING_DIMENSIONS=
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - minichat-network
+
   frontend:
     build:
       context: ./frontend

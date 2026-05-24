@@ -37,14 +37,14 @@ Tests are not configured. Validation is done via `npm run build` + `npm run lint
 
 ### Backend (`backend/src/`)
 
-**Entry**: `server.ts` — Express 5 + HTTP server + Socket.IO initialization. All middleware, routes, and services are bootstrapped here. Monitoring is set up via `setupMonitoring(app)`.
+**Entry**: `server.ts` — Express 5 + HTTP server + Socket.IO initialization. All middleware, routes, and services are bootstrapped here. Monitoring is set up via `setupMonitoring(app)`. Scheduled task execution is split into `workers/scheduledTaskWorker.ts`.
 
 **Routing**: All routes live in `routes/` and are mounted on `/api/*`. Auth middleware (`middleware/authMiddleware.ts`) protects routes via JWT. Admin routes (e.g., `/admin/ai-providers`) require the `admin` role.
 
 **Socket.IO** (`socket/socketHandler.ts`): Singleton pattern — exports `getIO()`. Socket auth uses JWT from `socket.handshake.auth.token`. Handles:
 - Friend chat: `join_room`, `send_message` events
 - Group chat: group room management, `@小助手` / `@AI` / `@助手` mention triggers AI response with streaming
-- Scheduled task results pushed via WebSocket
+- Scheduled task results are published by the worker through Redis pub/sub, then pushed by the API over WebSocket
 
 **AI Service** (`services/aiService.ts`): OpenAI-compatible client with streaming support. Config resolution order:
 1. User's `selectedAIProvider` (from `AIProvider` collection, field: `modelName`)
@@ -58,7 +58,7 @@ Supports any OpenAI-compatible API. Includes Agent ReAct loop with tool calling 
 
 **MCP Service** (`services/mcpService.ts`): Connects to external MCP servers via Streamable HTTP or SSE transports. Supports Bearer Token and custom header auth. Tool discovery, caching, and execution integrated with AI chat.
 
-**Scheduled Tasks**: `taskScheduler.ts` uses `node-cron` (every minute) to check enabled tasks against user timezone. `taskQueue.ts` uses BullMQ with Redis for job processing. Task plugins are registered via a `TaskRegistry` pattern. AI content is generated via `aiService`, results pushed via WebSocket.
+**Scheduled Tasks**: `taskScheduleService.ts` syncs Mongo `ScheduledTask` records into BullMQ JobScheduler entries. `workers/scheduledTaskWorker.ts` reconciles schedules on startup and executes due jobs through `taskQueue.ts`. AI content is generated via `aiService`; results are published through Redis pub/sub and pushed by the API over WebSocket.
 
 **Monitoring** (`monitoring/`): Self-contained module — `metrics.ts` (sliding window collector), `alertManager.ts` (state machine: normal→pending→firing→resolved), `alertNotifier.ts` (WebSocket, email, console channels), `middleware.ts` (auto HTTP metrics). Initialized via `setupMonitoring(app)` in `server.ts`.
 

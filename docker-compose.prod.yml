@@ -105,6 +105,49 @@ services:
     networks:
       - minichat-network
 
+  # 后端 Worker（定时任务调度与执行）
+  worker:
+    image: ${DOCKERHUB_USERNAME}/minichat-backend:latest
+    container_name: minichat-worker
+    restart: always
+    command: npm run start:worker
+    volumes:
+      - uploads_data:/app/uploads
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://${MONGO_USER:-admin}:${MONGO_PASSWORD:-changeme}@mongodb:27017/mini-chat?authSource=admin
+      - JWT_SECRET=${JWT_SECRET}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-minichat}
+      - ALIYUN_ACCESS_KEY_ID=${ALIYUN_ACCESS_KEY_ID}
+      - ALIYUN_ACCESS_KEY_SECRET=${ALIYUN_ACCESS_KEY_SECRET}
+      - ALIYUN_SMS_SIGN_NAME=${ALIYUN_SMS_SIGN_NAME}
+      - ALIYUN_SMS_TEMPLATE_CODE=${ALIYUN_SMS_TEMPLATE_CODE}
+      - ALIYUN_SMTP_HOST=${ALIYUN_SMTP_HOST}
+      - ALIYUN_SMTP_PORT=${ALIYUN_SMTP_PORT}
+      - ALIYUN_SMTP_USER=${ALIYUN_SMTP_USER}
+      - ALIYUN_SMTP_PASS=${ALIYUN_SMTP_PASS}
+      - ALIYUN_SMTP_SENDER_NAME=${ALIYUN_SMTP_SENDER_NAME}
+      - AI_BASE_URL=${AI_BASE_URL}
+      - AI_API_KEY=${AI_API_KEY}
+      - AI_MODEL=${AI_MODEL}
+      - AI_EMBEDDING_BASE_URL=${AI_EMBEDDING_BASE_URL}
+      - AI_EMBEDDING_API_KEY=${AI_EMBEDDING_API_KEY}
+      - AI_EMBEDDING_MODEL=${AI_EMBEDDING_MODEL}
+      - AI_EMBEDDING_DIMENSIONS=${AI_EMBEDDING_DIMENSIONS}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - minichat-network
+
   # 前端 (从 Docker Hub 拉取)
   frontend:
     image: ${DOCKERHUB_USERNAME}/minichat-frontend:latest

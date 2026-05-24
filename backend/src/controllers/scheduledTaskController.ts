@@ -3,7 +3,7 @@ import ScheduledTask, { TaskType } from '../models/ScheduledTask';
 import Conversation from '../models/Conversation';
 import Message from '../models/Message';
 import mongoose from 'mongoose';
-import { computeNextRunTime } from '../utils/timeUtils';
+import { removeTaskScheduler, syncTaskScheduler, updateTaskNextRunAt } from '../services/taskScheduleService';
 
 const PRESET_TASK_NAMES: Record<string, string> = {
     github_trending: 'GitHub 热点',
@@ -106,14 +106,9 @@ export const updateScheduledTask = async (req: Request, res: Response) => {
             task.conversationId = conversation._id;
         }
 
-        // Recompute next run time when task is enabled or time changed
-        if (task.enabled) {
-            task.nextRunAt = computeNextRunTime(task.pushTime, task.timezone || 'Asia/Shanghai');
-        } else {
-            task.nextRunAt = null;
-        }
-
+        updateTaskNextRunAt(task);
         await task.save();
+        await syncTaskScheduler(task);
 
         res.json({
             _id: task._id,
@@ -158,10 +153,11 @@ export const createCustomTask = async (req: Request, res: Response) => {
             pushTime: pushTime || '09:00',
             timezone: timezone || 'Asia/Shanghai',
             conversationId: conversation._id,
-            nextRunAt: computeNextRunTime(pushTime || '09:00', timezone || 'Asia/Shanghai'),
         });
+        updateTaskNextRunAt(task);
 
         await task.save();
+        await syncTaskScheduler(task);
 
         res.json({
             _id: task._id,
@@ -183,7 +179,7 @@ export const createCustomTask = async (req: Request, res: Response) => {
 export const updateCustomTask = async (req: Request, res: Response) => {
     try {
         const userId = req.user!.id;
-        const taskId = req.params.taskId;
+        const taskId = String(req.params.taskId);
         const { enabled, pushTime, timezone } = req.body;
 
         const task = await ScheduledTask.findOne({ 
@@ -200,13 +196,9 @@ export const updateCustomTask = async (req: Request, res: Response) => {
         if (pushTime) task.pushTime = pushTime;
         if (timezone) task.timezone = timezone;
 
-        if (task.enabled) {
-            task.nextRunAt = computeNextRunTime(task.pushTime, task.timezone || 'Asia/Shanghai');
-        } else {
-            task.nextRunAt = null;
-        }
-
+        updateTaskNextRunAt(task);
         await task.save();
+        await syncTaskScheduler(task);
 
         res.json({
             _id: task._id,
@@ -228,7 +220,7 @@ export const updateCustomTask = async (req: Request, res: Response) => {
 export const deleteCustomTask = async (req: Request, res: Response) => {
     try {
         const userId = req.user!.id;
-        const taskId = req.params.taskId;
+        const taskId = String(req.params.taskId);
 
         const task = await ScheduledTask.findOne({ 
             _id: taskId, 
@@ -247,6 +239,9 @@ export const deleteCustomTask = async (req: Request, res: Response) => {
         }
 
         await ScheduledTask.findByIdAndDelete(taskId);
+        await removeTaskScheduler(taskId).catch((error) => {
+            console.warn(`[ScheduledTask] Failed to remove scheduler for ${taskId}:`, error);
+        });
 
         res.json({ message: 'Task deleted successfully' });
     } catch (error) {

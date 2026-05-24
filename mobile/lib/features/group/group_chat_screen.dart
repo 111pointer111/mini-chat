@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/theme.dart';
@@ -11,6 +10,7 @@ import '../../data/models/message.dart';
 import '../../providers/group_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../shared/utils/toast_utils.dart';
+import '../../shared/widgets/ai_message_content.dart';
 
 class GroupChatScreen extends ConsumerStatefulWidget {
   final String groupId;
@@ -45,7 +45,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
   }
 
   void _loadMessages() {
-    ref.read(groupMessagesProvider(widget.groupId).notifier).refresh(widget.groupId);
+    ref
+        .read(groupMessagesProvider(widget.groupId).notifier)
+        .refresh(widget.groupId);
   }
 
   void _setupSocketListeners() {
@@ -58,7 +60,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
     _groupMessageSub = socketService.onReceiveGroupMessage.listen((data) {
       final groupId = data['groupId'] as String?;
       if (groupId == widget.groupId) {
-        ref.read(groupMessagesProvider(widget.groupId).notifier).addMessage(data);
+        ref
+            .read(groupMessagesProvider(widget.groupId).notifier)
+            .addMessage(data);
         _scrollToBottom();
       }
     });
@@ -98,16 +102,17 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
     final tempId = 'temp-${DateTime.now().millisecondsSinceEpoch}';
     final tempMessage = {
       '_id': tempId,
-      'sender': user != null
-          ? {'_id': user.id, 'username': user.username}
-          : tempId,
+      'sender':
+          user != null ? {'_id': user.id, 'username': user.username} : tempId,
       'groupId': widget.groupId,
       'content': content,
       'type': 'text',
       'createdAt': DateTime.now().toIso8601String(),
     };
 
-    ref.read(groupMessagesProvider(widget.groupId).notifier).addMessage(tempMessage);
+    ref
+        .read(groupMessagesProvider(widget.groupId).notifier)
+        .addMessage(tempMessage);
     _scrollToBottom();
 
     // 发送消息
@@ -149,97 +154,95 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
         context.go('/');
       },
       child: Scaffold(
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              group?.name ?? '群聊',
-              style: const TextStyle(fontSize: 16),
-            ),
-            if (group?.assistantEnabled == true)
-              const Text(
-                '输入 @小助手 可提问',
-                style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+        appBar: AppBar(
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                group?.name ?? '群聊',
+                style: const TextStyle(fontSize: 16),
               ),
+              if (group?.assistantEnabled == true)
+                const Text(
+                  '输入 @小助手 可提问',
+                  style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                ),
+            ],
+          ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.library_books_outlined),
+              tooltip: '群知识库',
+              onPressed: () =>
+                  context.push('/groups/${widget.groupId}/knowledge-base'),
+            ),
+            IconButton(
+              icon: const Icon(Icons.settings_outlined),
+              tooltip: '群设置',
+              onPressed: () =>
+                  context.push('/groups/${widget.groupId}/settings'),
+            ),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.library_books_outlined),
-            tooltip: '群知识库',
-            onPressed: () =>
-                context.push('/groups/${widget.groupId}/knowledge-base'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            tooltip: '群设置',
-            onPressed: () =>
-                context.push('/groups/${widget.groupId}/settings'),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // 消息列表
-          Expanded(
-            child: messagesAsync.when(
-              loading: () =>
-                  const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.error_outline,
-                        size: 48, color: Colors.red[300]),
-                    const SizedBox(height: 12),
-                    Text('加载消息失败',
-                        style: TextStyle(color: Colors.grey[600])),
-                    const SizedBox(height: 16),
-                    ElevatedButton.icon(
-                      onPressed: _loadMessages,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('重试'),
-                    ),
-                  ],
+        body: Column(
+          children: [
+            // 消息列表
+            Expanded(
+              child: messagesAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.error_outline,
+                          size: 48, color: Colors.red[300]),
+                      const SizedBox(height: 12),
+                      Text('加载消息失败', style: TextStyle(color: Colors.grey[600])),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: _loadMessages,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('重试'),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              data: (messages) {
-                if (messages.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.chat_bubble_outline,
-                            size: 64, color: Colors.grey[300]),
-                        const SizedBox(height: 16),
-                        Text('暂无消息',
-                            style: TextStyle(
-                                fontSize: 16, color: Colors.grey[500])),
-                        const SizedBox(height: 8),
-                        Text('发送第一条消息开始群聊',
-                            style: TextStyle(
-                                fontSize: 13, color: Colors.grey[400])),
-                      ],
-                    ),
+                data: (messages) {
+                  if (messages.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.chat_bubble_outline,
+                              size: 64, color: Colors.grey[300]),
+                          const SizedBox(height: 16),
+                          Text('暂无消息',
+                              style: TextStyle(
+                                  fontSize: 16, color: Colors.grey[500])),
+                          const SizedBox(height: 8),
+                          Text('发送第一条消息开始群聊',
+                              style: TextStyle(
+                                  fontSize: 13, color: Colors.grey[400])),
+                        ],
+                      ),
+                    );
+                  }
+                  return ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    itemCount: messages.length,
+                    itemBuilder: (context, index) =>
+                        _buildMessageBubble(messages[index], currentUser),
                   );
-                }
-                return ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 12),
-                  itemCount: messages.length,
-                  itemBuilder: (context, index) =>
-                      _buildMessageBubble(messages[index], currentUser),
-                );
-              },
+                },
+              ),
             ),
-          ),
-          // 输入栏
-          _buildInputBar(),
-        ],
+            // 输入栏
+            _buildInputBar(),
+          ],
+        ),
       ),
-    ),
     );
   }
 
@@ -261,15 +264,14 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
           if (!isMe) ...[
             CircleAvatar(
               radius: 16,
-              backgroundColor:
-                  isAssistant ? Colors.indigo.shade50 : AppTheme.primary.withAlpha(25),
+              backgroundColor: isAssistant
+                  ? Colors.indigo.shade50
+                  : AppTheme.primary.withAlpha(25),
               child: isAssistant
                   ? Icon(Icons.smart_toy,
                       size: 16, color: Colors.indigo.shade400)
                   : Text(
-                      senderName.isNotEmpty
-                          ? senderName[0].toUpperCase()
-                          : '?',
+                      senderName.isNotEmpty ? senderName[0].toUpperCase() : '?',
                       style: const TextStyle(
                           fontSize: 12, color: AppTheme.primary),
                     ),
@@ -296,8 +298,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                     ),
                   ),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   constraints: BoxConstraints(
                     maxWidth: MediaQuery.of(context).size.width * 0.75,
                   ),
@@ -310,10 +312,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                                 ? AppColors.surfaceDark
                                 : Colors.white),
                     borderRadius: BorderRadius.circular(16).copyWith(
-                      bottomRight:
-                          isMe ? const Radius.circular(4) : null,
-                      bottomLeft:
-                          !isMe ? const Radius.circular(4) : null,
+                      bottomRight: isMe ? const Radius.circular(4) : null,
+                      bottomLeft: !isMe ? const Radius.circular(4) : null,
                     ),
                     boxShadow: [
                       BoxShadow(
@@ -324,26 +324,15 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                     ],
                   ),
                   child: isAssistant
-                      ? MarkdownBody(
-                          data: content,
-                          styleSheet: MarkdownStyleSheet(
-                            p: TextStyle(
-                              fontSize: 14,
-                              color: Colors.indigo.shade900,
-                            ),
-                            code: TextStyle(
-                              fontSize: 13,
-                              color: Colors.indigo.shade700,
-                              backgroundColor: Colors.indigo.shade100,
-                            ),
-                          ),
+                      ? AIMessageContent(
+                          content: content,
+                          textColor: Colors.indigo.shade900,
+                          accentColor: Colors.indigo.shade600,
                         )
                       : Text(
                           content,
                           style: TextStyle(
-                            color: isMe
-                                ? Colors.white
-                                : AppTheme.textPrimary,
+                            color: isMe ? Colors.white : AppTheme.textPrimary,
                             fontSize: 14,
                           ),
                         ),
@@ -352,8 +341,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
-                      DateFormat('HH:mm').format(
-                          DateTime.parse(createdAt).toLocal()),
+                      DateFormat('HH:mm')
+                          .format(DateTime.parse(createdAt).toLocal()),
                       style: const TextStyle(
                           fontSize: 10, color: AppTheme.textSecondary),
                     ),
@@ -370,8 +359,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                 currentUser?.username.isNotEmpty == true
                     ? currentUser!.username[0].toUpperCase()
                     : '?',
-                style:
-                    const TextStyle(fontSize: 12, color: AppTheme.primary),
+                style: const TextStyle(fontSize: 12, color: AppTheme.primary),
               ),
             ),
           ],
@@ -387,8 +375,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: Colors.white.withAlpha(200),
-          border: Border(
-              top: BorderSide(color: Colors.grey.shade200, width: 0.5)),
+          border:
+              Border(top: BorderSide(color: Colors.grey.shade200, width: 0.5)),
         ),
         child: Row(
           children: [
@@ -406,16 +394,15 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                   ),
                   filled: true,
                   fillColor: Colors.grey.shade100,
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 10),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 ),
                 onSubmitted: (_) => _sendMessage(),
               ),
             ),
             const SizedBox(width: 8),
             CircleAvatar(
-              backgroundColor:
-                  _isSending ? Colors.grey : AppTheme.primary,
+              backgroundColor: _isSending ? Colors.grey : AppTheme.primary,
               child: IconButton(
                 icon: _isSending
                     ? const SizedBox(
@@ -426,9 +413,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                           color: Colors.white,
                         ),
                       )
-                    : const Icon(Icons.send,
-                        color: Colors.white, size: 20),
-                  onPressed: _isSending ? null : _sendMessage,
+                    : const Icon(Icons.send, color: Colors.white, size: 20),
+                onPressed: _isSending ? null : _sendMessage,
               ),
             ),
           ],

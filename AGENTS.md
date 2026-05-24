@@ -13,6 +13,7 @@ Full-stack chat platform: real-time 1v1 messaging, AI chat, scheduled task push,
 docker compose up -d                          # MongoDB + Redis + PostgreSQL
 cp backend/.env.example backend/.env           # then edit as needed
 npm --prefix backend install && npm --prefix backend run dev    # port 5000
+npm --prefix backend run dev:worker                             # scheduled task worker
 npm --prefix frontend install && npm --prefix frontend run dev  # port 5173
 ```
 
@@ -21,8 +22,10 @@ npm --prefix frontend install && npm --prefix frontend run dev  # port 5173
 | Context | Command | Notes |
 |---------|---------|-------|
 | backend | `npm run dev` | nodemon on `src/server.ts` |
+| backend | `npm run dev:worker` | nodemon on `src/workers/scheduledTaskWorker.ts` |
 | backend | `npm run build` | `tsc` only (no bundler) |
 | backend | `npm start` | run compiled `dist/server.js` |
+| backend | `npm run start:worker` | run compiled `dist/workers/scheduledTaskWorker.js` |
 | frontend | `npm run dev` | Vite dev server, proxies `/api` + `/socket.io` + `/uploads` → :5000 |
 | frontend | `npm run build` | `tsc -b && vite build` |
 | frontend | `npm run lint` | ESLint 9 flat config |
@@ -35,7 +38,7 @@ No test framework configured (`test: echo "Error: no test specified"`). Verifica
 
 ### Backend
 
-**Entry**: `backend/src/server.ts` — Express + HTTP server + Socket.IO init. Boots scheduler and worker inline.
+**Entry**: `backend/src/server.ts` — Express + HTTP server + Socket.IO init. Scheduled tasks run in a separate BullMQ worker entry at `backend/src/workers/scheduledTaskWorker.ts`.
 
 **Routes**: All under `/api/*`. Auth middleware (`middleware/authMiddleware.ts`) via JWT `Bearer` header. Route files: `authRoutes`, `userRoutes`, `friendRoutes`, `messageRoutes`, `scheduledTaskRoutes`, `aiChatRoutes`, `aiProviderRoutes`, `uploadRoutes`, `kbRoutes`, `groupRoutes`, `mcpRoutes`.
 
@@ -46,7 +49,7 @@ No test framework configured (`test: echo "Error: no test specified"`). Verifica
 2. Default `AIProvider` (`isDefault: true`)
 3. Environment variables (`AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL`)
 
-**Scheduled Tasks**: `node-cron` (every minute) checks user timezone. BullMQ + Redis for job processing. Task plugin registry pattern.
+**Scheduled Tasks**: BullMQ JobScheduler + Redis stores per-task schedules. The API syncs schedulers when tasks are created/updated/deleted; the worker reconciles enabled Mongo tasks on startup and executes due jobs.
 
 **Admin bootstrap**: `scripts/initAdmin.ts` runs on MongoDB connect. Default: `admin / admin123` (configurable via `ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars).
 

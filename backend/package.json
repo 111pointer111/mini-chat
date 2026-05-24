@@ -7,8 +7,10 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "typecheck": "tsc --noEmit",
     "start": "node dist/server.js",
+    "start:worker": "node dist/workers/scheduledTaskWorker.js",
     "build": "tsc",
-    "dev": "nodemon src/server.ts"
+    "dev": "nodemon src/server.ts",
+    "dev:worker": "nodemon src/workers/scheduledTaskWorker.ts"
   },
   "keywords": [],
   "author": "",
@@ -38,7 +40,6 @@
     "@langchain/openai": "^1.4.4",
     "@langchain/textsplitters": "^1.0.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@types/node-cron": "^3.0.11",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.69.2",
     "cheerio": "^1.2.0",
@@ -53,7 +54,6 @@
     "mongoose": "^9.2.0",
     "morgan": "^1.10.1",
     "multer": "^2.1.1",
-    "node-cron": "^4.2.1",
     "nodemailer": "^8.0.7",
     "openai": "^6.22.0",
     "pg": "^8.20.0",

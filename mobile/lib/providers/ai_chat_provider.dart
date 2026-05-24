@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/api/ai_chat_api.dart';
 import '../data/api/upload_api.dart';
 import '../data/models/conversation.dart';
+import '../shared/utils/ai_message_parser.dart';
 import 'auth_provider.dart';
 
 final aiChatApiProvider = Provider<AIChatApi>((ref) {
@@ -13,12 +14,13 @@ final uploadApiProvider = Provider<UploadApi>((ref) {
   return UploadApi(ref.watch(apiClientProvider));
 });
 
-final conversationsProvider =
-    AsyncNotifierProvider.autoDispose<ConversationsNotifier, List<Conversation>>(() {
+final conversationsProvider = AsyncNotifierProvider.autoDispose<
+    ConversationsNotifier, List<Conversation>>(() {
   return ConversationsNotifier();
 });
 
-class ConversationsNotifier extends AutoDisposeAsyncNotifier<List<Conversation>> {
+class ConversationsNotifier
+    extends AutoDisposeAsyncNotifier<List<Conversation>> {
   @override
   Future<List<Conversation>> build() async {
     final res = await ref.read(aiChatApiProvider).getConversations();
@@ -79,28 +81,24 @@ class AIChatMessage {
       role: json['sender'] == 'ai' ? 'assistant' : 'user',
       content: parsed['content']!,
       thinking: parsed['thinking'],
-      images: (json['images'] as List<dynamic>?)
-          ?.map((e) => e as String)
-          .toList(),
+      images:
+          (json['images'] as List<dynamic>?)?.map((e) => e as String).toList(),
       createdAt: json['createdAt'] as String?,
     );
   }
 
   static Map<String, String> _parseThinking(String content) {
-    final thinkRegex = RegExp(r'<think>([\s\S]*?)</think>', dotAll: true);
-    final match = thinkRegex.firstMatch(content);
-    if (match != null) {
-      return {
-        'thinking': match.group(1)!.trim(),
-        'content': content.replaceFirst(thinkRegex, '').trim(),
-      };
-    }
-    return {'content': content, 'thinking': ''};
+    final parsed = parseAIMessageContent(content);
+    return {
+      'content': parsed.content,
+      'thinking': parsed.thinking ?? '',
+    };
   }
 }
 
 final aiMessagesProvider =
-    StateNotifierProvider.autoDispose<AIMessagesNotifier, List<AIChatMessage>>((ref) {
+    StateNotifierProvider.autoDispose<AIMessagesNotifier, List<AIChatMessage>>(
+        (ref) {
   return AIMessagesNotifier();
 });
 
@@ -166,5 +164,6 @@ class AIMessagesNotifier extends StateNotifier<List<AIChatMessage>> {
   }
 }
 
-final currentConversationIdProvider = StateProvider.autoDispose<String?>((ref) => null);
+final currentConversationIdProvider =
+    StateProvider.autoDispose<String?>((ref) => null);
 final isStreamingProvider = StateProvider.autoDispose<bool>((ref) => false);

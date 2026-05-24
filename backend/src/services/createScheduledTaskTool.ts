@@ -6,7 +6,7 @@
 import mongoose from 'mongoose';
 import ScheduledTask from '../models/ScheduledTask';
 import Conversation from '../models/Conversation';
-import { computeNextRunTime } from '../utils/timeUtils';
+import { syncTaskScheduler, updateTaskNextRunAt } from './taskScheduleService';
 
 // 工具执行结果接口
 export interface ToolResult {
@@ -59,8 +59,9 @@ export async function createScheduledTask(
                 task.enabled = true;
                 task.pushTime = pushTime;
                 task.timezone = timezone;
-                task.nextRunAt = computeNextRunTime(pushTime, timezone);
+                updateTaskNextRunAt(task);
                 await task.save();
+                await syncTaskScheduler(task);
 
                 return {
                     success: true,
@@ -84,8 +85,10 @@ export async function createScheduledTask(
                 pushTime,
                 timezone,
                 conversationId: conversation._id,
-                nextRunAt: computeNextRunTime(pushTime, timezone),
             });
+            updateTaskNextRunAt(task);
+            await task.save();
+            await syncTaskScheduler(task);
 
             return {
                 success: true,
@@ -115,8 +118,9 @@ export async function createScheduledTask(
             existingTask.pushTime = pushTime;
             existingTask.timezone = timezone;
             existingTask.enabled = true;
-            existingTask.nextRunAt = computeNextRunTime(pushTime, timezone);
+            updateTaskNextRunAt(existingTask);
             await existingTask.save();
+            await syncTaskScheduler(existingTask);
 
             return {
                 success: true,
@@ -141,8 +145,10 @@ export async function createScheduledTask(
             pushTime,
             timezone,
             conversationId: conversation._id,
-            nextRunAt: computeNextRunTime(pushTime, timezone),
         });
+        updateTaskNextRunAt(task);
+        await task.save();
+        await syncTaskScheduler(task);
 
         return {
             success: true,

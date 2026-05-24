@@ -21,13 +21,13 @@ import mcpRoutes from './routes/mcpRoutes';
 import { createMonitoringRoutes } from './routes/monitoringRoutes';
 import path from 'path';
 import { setupSocket, getIO } from './socket/socketHandler';
-import { startTaskScheduler } from './services/taskScheduler';
-import { createTaskWorker } from './services/taskQueue';
 import { initAdmin } from './scripts/initAdmin';
 import { ensureKnowledgeBaseSchema } from './utils/kbSchema';
 import redis from './utils/redis';
 import { Pool } from 'pg';
 import { setupMonitoring, errorHandlerMiddleware } from './monitoring';
+import { startScheduledTaskEventSubscriber } from './services/scheduledTaskEvents';
+import { taskQueue } from './services/taskQueue';
 
 dotenv.config();
 
@@ -148,13 +148,10 @@ app.use('/api', createMonitoringRoutes({ redis, pgPool, monitoring }));
 
 // Setup Socket.io
 setupSocket(io);
+const stopScheduledTaskEvents = startScheduledTaskEventSubscriber();
 
 // 错误处理中间件（必须放在所有路由之后）
 app.use(errorHandlerMiddleware);
-
-// Start task scheduler and worker
-startTaskScheduler();
-createTaskWorker();
 
 const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => {
@@ -176,15 +173,23 @@ const shutdown = async (signal: string) => {
         getIO().close(() => console.log('Socket.IO closed'));
     } catch { /* socket 未初始化时忽略 */ }
 
-    // 4. 关闭 MongoDB
+    // 4. 关闭定时任务事件订阅
+    await stopScheduledTaskEvents();
+    console.log('Scheduled task event subscriber closed');
+
+    // 5. 关闭 MongoDB
     await mongoose.connection.close();
     console.log('MongoDB connection closed');
 
-    // 5. 关闭 Redis
+    // 6. 关闭 BullMQ Queue
+    await taskQueue.close();
+    console.log('BullMQ queue closed');
+
+    // 7. 关闭 Redis
     await redis.quit();
     console.log('Redis connection closed');
 
-    // 6. 关闭 PostgreSQL
+    // 8. 关闭 PostgreSQL
     await pgPool.end();
     console.log('PostgreSQL connection closed');
 
