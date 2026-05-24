@@ -367,6 +367,46 @@ export const resetPasswordByPhone = async (req: Request, res: Response) => {
     }
 };
 
+// Reset password by email
+export const resetPasswordByEmail = async (req: Request, res: Response) => {
+    try {
+        const { email, code, newPassword } = req.body;
+
+        if (!email || !code || !newPassword) {
+            return res.status(400).json({ message: '邮箱、验证码和新密码不能为空' });
+        }
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({ message: '邮箱格式不正确' });
+        }
+
+        if (newPassword.length < 6) {
+            return res.status(400).json({ message: '密码长度至少6位' });
+        }
+
+        const user = await User.findOne({ email }).select('+password');
+        if (!user) {
+            return res.status(400).json({ message: '该邮箱未注册' });
+        }
+
+        // Verify email code (consumed on success)
+        const isValid = await emailService.verifyCode(email, code, 'reset', true);
+        if (!isValid) {
+            return res.status(400).json({ message: '验证码错误或已过期' });
+        }
+
+        user.password = newPassword;
+        user.isEmailVerified = true;
+        await user.save();
+
+        res.json({ message: '密码重置成功' });
+    } catch (error) {
+        console.error('ResetPasswordByEmail error:', error);
+        res.status(500).json({ message: '服务器错误' });
+    }
+};
+
 // Send verification email
 export const sendVerificationEmail = async (req: Request, res: Response) => {
     try {
@@ -395,8 +435,8 @@ export const sendVerificationEmail = async (req: Request, res: Response) => {
             }
         }
 
-        // Check if email exists for login type
-        if (type === 'login') {
+        // Check if email exists for login/reset type
+        if (type === 'login' || type === 'reset') {
             const existingUser = await User.findOne({ email });
             if (!existingUser) {
                 return res.status(400).json({ message: '该邮箱未注册' });

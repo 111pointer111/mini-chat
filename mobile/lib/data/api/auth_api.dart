@@ -27,7 +27,8 @@ class AuthApi {
     });
   }
 
-  Future<Response> register(String username, String email, String password, String code) {
+  Future<Response> register(
+      String username, String email, String password, String code) {
     return _client.dio.post('/auth/register', data: {
       'username': username,
       'email': email,
@@ -43,7 +44,8 @@ class AuthApi {
     });
   }
 
-  Future<Response> registerPhone(String username, String phone, String code, {String? email, String? password}) {
+  Future<Response> registerPhone(String username, String phone, String code,
+      {String? email, String? password}) {
     return _client.dio.post('/auth/register-phone', data: {
       'username': username,
       'phone': phone,
@@ -60,9 +62,19 @@ class AuthApi {
     });
   }
 
-  Future<Response> resetPasswordPhone(String phone, String code, String newPassword) {
+  Future<Response> resetPasswordPhone(
+      String phone, String code, String newPassword) {
     return _client.dio.post('/auth/reset-password-phone', data: {
       'phone': phone,
+      'code': code,
+      'newPassword': newPassword,
+    });
+  }
+
+  Future<Response> resetPasswordEmail(
+      String email, String code, String newPassword) {
+    return _client.dio.post('/auth/reset-password-email', data: {
+      'email': email,
       'code': code,
       'newPassword': newPassword,
     });

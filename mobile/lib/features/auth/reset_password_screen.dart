@@ -6,7 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/theme.dart';
 import '../../providers/auth_provider.dart';
-import '../../shared/widgets/phone_code_input.dart';
+import '../../shared/widgets/email_code_input.dart';
 import '../../shared/utils/error_utils.dart';
 import '../../shared/utils/toast_utils.dart';
 
@@ -19,7 +19,7 @@ class ResetPasswordScreen extends ConsumerStatefulWidget {
 }
 
 class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
-  final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
   final _codeController = TextEditingController();
   final _newPasswordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -27,20 +27,20 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
 
   @override
   void dispose() {
-    _phoneController.dispose();
+    _emailController.dispose();
     _codeController.dispose();
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
   }
 
-  bool _isValidPhone(String phone) {
-    return RegExp(r'^1[3-9]\d{9}$').hasMatch(phone);
+  bool _isValidEmail(String email) {
+    return RegExp(r'^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
   }
 
   bool _validateForm() {
-    if (!_isValidPhone(_phoneController.text.trim())) {
-      _showError('请输入正确的手机号');
+    if (!_isValidEmail(_emailController.text.trim())) {
+      _showError('请输入正确的邮箱地址');
       return false;
     }
     if (_codeController.text.trim().isEmpty) {
@@ -71,8 +71,8 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
 
     setState(() => _isLoading = true);
     try {
-      await ref.read(authApiProvider).resetPasswordPhone(
-            _phoneController.text.trim(),
+      await ref.read(authApiProvider).resetPasswordEmail(
+            _emailController.text.trim(),
             _codeController.text.trim(),
             _newPasswordController.text,
           );
@@ -95,7 +95,8 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
       body: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
         child: Container(
-          decoration: const BoxDecoration(gradient: AppTheme.backgroundGradient),
+          decoration:
+              const BoxDecoration(gradient: AppTheme.backgroundGradient),
           child: SafeArea(
             child: Center(
               child: SingleChildScrollView(
@@ -145,7 +146,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
         ),
         const SizedBox(height: AppSpacing.sm),
         Text(
-          '通过手机号验证重置密码',
+          '通过邮箱验证码重置密码',
           style: GoogleFonts.inter(
             fontSize: 16,
             color: Colors.white70,
@@ -178,8 +179,8 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
             padding: const EdgeInsets.all(AppSpacing.xxl),
             child: Column(
               children: [
-                PhoneCodeInput(
-                  phoneController: _phoneController,
+                EmailCodeInput(
+                  emailController: _emailController,
                   codeController: _codeController,
                   codeType: 'reset',
                 ),

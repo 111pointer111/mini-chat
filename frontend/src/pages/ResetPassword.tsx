@@ -3,21 +3,23 @@ import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { TextField, Button, Typography, Link, Box, Alert } from '@mui/material';
 import { motion } from 'framer-motion';
 import api from '../services/api';
-import PhoneCodeInput from '../components/PhoneCodeInput';
+import EmailCodeInput from '../components/EmailCodeInput';
 import { authInputSx, authButtonSx, authLinkSx, authAlertSx, authSuccessAlertSx } from '../styles/authStyles';
 
 const ResetPassword: React.FC = () => {
     const navigate = useNavigate();
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
-    const [phone, setPhone] = useState('');
+    const [email, setEmail] = useState('');
     const [code, setCode] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [loading, setLoading] = useState(false);
 
     const handleReset = async () => {
-        if (!phone || !code || !newPassword) {
+        const trimmedEmail = email.trim();
+
+        if (!trimmedEmail || !code || !newPassword) {
             setError('请填写所有必填项');
             return;
         }
@@ -35,7 +37,7 @@ const ResetPassword: React.FC = () => {
         setSuccess('');
 
         try {
-            await api.post('/auth/reset-password-phone', { phone, code, newPassword });
+            await api.post('/auth/reset-password-email', { email: trimmedEmail, code, newPassword });
             setSuccess('密码重置成功，即将跳转到登录页面...');
             setTimeout(() => navigate('/login'), 2000);
         } catch (err: unknown) {
@@ -57,14 +59,14 @@ const ResetPassword: React.FC = () => {
                 找回密码
             </Typography>
             <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center', mb: 3 }}>
-                通过手机验证码重置密码
+                通过邮箱验证码重置密码
             </Typography>
 
             {error && <Alert severity="error" sx={authAlertSx}>{error}</Alert>}
             {success && <Alert severity="success" sx={authSuccessAlertSx}>{success}</Alert>}
 
             <Box>
-                <PhoneCodeInput phone={phone} setPhone={setPhone} code={code} setCode={setCode} type="reset" />
+                <EmailCodeInput email={email} setEmail={setEmail} code={code} setCode={setCode} type="reset" />
                 <TextField
                     fullWidth label="新密码" type="password" value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
