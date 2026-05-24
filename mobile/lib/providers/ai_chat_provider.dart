@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/constants.dart';
 import '../data/api/ai_chat_api.dart';
 import '../data/api/upload_api.dart';
 import '../data/models/conversation.dart';
@@ -76,15 +77,25 @@ class AIChatMessage {
   factory AIChatMessage.fromBackend(Map<String, dynamic> json) {
     final content = json['content'] as String? ?? '';
     final parsed = _parseThinking(content);
+    final senderId = _senderIdFromBackend(json['sender']);
     return AIChatMessage(
       id: json['_id'] as String? ?? '',
-      role: json['sender'] == 'ai' ? 'assistant' : 'user',
+      role: senderId == AppConstants.aiAssistantId || senderId == 'ai'
+          ? 'assistant'
+          : 'user',
       content: parsed['content']!,
       thinking: parsed['thinking'],
       images:
           (json['images'] as List<dynamic>?)?.map((e) => e as String).toList(),
       createdAt: json['createdAt'] as String?,
     );
+  }
+
+  static String _senderIdFromBackend(dynamic sender) {
+    if (sender is Map<String, dynamic>) {
+      return (sender['_id'] ?? sender['id'] ?? '').toString();
+    }
+    return sender?.toString() ?? '';
   }
 
   static Map<String, String> _parseThinking(String content) {
