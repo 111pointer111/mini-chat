@@ -59,12 +59,13 @@ const EmailCodeInput: React.FC<EmailCodeInputProps> = ({
 
     return (
         <Box>
-            <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, mb: 2 }}>
                 <TextField
                     fullWidth
                     label="邮箱地址"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="email"
                     error={!!emailError || !!sendError}
                     helperText={emailError || sendError}
                     placeholder="请输入邮箱地址"
@@ -75,7 +76,9 @@ const EmailCodeInput: React.FC<EmailCodeInputProps> = ({
                     onClick={handleSendCode}
                     disabled={countdown > 0 || sending || !email}
                     sx={{
-                        minWidth: 120,
+                        width: { xs: '100%', sm: 'auto' },
+                        minWidth: { xs: '100%', sm: 120 },
+                        height: 48,
                         whiteSpace: 'nowrap',
                         borderRadius: '12px',
                         borderColor: 'rgba(255, 255, 255, 0.2)',
@@ -99,6 +102,7 @@ const EmailCodeInput: React.FC<EmailCodeInputProps> = ({
                 label="验证码"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
+                autoComplete="one-time-code"
                 error={!!codeError}
                 helperText={codeError}
                 placeholder="请输入验证码"

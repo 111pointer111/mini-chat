@@ -35,18 +35,30 @@ export const authInputSx = {
 // Tab 样式
 export const authTabsSx = {
     mb: 2.5,
+    minHeight: 42,
+    borderRadius: '12px',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    p: 0.5,
+    '& .MuiTabs-flexContainer': {
+        gap: 0.5,
+    },
     '& .MuiTab-root': {
         color: 'rgba(255,255,255,0.45)',
         fontWeight: 600,
         fontSize: '0.85rem',
         textTransform: 'none',
-        minHeight: 40,
-        '&.Mui-selected': { color: '#c7d2fe' },
+        minHeight: 34,
+        minWidth: 0,
+        flex: 1,
+        borderRadius: '10px',
+        '&.Mui-selected': {
+            color: '#f8fafc',
+            backgroundColor: 'rgba(129, 140, 248, 0.22)',
+        },
     },
     '& .MuiTabs-indicator': {
-        background: 'linear-gradient(90deg, #6366f1, #8b5cf6)',
-        height: 3,
-        borderRadius: 2,
+        display: 'none',
     },
 };
 

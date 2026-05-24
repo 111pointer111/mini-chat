@@ -59,12 +59,13 @@ const PhoneCodeInput: React.FC<PhoneCodeInputProps> = ({
 
     return (
         <Box>
-            <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, mb: 2 }}>
                 <TextField
                     fullWidth
                     label="手机号"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
+                    autoComplete="tel"
                     error={!!phoneError || !!sendError}
                     helperText={phoneError || sendError}
                     placeholder="请输入手机号"
@@ -75,7 +76,9 @@ const PhoneCodeInput: React.FC<PhoneCodeInputProps> = ({
                     onClick={handleSendCode}
                     disabled={countdown > 0 || sending || !phone}
                     sx={{
-                        minWidth: 120,
+                        width: { xs: '100%', sm: 'auto' },
+                        minWidth: { xs: '100%', sm: 120 },
+                        height: 48,
                         whiteSpace: 'nowrap',
                         borderRadius: '12px',
                         borderColor: 'rgba(255, 255, 255, 0.2)',
@@ -99,6 +102,7 @@ const PhoneCodeInput: React.FC<PhoneCodeInputProps> = ({
                 label="验证码"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
+                autoComplete="one-time-code"
                 error={!!codeError}
                 helperText={codeError}
                 placeholder="请输入验证码"

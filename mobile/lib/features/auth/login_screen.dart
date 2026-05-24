@@ -9,8 +9,6 @@ import '../../data/models/user.dart';
 import '../../providers/auth_provider.dart';
 import '../../shared/utils/error_utils.dart';
 import '../../shared/utils/toast_utils.dart';
-import '../../shared/widgets/phone_code_input.dart';
-import '../../shared/widgets/email_code_input.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -19,32 +17,15 @@ class LoginScreen extends ConsumerStatefulWidget {
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _emailCodeEmailController = TextEditingController();
-  final _emailCodeController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _codeController = TextEditingController();
   bool _isLoading = false;
 
   @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-  }
-
-  @override
   void dispose() {
-    _tabController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
-    _emailCodeEmailController.dispose();
-    _emailCodeController.dispose();
-    _phoneController.dispose();
-    _codeController.dispose();
     super.dispose();
   }
 
@@ -59,6 +40,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       showErrorToast(context, '请输入密码');
       return;
     }
+
     FocusScope.of(context).unfocus();
     setState(() => _isLoading = true);
     try {
@@ -70,65 +52,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       if (mounted) context.go('/');
     } catch (e) {
       if (mounted) {
-        showErrorToast(context, extractErrorMessage(e, context: 'login', fallback: '登录失败'));
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _loginWithEmailCode() async {
-    final email = _emailCodeEmailController.text.trim();
-    final code = _emailCodeController.text.trim();
-    if (email.isEmpty || code.isEmpty) {
-      showErrorToast(context, '请输入邮箱和验证码');
-      return;
-    }
-    FocusScope.of(context).unfocus();
-    setState(() => _isLoading = true);
-    try {
-      final res = await ref.read(authApiProvider).loginByEmailCode(email, code);
-      final data = res.data;
-      final user = User.fromJson(data['user'] as Map<String, dynamic>);
-      final token = data['token'] as String;
-      await ref.read(authStateProvider.notifier).login(user, token);
-      if (mounted) context.go('/');
-    } catch (e) {
-      if (mounted) {
-        showErrorToast(context, extractErrorMessage(e, context: 'login', fallback: '登录失败'));
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _loginWithPhone() async {
-    final phone = _phoneController.text.trim();
-    final code = _codeController.text.trim();
-    if (phone.isEmpty) {
-      showErrorToast(context, '请输入手机号');
-      return;
-    }
-    if (!RegExp(r'^1[3-9]\d{9}$').hasMatch(phone)) {
-      showErrorToast(context, '请输入正确的手机号');
-      return;
-    }
-    if (code.isEmpty) {
-      showErrorToast(context, '请输入验证码');
-      return;
-    }
-    FocusScope.of(context).unfocus();
-    setState(() => _isLoading = true);
-    try {
-      final res = await ref.read(authApiProvider).loginPhone(phone, code);
-      final data = res.data;
-      final user = User.fromJson(data['user'] as Map<String, dynamic>);
-      final token = data['token'] as String;
-      await ref.read(authStateProvider.notifier).login(user, token);
-      if (mounted) context.go('/');
-    } catch (e) {
-      if (mounted) {
-        showErrorToast(context, extractErrorMessage(e, context: 'login', fallback: '登录失败'));
+        showErrorToast(
+          context,
+          extractErrorMessage(e, context: 'login', fallback: '登录失败'),
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -141,9 +68,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       body: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
         child: Container(
-          decoration: const BoxDecoration(
-            gradient: AppTheme.backgroundGradient,
-          ),
+          decoration:
+              const BoxDecoration(gradient: AppTheme.backgroundGradient),
           child: SafeArea(
             child: Center(
               child: SingleChildScrollView(
@@ -152,7 +78,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     _buildHeader(),
-                    const SizedBox(height: AppSpacing.xxxl),
+                    const SizedBox(height: AppSpacing.xl),
                     _buildLoginCard(),
                     const SizedBox(height: AppSpacing.xl),
                     _buildFooterLinks(),
@@ -178,25 +104,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           ),
           child: const Icon(
             Icons.chat_bubble_rounded,
-            size: 56,
+            size: 52,
             color: Colors.white,
           ),
         ),
-        const SizedBox(height: AppSpacing.xl),
+        const SizedBox(height: AppSpacing.lg),
         Text(
-          'Mini-Chat',
+          'Mini Chat',
           style: GoogleFonts.poppins(
-            fontSize: 36,
+            fontSize: 34,
             fontWeight: FontWeight.bold,
             color: Colors.white,
-            letterSpacing: 1.2,
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
         Text(
-          '连接你我，畅聊无限',
+          '登录后继续聊天、AI 对话和任务提醒',
+          textAlign: TextAlign.center,
           style: GoogleFonts.inter(
-            fontSize: 16,
+            fontSize: 15,
             color: Colors.white70,
             fontWeight: FontWeight.w500,
           ),
@@ -226,20 +152,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.xxl),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                _buildTabBar(),
+                _buildAuthModeSwitch(),
                 const SizedBox(height: AppSpacing.xl),
-                SizedBox(
-                  height: 240,
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildPasswordTab(),
-                      _buildEmailCodeTab(),
-                      _buildPhoneTab(),
-                    ],
+                Text(
+                  '登录账号',
+                  style: GoogleFonts.inter(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: AppThemeHelper.textPrimary(context),
                   ),
                 ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  '使用已注册的邮箱和密码进入。',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    color: AppThemeHelper.textSecondary(context),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                _buildLoginForm(),
               ],
             ),
           ),
@@ -248,7 +183,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     );
   }
 
-  Widget _buildTabBar() {
+  Widget _buildAuthModeSwitch() {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
@@ -257,49 +192,71 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             : AppColors.primary.withAlpha(13),
         borderRadius: AppRadius.mdAll,
       ),
-      child: TabBar(
-        controller: _tabController,
-        labelColor: Colors.white,
-        unselectedLabelColor: AppThemeHelper.textPrimary(context),
-        indicator: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [AppColors.primary, AppColors.accent],
-          ),
-          borderRadius: AppRadius.smAll,
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withAlpha(102),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+      child: Row(
+        children: [
+          Expanded(child: _buildModeButton('登录', selected: true)),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _buildModeButton(
+              '注册',
+              selected: false,
+              onTap: () => context.go('/register'),
             ),
-          ],
-        ),
-        dividerColor: Colors.transparent,
-        labelStyle: GoogleFonts.inter(
-          fontWeight: FontWeight.w600,
-          fontSize: 13,
-        ),
-        unselectedLabelStyle: GoogleFonts.inter(
-          fontWeight: FontWeight.w500,
-          fontSize: 13,
-        ),
-        tabs: const [
-          Tab(text: '密码登录'),
-          Tab(text: '邮箱验证码'),
-          Tab(text: '手机号'),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildPasswordTab() {
+  Widget _buildModeButton(
+    String label, {
+    required bool selected,
+    VoidCallback? onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: AppRadius.smAll,
+      child: Container(
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          gradient: selected
+              ? const LinearGradient(
+                  colors: [AppColors.primary, AppColors.accent])
+              : null,
+          borderRadius: AppRadius.smAll,
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: AppColors.primary.withAlpha(77),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.inter(
+            color:
+                selected ? Colors.white : AppThemeHelper.textPrimary(context),
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoginForm() {
     return Column(
       children: [
         _buildTextField(
           controller: _emailController,
-          hintText: '邮箱地址',
+          hintText: '邮箱',
           icon: Icons.email_outlined,
           keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.next,
         ),
         const SizedBox(height: AppSpacing.lg),
         _buildTextField(
@@ -307,37 +264,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           hintText: '密码',
           icon: Icons.lock_outlined,
           obscureText: true,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _loginWithEmail(),
         ),
         const SizedBox(height: AppSpacing.xl),
         _buildLoginButton(onPressed: _loginWithEmail),
-      ],
-    );
-  }
-
-  Widget _buildEmailCodeTab() {
-    return Column(
-      children: [
-        EmailCodeInput(
-          emailController: _emailCodeEmailController,
-          codeController: _emailCodeController,
-          codeType: 'login',
-        ),
-        const SizedBox(height: AppSpacing.xl),
-        _buildLoginButton(onPressed: _loginWithEmailCode),
-      ],
-    );
-  }
-
-  Widget _buildPhoneTab() {
-    return Column(
-      children: [
-        PhoneCodeInput(
-          phoneController: _phoneController,
-          codeController: _codeController,
-          codeType: 'login',
-        ),
-        const SizedBox(height: AppSpacing.xl),
-        _buildLoginButton(onPressed: _loginWithPhone),
       ],
     );
   }
@@ -348,6 +279,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     required IconData icon,
     TextInputType? keyboardType,
     bool obscureText = false,
+    TextInputAction? textInputAction,
+    ValueChanged<String>? onSubmitted,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -361,6 +294,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         controller: controller,
         keyboardType: keyboardType,
         obscureText: obscureText,
+        textInputAction: textInputAction,
+        onSubmitted: onSubmitted,
         style: GoogleFonts.inter(
           fontSize: 15,
           color: AppThemeHelper.textPrimary(context),
@@ -376,7 +311,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             borderSide: BorderSide.none,
           ),
           filled: true,
-          fillColor: Colors.white,
+          fillColor: AppThemeHelper.isDark(context)
+              ? AppColors.surfaceDark
+              : Colors.white,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.lg,
             vertical: AppSpacing.lg,
@@ -440,7 +377,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         TextButton(
           onPressed: () => context.go('/register'),
           child: Text(
-            '没有账号？立即注册',
+            '还没有账号？去注册',
             style: GoogleFonts.inter(
               color: Colors.white,
               fontWeight: FontWeight.w600,

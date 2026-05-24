@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
-import { Outlet } from 'react-router-dom';
-import { Box, Container, Paper } from '@mui/material';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Box, ButtonBase, Container, Paper } from '@mui/material';
 import { motion } from 'framer-motion';
 import AutoAwesome from '@mui/icons-material/AutoAwesome';
 import Typography from '@mui/material/Typography';
@@ -60,9 +60,11 @@ const particles = Array.from({ length: 30 }, (_, i) => ({
     opacity: Math.random() * 0.4 + 0.1,
 }));
 
-// 边框光束用 rotate 动画实现
-
 const AuthLayout: React.FC = () => {
+    const location = useLocation();
+    const navigate = useNavigate();
+    const authMode = location.pathname === '/register' ? 'register' : location.pathname === '/login' ? 'login' : null;
+
     // 粒子动画 — 直接用 animate prop 驱动
     const particleAnimations = useMemo(() => particles.map((p) => ({
         y: [p.y + '%', (p.y - 30) + '%', p.y + '%'],
@@ -84,8 +86,10 @@ const AuthLayout: React.FC = () => {
                 flexDirection: 'column',
                 justifyContent: 'center',
                 alignItems: 'center',
-                minHeight: '100vh',
-                overflow: 'hidden',
+                minHeight: '100svh',
+                py: { xs: 2.5, sm: 4 },
+                overflowX: 'hidden',
+                overflowY: 'auto',
                 background: 'linear-gradient(135deg, #0f0c29 0%, #1a1145 30%, #302b63 60%, #24243e 100%)',
             }}
         >
@@ -165,14 +169,14 @@ const AuthLayout: React.FC = () => {
             />
 
             {/* 居中卡片区域 */}
-            <Container maxWidth="xs" sx={{ position: 'relative', zIndex: 1 }}>
+            <Container maxWidth="xs" sx={{ position: 'relative', zIndex: 1, width: '100%', px: { xs: 2, sm: 3 } }}>
                 {/* 品牌头部 — 入场动画 */}
                 <Box
                     component={motion.div}
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, ease: 'easeOut' }}
-                    sx={{ textAlign: 'center', mb: 3 }}
+                    sx={{ textAlign: 'center', mb: { xs: 2, sm: 3 } }}
                 >
                     <Box
                         component={motion.div}
@@ -188,8 +192,8 @@ const AuthLayout: React.FC = () => {
                             display: 'inline-flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            width: 56,
-                            height: 56,
+                            width: { xs: 50, sm: 56 },
+                            height: { xs: 50, sm: 56 },
                             borderRadius: '16px',
                             background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
                             mb: 1.5,
@@ -217,7 +221,7 @@ const AuthLayout: React.FC = () => {
                     </Typography>
                 </Box>
 
-                {/* 表单卡片 — 入场动画 + 边框光束 */}
+                {/* 表单卡片 — 入场动画 */}
                 <Box
                     component={motion.div}
                     initial={{ opacity: 0, y: 30, scale: 0.96 }}
@@ -228,7 +232,7 @@ const AuthLayout: React.FC = () => {
                         elevation={0}
                         sx={{
                             position: 'relative',
-                            p: { xs: 3, sm: 4 },
+                            p: { xs: 2.25, sm: 4 },
                             width: '100%',
                             borderRadius: '20px',
                             backgroundColor: 'rgba(255, 255, 255, 0.06)',
@@ -238,23 +242,49 @@ const AuthLayout: React.FC = () => {
                             overflow: 'hidden',
                         }}
                     >
-                        {/* 边框光束效果 */}
-                        <Box
-                            component={motion.div}
-                            animate={{ rotate: [0, 360] }}
-                            transition={{ duration: 6, repeat: Infinity, ease: 'linear' }}
-                            sx={{
-                                position: 'absolute',
-                                inset: -1,
-                                borderRadius: '20px',
-                                padding: '1px',
-                                background: 'conic-gradient(from 0deg, transparent 60%, #6366f1 75%, #8b5cf6 85%, #a78bfa 90%, transparent 100%)',
-                                WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-                                WebkitMaskComposite: 'xor',
-                                maskComposite: 'exclude',
-                                pointerEvents: 'none',
-                            }}
-                        />
+                        {authMode && (
+                            <Box
+                                sx={{
+                                    display: 'grid',
+                                    gridTemplateColumns: '1fr 1fr',
+                                    gap: 0.5,
+                                    p: 0.5,
+                                    mb: 3,
+                                    borderRadius: '14px',
+                                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                                }}
+                            >
+                                {[
+                                    { value: 'login', label: '登录', path: '/login' },
+                                    { value: 'register', label: '注册', path: '/register' },
+                                ].map((item) => {
+                                    const active = authMode === item.value;
+
+                                    return (
+                                        <ButtonBase
+                                            key={item.value}
+                                            onClick={() => navigate(item.path)}
+                                            aria-pressed={active}
+                                            sx={{
+                                                height: 38,
+                                                borderRadius: '11px',
+                                                color: active ? '#f8fafc' : 'rgba(255,255,255,0.55)',
+                                                fontSize: '0.92rem',
+                                                fontWeight: 700,
+                                                backgroundColor: active ? 'rgba(129, 140, 248, 0.24)' : 'transparent',
+                                                transition: 'background-color 160ms ease, color 160ms ease',
+                                                '&:hover': {
+                                                    backgroundColor: active ? 'rgba(129, 140, 248, 0.3)' : 'rgba(255,255,255,0.05)',
+                                                },
+                                            }}
+                                        >
+                                            {item.label}
+                                        </ButtonBase>
+                                    );
+                                })}
+                            </Box>
+                        )}
 
                         <Outlet />
                     </Paper>
