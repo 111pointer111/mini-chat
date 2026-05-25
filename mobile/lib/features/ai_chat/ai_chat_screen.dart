@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -12,10 +11,9 @@ import 'package:dio/dio.dart';
 
 import '../../core/theme.dart';
 import '../../core/constants.dart';
+import '../../data/api/upload_api.dart';
 import '../../data/models/conversation.dart';
 import '../../providers/ai_chat_provider.dart';
-import '../../providers/auth_provider.dart';
-import '../../shared/utils/ai_message_parser.dart';
 import '../../shared/widgets/ai_provider_selector.dart';
 import '../../shared/widgets/ai_message_content.dart';
 import '../../shared/utils/error_utils.dart';
@@ -36,21 +34,9 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   List<XFile> _pendingImages = [];
   bool _isUploading = false;
-  final List<StreamSubscription> _subscriptions = [];
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _setupSocketListeners();
-    });
-  }
 
   @override
   void dispose() {
-    for (final sub in _subscriptions) {
-      sub.cancel();
-    }
     _messageController.dispose();
     _scrollController.dispose();
     _renameController.dispose();
@@ -59,52 +45,6 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
 
   void _loadConversations() {
     ref.read(conversationsProvider.notifier).refresh();
-  }
-
-  void _setupSocketListeners() {
-    final socketService = ref.read(socketServiceProvider);
-
-    _subscriptions.add(
-      socketService.onAIStream.listen((data) {
-        final content = data['content'] as String? ?? '';
-        final done = data['done'] as bool? ?? false;
-
-        if (content.isNotEmpty) {
-          ref.read(aiMessagesProvider.notifier).appendToLastMessage(content);
-        }
-        if (done) {
-          ref.read(aiMessagesProvider.notifier).markStreamDone();
-          ref.read(isStreamingProvider.notifier).state = false;
-          _loadConversations();
-        }
-        _scrollToBottom();
-      }),
-    );
-
-    _subscriptions.add(
-      socketService.onAIStreamError.listen((data) {
-        String errorMsg = 'AI 响应出错';
-        if (data is Map<String, dynamic>) {
-          errorMsg = data['error'] as String? ??
-              data['message'] as String? ??
-              errorMsg;
-        } else if (data is String) {
-          errorMsg = data;
-        }
-        ref
-            .read(aiMessagesProvider.notifier)
-            .appendToLastMessage('\n\n❌ $errorMsg');
-        ref.read(aiMessagesProvider.notifier).markStreamDone();
-        ref.read(isStreamingProvider.notifier).state = false;
-        _scrollToBottom();
-      }),
-    );
-
-    _subscriptions.add(
-      socketService.onConversationRenamed.listen((data) {
-        ref.read(conversationsProvider.notifier).refresh();
-      }),
-    );
   }
 
   void _scrollToBottom() {
@@ -134,7 +74,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
     });
   }
 
-  Future<List<String>?> _uploadImages() async {
+  Future<List<UploadedImage>?> _uploadImages() async {
     if (_pendingImages.isEmpty) return [];
     setState(() => _isUploading = true);
     try {
@@ -146,8 +86,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
         );
       }
 
-      final uploadedImages = await uploadApi.uploadImageFiles(files);
-      return uploadedImages.map((image) => image.url).toList();
+      return uploadApi.uploadImageFiles(files);
     } catch (e) {
       if (mounted) {
         showErrorToast(context, extractErrorMessage(e, fallback: '图片上传失败'));
@@ -164,12 +103,17 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
     if (content.isEmpty && _pendingImages.isEmpty) return;
     if (ref.read(isStreamingProvider)) return;
 
-    final imageUrls = await _uploadImages();
-    if (imageUrls == null) return;
+    final uploadedImages = await _uploadImages();
+    if (uploadedImages == null) return;
+    final displayImageUrls = uploadedImages.map((image) => image.url).toList();
+    final modelImagePayloads = uploadedImages
+        .map((image) => image.base64)
+        .where((base64) => base64.isNotEmpty)
+        .toList();
 
     ref.read(aiMessagesProvider.notifier).addUserMessage(
           content,
-          images: imageUrls.isNotEmpty ? imageUrls : null,
+          images: displayImageUrls.isNotEmpty ? displayImageUrls : null,
         );
 
     _messageController.clear();
@@ -180,84 +124,70 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
     ref.read(isStreamingProvider.notifier).state = true;
     _scrollToBottom();
 
-    final socketService = ref.read(socketServiceProvider);
     final conversationId = ref.read(currentConversationIdProvider);
-    final now = DateTime.now();
-    final timezoneOffset = now.timeZoneOffset.inMinutes;
 
-    // 检查 Socket 连接状态
-    if (socketService.isConnected) {
-      // Socket 连接正常 → 使用 Socket 流式传输
-      socketService.emitAIChatStream({
-        'message': content,
-        if (imageUrls.isNotEmpty) 'images': imageUrls,
-        'timezone': timezoneOffset,
-        if (conversationId != null) 'conversationId': conversationId,
-      });
-    } else {
-      // Socket 断开 → fallback 到 REST API
-      try {
-        final api = ref.read(aiChatApiProvider);
-        final res = await api.sendMessage(
-          content,
-          images: imageUrls.isNotEmpty ? imageUrls : null,
-          conversationId: conversationId,
-        );
+    var streamDone = false;
+    try {
+      final api = ref.read(aiChatApiProvider);
+      final stream = await api.streamMessage(
+        content,
+        modelImages: modelImagePayloads.isNotEmpty ? modelImagePayloads : null,
+        displayImages: displayImageUrls.isNotEmpty ? displayImageUrls : null,
+        conversationId: conversationId,
+      );
 
-        final data = res.data;
-        if (data != null) {
-          final reply = data['reply'] as String? ?? '';
-          final newConversationId = data['conversationId'] as String?;
-
-          final parsedReply = parseAIMessageContent(reply);
-
-          // 更新消息
-          final messages = ref.read(aiMessagesProvider);
-          if (messages.isNotEmpty) {
-            final lastMessage = messages.last;
-            ref.read(aiMessagesProvider.notifier).setMessages(
-                  messages.sublist(0, messages.length - 1)
-                    ..add(
-                      AIChatMessage(
-                        id: lastMessage.id,
-                        role: 'assistant',
-                        content: parsedReply.content,
-                        thinking: parsedReply.thinking,
-                        createdAt: DateTime.now().toIso8601String(),
-                      ),
-                    ),
+      await for (final event in stream) {
+        switch (event.type) {
+          case 'ready':
+            if (event.conversationId != null) {
+              ref.read(currentConversationIdProvider.notifier).state =
+                  event.conversationId;
+            }
+            break;
+          case 'chunk':
+            final chunk = event.content ?? '';
+            if (chunk.isNotEmpty) {
+              ref.read(aiMessagesProvider.notifier).appendToLastMessage(chunk);
+              _scrollToBottom();
+            }
+            break;
+          case 'done':
+            streamDone = true;
+            if (event.conversationId != null) {
+              ref.read(currentConversationIdProvider.notifier).state =
+                  event.conversationId;
+            }
+            ref.read(aiMessagesProvider.notifier).markStreamDone(
+                  pendingTask: event.pendingTask,
+                  taskCreated: event.taskCreated,
+                  sources: event.sources,
                 );
-          }
-
-          // 更新会话 ID
-          if (newConversationId != null && conversationId == null) {
-            ref.read(currentConversationIdProvider.notifier).state =
-                newConversationId;
-          }
-
-          _loadConversations();
+            ref.read(isStreamingProvider.notifier).state = false;
+            _loadConversations();
+            _scrollToBottom();
+            break;
+          case 'error':
+            throw Exception(event.message ?? 'AI 响应失败');
         }
-      } catch (e) {
-        // REST API 也失败了，显示错误
-        final messages = ref.read(aiMessagesProvider);
-        if (messages.isNotEmpty) {
-          final lastMessage = messages.last;
-          ref.read(aiMessagesProvider.notifier).setMessages(
-                messages.sublist(0, messages.length - 1)
-                  ..add(
-                    AIChatMessage(
-                      id: lastMessage.id,
-                      role: 'assistant',
-                      content: '❌ 发送失败，请检查网络连接后重试',
-                      createdAt: DateTime.now().toIso8601String(),
-                    ),
-                  ),
-              );
-        }
-      } finally {
-        ref.read(isStreamingProvider.notifier).state = false;
-        _scrollToBottom();
       }
+
+      if (!streamDone) {
+        ref.read(aiMessagesProvider.notifier).markStreamDone();
+        _loadConversations();
+      }
+    } catch (e) {
+      final errorMessage = extractErrorMessage(e, fallback: '发送失败，请检查网络连接后重试');
+      ref
+          .read(aiMessagesProvider.notifier)
+          .replaceLastAssistantWithError('❌ $errorMessage');
+      if (mounted) {
+        showErrorToast(context, errorMessage);
+      }
+    } finally {
+      if (!streamDone) {
+        ref.read(isStreamingProvider.notifier).state = false;
+      }
+      _scrollToBottom();
     }
   }
 

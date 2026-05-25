@@ -25,7 +25,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
   bool _isSending = false;
-  StreamSubscription? _groupMessageSub;
+  final List<StreamSubscription> _subscriptions = [];
 
   @override
   void initState() {
@@ -38,7 +38,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
 
   @override
   void dispose() {
-    _groupMessageSub?.cancel();
+    for (final sub in _subscriptions) {
+      sub.cancel();
+    }
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -57,15 +59,70 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
     socketService.joinGroupRoom(widget.groupId);
 
     // 监听群消息
-    _groupMessageSub = socketService.onReceiveGroupMessage.listen((data) {
-      final groupId = data['groupId'] as String?;
-      if (groupId == widget.groupId) {
-        ref
-            .read(groupMessagesProvider(widget.groupId).notifier)
-            .addMessage(data);
-        _scrollToBottom();
-      }
-    });
+    _subscriptions.add(
+      socketService.onReceiveGroupMessage.listen((data) {
+        final groupId = data['groupId'] as String?;
+        if (groupId == widget.groupId) {
+          ref
+              .read(groupMessagesProvider(widget.groupId).notifier)
+              .addMessage(data);
+          _scrollToBottom();
+        }
+      }),
+    );
+
+    _subscriptions.add(
+      socketService.onGroupAiStreamStart.listen((data) {
+        final groupId = data['groupId'] as String?;
+        final message = data['message'];
+        if (groupId == widget.groupId && message is Map<String, dynamic>) {
+          ref
+              .read(groupMessagesProvider(widget.groupId).notifier)
+              .addMessage(message);
+          _scrollToBottom();
+        }
+      }),
+    );
+
+    _subscriptions.add(
+      socketService.onGroupAiStreamChunk.listen((data) {
+        final groupId = data['groupId'] as String?;
+        final tempMessageId = data['tempMessageId'] as String?;
+        final content = data['content'] as String? ?? '';
+        if (groupId == widget.groupId && tempMessageId != null) {
+          ref
+              .read(groupMessagesProvider(widget.groupId).notifier)
+              .appendMessageContent(tempMessageId, content);
+          _scrollToBottom();
+        }
+      }),
+    );
+
+    _subscriptions.add(
+      socketService.onGroupAiStreamDone.listen((data) {
+        _replaceStreamMessage(data);
+      }),
+    );
+
+    _subscriptions.add(
+      socketService.onGroupAiStreamError.listen((data) {
+        _replaceStreamMessage(data);
+      }),
+    );
+  }
+
+  void _replaceStreamMessage(Map<String, dynamic> data) {
+    final groupId = data['groupId'] as String?;
+    final tempMessageId = data['tempMessageId'] as String?;
+    final message = data['message'];
+    if (groupId == widget.groupId &&
+        tempMessageId != null &&
+        message is Map<String, dynamic>) {
+      ref
+          .read(groupMessagesProvider(widget.groupId).notifier)
+          .replaceMessage(tempMessageId, message);
+      _scrollToBottom();
+    }
   }
 
   void _scrollToBottom() {
@@ -122,10 +179,11 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
       'type': 'text',
     }, ack: (response) {
       if (response is Map<String, dynamic> && response['success'] == true) {
-        // 成功：替换临时 ID
-        final messageId = response['messageId'] as String?;
-        if (messageId != null) {
-          // 消息会通过 receive_group_message 事件更新
+        final serverMessage = response['message'];
+        if (serverMessage is Map<String, dynamic>) {
+          ref
+              .read(groupMessagesProvider(widget.groupId).notifier)
+              .replaceMessage(tempId, serverMessage);
         }
       } else {
         if (mounted) {

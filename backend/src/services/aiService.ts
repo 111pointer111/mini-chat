@@ -250,6 +250,7 @@ export const chat = async (message: string, systemPrompt?: string): Promise<stri
 export interface ChatMessage {
     role: 'user' | 'assistant';
     content: string;
+    images?: string[];
 }
 
 export const chatWithHistory = async (

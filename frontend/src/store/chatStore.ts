@@ -58,6 +58,8 @@ interface ChatState {
     selectGroup: (group: Group) => void;
     selectScheduledTask: (taskType: string, taskName?: string) => void;
     addMessage: (message: Message) => void;
+    appendMessageContent: (messageId: string, content: string) => void;
+    replaceMessage: (messageId: string, message: Message) => void;
     sendFriendRequest: (recipientId: string) => Promise<void>;
     acceptFriendRequest: (requestId: string) => Promise<void>;
 }
@@ -150,9 +152,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     addMessage: (message) => {
         const { selectedFriend, selectedGroup } = get();
+        const appendIfMissing = (state: ChatState) => (
+            state.messages.some((m) => m._id === message._id)
+                ? { messages: state.messages }
+                : { messages: [...state.messages, message] }
+        );
 
         if (selectedGroup && message.groupId === selectedGroup._id) {
-            set((state) => ({ messages: [...state.messages, message] }));
+            set(appendIfMissing);
             return;
         }
 
@@ -161,8 +168,42 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const friendId = selectedFriend._id;
         const senderId = typeof message.sender === 'string' ? message.sender : message.sender._id;
         if (senderId === friendId || message.receiver === friendId) {
-            set((state) => ({ messages: [...state.messages, message] }));
+            set(appendIfMissing);
         }
+    },
+
+    appendMessageContent: (messageId, content) => {
+        if (!content) return;
+        set((state) => ({
+            messages: state.messages.map((message) =>
+                message._id === messageId
+                    ? { ...message, content: `${message.content}${content}` }
+                    : message
+            ),
+        }));
+    },
+
+    replaceMessage: (messageId, message) => {
+        set((state) => {
+            let replaced = false;
+            const messages = state.messages.map((item) => {
+                if (item._id === messageId) {
+                    replaced = true;
+                    return message;
+                }
+                return item;
+            });
+
+            if (!replaced && !messages.some((item) => item._id === message._id)) {
+                messages.push(message);
+            }
+
+            return {
+                messages: messages.filter((item, index, list) =>
+                    list.findIndex((candidate) => candidate._id === item._id) === index
+                ),
+            };
+        });
     },
 
     sendFriendRequest: async (recipientId: string) => {

@@ -43,12 +43,13 @@ class GroupMember {
   GroupMember({required this.user, required this.role});
 }
 
-final groupMembersProvider = AsyncNotifierProvider.autoDispose.family<
-    GroupMembersNotifier, List<GroupMember>, String>(() {
+final groupMembersProvider = AsyncNotifierProvider.autoDispose
+    .family<GroupMembersNotifier, List<GroupMember>, String>(() {
   return GroupMembersNotifier();
 });
 
-class GroupMembersNotifier extends AutoDisposeFamilyAsyncNotifier<List<GroupMember>, String> {
+class GroupMembersNotifier
+    extends AutoDisposeFamilyAsyncNotifier<List<GroupMember>, String> {
   @override
   Future<List<GroupMember>> build(String groupId) async {
     final res = await ref.read(groupApiProvider).getGroupMembers(groupId);
@@ -73,8 +74,8 @@ class GroupMembersNotifier extends AutoDisposeFamilyAsyncNotifier<List<GroupMemb
 }
 
 // 群消息
-final groupMessagesProvider = AsyncNotifierProvider.autoDispose.family<
-    GroupMessagesNotifier, List<Message>, String>(() {
+final groupMessagesProvider = AsyncNotifierProvider.autoDispose
+    .family<GroupMessagesNotifier, List<Message>, String>(() {
   return GroupMessagesNotifier();
 });
 
@@ -118,7 +119,8 @@ class GroupMessagesNotifier
     _isLoadingMore = true;
     try {
       final oldest = currentMessages.first;
-      final res = await ref.read(groupApiProvider)
+      final res = await ref
+          .read(groupApiProvider)
           .getGroupMessages(groupId, before: oldest.createdAt);
       final data = res.data;
       final messagesList = data['messages'] as List<dynamic>? ?? [];
@@ -136,13 +138,58 @@ class GroupMessagesNotifier
 
   void addMessage(Map<String, dynamic> json) {
     final current = state.valueOrNull ?? [];
-    state = AsyncValue.data([...current, Message.fromJson(json)]);
+    final message = Message.fromJson(json);
+    if (current.any((item) => item.id == message.id)) return;
+    state = AsyncValue.data([...current, message]);
+  }
+
+  void appendMessageContent(String messageId, String content) {
+    if (content.isEmpty) return;
+    final current = state.valueOrNull ?? [];
+    state = AsyncValue.data(current.map((message) {
+      if (message.id != messageId) return message;
+      return Message(
+        id: message.id,
+        sender: message.sender,
+        receiver: message.receiver,
+        groupId: message.groupId,
+        content: '${message.content}$content',
+        type: message.type,
+        createdAt: message.createdAt,
+        mentionAssistant: message.mentionAssistant,
+        images: message.images,
+      );
+    }).toList());
+  }
+
+  void replaceMessage(String messageId, Map<String, dynamic> json) {
+    final current = state.valueOrNull ?? [];
+    final message = Message.fromJson(json);
+    var replaced = false;
+    final updated = current.map((item) {
+      if (item.id == messageId) {
+        replaced = true;
+        return message;
+      }
+      return item;
+    }).toList();
+
+    if (!replaced && !updated.any((item) => item.id == message.id)) {
+      updated.add(message);
+    }
+
+    state = AsyncValue.data([
+      for (final item in updated)
+        if (updated.indexWhere((candidate) => candidate.id == item.id) ==
+            updated.indexOf(item))
+          item,
+    ]);
   }
 }
 
 // 群知识库文档
-final groupKBDocumentsProvider = AsyncNotifierProvider.autoDispose.family<
-    GroupKBDocumentsNotifier, List<KBDocument>, String>(() {
+final groupKBDocumentsProvider = AsyncNotifierProvider.autoDispose
+    .family<GroupKBDocumentsNotifier, List<KBDocument>, String>(() {
   return GroupKBDocumentsNotifier();
 });
 
@@ -150,8 +197,7 @@ class GroupKBDocumentsNotifier
     extends AutoDisposeFamilyAsyncNotifier<List<KBDocument>, String> {
   @override
   Future<List<KBDocument>> build(String groupId) async {
-    final res =
-        await ref.read(groupApiProvider).getGroupKBDocuments(groupId);
+    final res = await ref.read(groupApiProvider).getGroupKBDocuments(groupId);
     return (res.data['documents'] as List<dynamic>? ?? [])
         .map((e) => KBDocument.fromJson(e as Map<String, dynamic>))
         .toList();
@@ -163,11 +209,8 @@ class GroupKBDocumentsNotifier
   }
 
   Future<void> deleteDocument(String groupId, int documentId) async {
-    await ref
-        .read(groupApiProvider)
-        .deleteGroupKBDocument(groupId, documentId);
+    await ref.read(groupApiProvider).deleteGroupKBDocument(groupId, documentId);
     final current = state.valueOrNull ?? [];
-    state =
-        AsyncValue.data(current.where((d) => d.id != documentId).toList());
+    state = AsyncValue.data(current.where((d) => d.id != documentId).toList());
   }
 }

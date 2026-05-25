@@ -82,8 +82,15 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
         if (ack != null &&
             ack is Map<String, dynamic> &&
             ack['success'] == true) {
-          final realId = ack['messageId'] as String? ?? tempId;
-          ref.read(messagesProvider.notifier).updateMessageId(tempId, realId);
+          final serverMessage = ack['message'];
+          if (serverMessage is Map<String, dynamic>) {
+            ref
+                .read(messagesProvider.notifier)
+                .replaceTempMessage(tempId, Message.fromJson(serverMessage));
+          } else {
+            final realId = ack['messageId'] as String? ?? tempId;
+            ref.read(messagesProvider.notifier).updateMessageId(tempId, realId);
+          }
         }
       });
     } else if (selection.type == ChatType.group && selection.id != null) {

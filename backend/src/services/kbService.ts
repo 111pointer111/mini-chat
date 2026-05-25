@@ -6,6 +6,7 @@ import path from 'path';
 import fs from 'fs';
 import {
     createDocument,
+    clearDocumentExistsCache,
     updateDocumentStatus,
     type KBDocument,
 } from '../utils/kbDb';
@@ -22,6 +23,10 @@ import {
 } from './kbEmbeddingService';
 import { getUserAIConfig } from './aiService';
 import OpenAI from 'openai';
+
+function clearScopeDocumentCache(userId: string, scope: { type?: 'user' | 'group'; id?: string } = {}) {
+    clearDocumentExistsCache(scope.type || 'user', scope.id || userId);
+}
 
 /**
  * 处理本地文件上传
@@ -64,6 +69,7 @@ export async function processUploadedFile(
 
         // 5. 更新文档状态为"就绪"
         await updateDocumentStatus(docId, userId, 'ready', chunks.length);
+        clearScopeDocumentCache(userId, scope);
 
         // 6. 返回更新后的文档
         const doc = await import('../utils/kbDb').then(m => m.getDocument(docId, userId));
@@ -72,6 +78,7 @@ export async function processUploadedFile(
         // 处理失败，更新状态
         const errorMsg = err instanceof Error ? err.message : '处理失败';
         await updateDocumentStatus(docId, userId, 'failed', undefined, errorMsg);
+        clearScopeDocumentCache(userId, scope);
         throw err;
     }
 }
@@ -115,12 +122,14 @@ export async function processUrlImport(
 
         // 5. 更新文档状态
         await updateDocumentStatus(docId, userId, 'ready', chunks.length);
+        clearScopeDocumentCache(userId, scope);
 
         const doc = await import('../utils/kbDb').then(m => m.getDocument(docId, userId));
         return doc!;
     } catch (err) {
         const errorMsg = err instanceof Error ? err.message : '处理失败';
         await updateDocumentStatus(docId, userId, 'failed', undefined, errorMsg);
+        clearScopeDocumentCache(userId, scope);
         throw err;
     }
 }
@@ -180,5 +189,4 @@ export async function chatWithKnowledge(
 
     return { answer, sources };
 }
-
 

@@ -6,6 +6,7 @@ import {
     searchDocuments,
     getChunksByDocument,
     textSearch,
+    clearDocumentExistsCache,
 } from '../utils/kbDb';
 import {
     processUploadedFile,
@@ -72,6 +73,7 @@ export const removeDocument = async (req: Request, res: Response) => {
         if (!deleted) {
             return res.status(404).json({ message: '文档不存在' });
         }
+        clearDocumentExistsCache('user', userId);
 
         res.json({ message: '删除成功' });
     } catch (err) {

@@ -45,7 +45,16 @@ const TASK_ICONS: Record<string, React.ReactNode> = {
 };
 
 const ChatWindow: React.FC = () => {
-    const { selectedFriend, selectedGroup, selectedTaskType, selectedTaskName, messages, addMessage } = useChatStore();
+    const {
+        selectedFriend,
+        selectedGroup,
+        selectedTaskType,
+        selectedTaskName,
+        messages,
+        addMessage,
+        appendMessageContent,
+        replaceMessage,
+    } = useChatStore();
     const { user } = useAuthStore();
     const { socket } = useSocketStore();
     const [inputText, setInputText] = useState('');
@@ -91,13 +100,41 @@ const ChatWindow: React.FC = () => {
         const handleReceiveGroupMessage = (newMessage: Message) => {
             addMessage(newMessage);
         };
+        const handleGroupAiStart = (data: { groupId: string; message?: Message }) => {
+            if (data.groupId === selectedGroup._id && data.message) {
+                addMessage(data.message);
+            }
+        };
+        const handleGroupAiChunk = (data: { groupId: string; tempMessageId: string; content: string }) => {
+            if (data.groupId === selectedGroup._id) {
+                appendMessageContent(data.tempMessageId, data.content);
+            }
+        };
+        const handleGroupAiDone = (data: { groupId: string; tempMessageId: string; message?: Message }) => {
+            if (data.groupId === selectedGroup._id && data.message) {
+                replaceMessage(data.tempMessageId, data.message);
+            }
+        };
+        const handleGroupAiError = (data: { groupId: string; tempMessageId: string; message?: Message }) => {
+            if (data.groupId === selectedGroup._id && data.message) {
+                replaceMessage(data.tempMessageId, data.message);
+            }
+        };
 
         socket.on('receive_group_message', handleReceiveGroupMessage);
+        socket.on('group_ai_stream_start', handleGroupAiStart);
+        socket.on('group_ai_stream_chunk', handleGroupAiChunk);
+        socket.on('group_ai_stream_done', handleGroupAiDone);
+        socket.on('group_ai_stream_error', handleGroupAiError);
 
         return () => {
             socket.off('receive_group_message', handleReceiveGroupMessage);
+            socket.off('group_ai_stream_start', handleGroupAiStart);
+            socket.off('group_ai_stream_chunk', handleGroupAiChunk);
+            socket.off('group_ai_stream_done', handleGroupAiDone);
+            socket.off('group_ai_stream_error', handleGroupAiError);
         };
-    }, [socket, selectedGroup, addMessage]);
+    }, [socket, selectedGroup, addMessage, appendMessageContent, replaceMessage]);
 
     const loadGroupDocuments = useCallback(async () => {
         if (!selectedGroup) return;
@@ -238,12 +275,14 @@ const ChatWindow: React.FC = () => {
                 groupId,
                 content,
                 type: 'text',
-            }, (ack: { success: boolean; error?: string; messageId?: string }) => {
+            }, (ack: { success: boolean; error?: string; messageId?: string; message?: Message }) => {
                 if (!ack?.success) {
                     useChatStore.setState((state) => ({
                         messages: state.messages.filter((m) => m._id !== tempId),
                     }));
                     console.error('Failed to send group message:', ack?.error);
+                } else if (ack?.message) {
+                    replaceMessage(tempId, ack.message);
                 } else if (ack?.messageId) {
                     useChatStore.setState((state) => ({
                         messages: state.messages.map((m) =>

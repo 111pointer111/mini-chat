@@ -28,7 +28,8 @@ final scheduledTaskApiProvider = Provider<ScheduledTaskApi>((ref) {
   return ScheduledTaskApi(ref.watch(apiClientProvider));
 });
 
-final friendsProvider = AsyncNotifierProvider.autoDispose<FriendsNotifier, List<User>>(() {
+final friendsProvider =
+    AsyncNotifierProvider.autoDispose<FriendsNotifier, List<User>>(() {
   return FriendsNotifier();
 });
 
@@ -50,12 +51,13 @@ class FriendsNotifier extends AutoDisposeAsyncNotifier<List<User>> {
   }
 }
 
-final pendingRequestsProvider =
-    AsyncNotifierProvider.autoDispose<PendingRequestsNotifier, List<FriendRequest>>(() {
+final pendingRequestsProvider = AsyncNotifierProvider.autoDispose<
+    PendingRequestsNotifier, List<FriendRequest>>(() {
   return PendingRequestsNotifier();
 });
 
-class PendingRequestsNotifier extends AutoDisposeAsyncNotifier<List<FriendRequest>> {
+class PendingRequestsNotifier
+    extends AutoDisposeAsyncNotifier<List<FriendRequest>> {
   @override
   Future<List<FriendRequest>> build() async {
     final res = await ref.read(friendApiProvider).getPendingRequests();
@@ -168,7 +170,8 @@ class MessagesNotifier extends AsyncNotifier<List<Message>> {
     } catch (e) {
       debugPrint('[MessagesNotifier] Network fetch error: $e');
       // 网络失败，但 SQLite 中有缓存，不会丢失数据
-      if (_currentConversationId == conversationId && state.valueOrNull == null) {
+      if (_currentConversationId == conversationId &&
+          state.valueOrNull == null) {
         state = AsyncValue.error(e, StackTrace.current);
       }
     }
@@ -218,7 +221,8 @@ class MessagesNotifier extends AsyncNotifier<List<Message>> {
       }
     } catch (e) {
       debugPrint('[MessagesNotifier] Network fetch error: $e');
-      if (_currentConversationId == conversationId && state.valueOrNull == null) {
+      if (_currentConversationId == conversationId &&
+          state.valueOrNull == null) {
         state = AsyncValue.error(e, StackTrace.current);
       }
     }
@@ -258,7 +262,8 @@ class MessagesNotifier extends AsyncNotifier<List<Message>> {
         state = AsyncValue.data(messages);
       }
     } catch (e) {
-      if (_currentConversationId == conversationId && state.valueOrNull == null) {
+      if (_currentConversationId == conversationId &&
+          state.valueOrNull == null) {
         state = AsyncValue.error(e, StackTrace.current);
       }
     }
@@ -279,10 +284,12 @@ class MessagesNotifier extends AsyncNotifier<List<Message>> {
 
       Response res;
       if (_currentFriendId != null) {
-        res = await ref.read(messageApiProvider)
+        res = await ref
+            .read(messageApiProvider)
             .getMessages(_currentFriendId!, before: before);
       } else if (_currentGroupId != null) {
-        res = await ref.read(groupApiProvider)
+        res = await ref
+            .read(groupApiProvider)
             .getGroupMessages(_currentGroupId!, before: before);
       } else {
         return;
@@ -317,6 +324,7 @@ class MessagesNotifier extends AsyncNotifier<List<Message>> {
 
   void addMessage(Message message) {
     final current = state.valueOrNull ?? [];
+    if (current.any((item) => item.id == message.id)) return;
     state = AsyncValue.data([...current, message]);
 
     // 同时保存到 SQLite
@@ -347,8 +355,25 @@ class MessagesNotifier extends AsyncNotifier<List<Message>> {
 
   void replaceTempMessage(String tempId, Message serverMessage) {
     final current = state.valueOrNull ?? [];
-    final updated = current.map((m) => m.id == tempId ? serverMessage : m).toList();
-    state = AsyncValue.data(updated);
+    var replaced = false;
+    final updated = current.map((m) {
+      if (m.id == tempId) {
+        replaced = true;
+        return serverMessage;
+      }
+      return m;
+    }).toList();
+
+    if (!replaced && !updated.any((m) => m.id == serverMessage.id)) {
+      updated.add(serverMessage);
+    }
+
+    state = AsyncValue.data([
+      for (final item in updated)
+        if (updated.indexWhere((candidate) => candidate.id == item.id) ==
+            updated.indexOf(item))
+          item,
+    ]);
   }
 
   void updateMessageId(String tempId, String realId) {
@@ -368,6 +393,26 @@ class MessagesNotifier extends AsyncNotifier<List<Message>> {
         );
       }
       return m;
+    }).toList();
+    state = AsyncValue.data(updated);
+  }
+
+  void appendMessageContent(String messageId, String content) {
+    if (content.isEmpty) return;
+    final current = state.valueOrNull ?? [];
+    final updated = current.map((m) {
+      if (m.id != messageId) return m;
+      return Message(
+        id: m.id,
+        sender: m.sender,
+        receiver: m.receiver,
+        groupId: m.groupId,
+        content: '${m.content}$content',
+        type: m.type,
+        createdAt: m.createdAt,
+        mentionAssistant: m.mentionAssistant,
+        images: m.images,
+      );
     }).toList();
     state = AsyncValue.data(updated);
   }

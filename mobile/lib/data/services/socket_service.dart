@@ -12,24 +12,46 @@ class SocketService {
   final Set<String> _joinedGroups = {};
 
   // 事件 StreamControllers
-  final _receiveMessageCtrl = StreamController<Map<String, dynamic>>.broadcast();
-  final _receiveGroupMessageCtrl = StreamController<Map<String, dynamic>>.broadcast();
-  final _scheduledTaskMessageCtrl = StreamController<Map<String, dynamic>>.broadcast();
-  final _friendRequestAcceptedCtrl = StreamController<Map<String, dynamic>>.broadcast();
-  final _aiStreamCtrl = StreamController<Map<String, dynamic>>.broadcast();
-  final _aiStreamErrorCtrl = StreamController<dynamic>.broadcast();
-  final _conversationRenamedCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _receiveMessageCtrl =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _receiveGroupMessageCtrl =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _scheduledTaskMessageCtrl =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _friendRequestAcceptedCtrl =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _groupAiStreamStartCtrl =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _groupAiStreamChunkCtrl =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _groupAiStreamDoneCtrl =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _groupAiStreamErrorCtrl =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _conversationRenamedCtrl =
+      StreamController<Map<String, dynamic>>.broadcast();
   final _connectCtrl = StreamController<void>.broadcast();
   final _disconnectCtrl = StreamController<void>.broadcast();
 
   // 公开 Stream
-  Stream<Map<String, dynamic>> get onReceiveMessage => _receiveMessageCtrl.stream;
-  Stream<Map<String, dynamic>> get onReceiveGroupMessage => _receiveGroupMessageCtrl.stream;
-  Stream<Map<String, dynamic>> get onScheduledTaskMessage => _scheduledTaskMessageCtrl.stream;
-  Stream<Map<String, dynamic>> get onFriendRequestAccepted => _friendRequestAcceptedCtrl.stream;
-  Stream<Map<String, dynamic>> get onAIStream => _aiStreamCtrl.stream;
-  Stream<dynamic> get onAIStreamError => _aiStreamErrorCtrl.stream;
-  Stream<Map<String, dynamic>> get onConversationRenamed => _conversationRenamedCtrl.stream;
+  Stream<Map<String, dynamic>> get onReceiveMessage =>
+      _receiveMessageCtrl.stream;
+  Stream<Map<String, dynamic>> get onReceiveGroupMessage =>
+      _receiveGroupMessageCtrl.stream;
+  Stream<Map<String, dynamic>> get onScheduledTaskMessage =>
+      _scheduledTaskMessageCtrl.stream;
+  Stream<Map<String, dynamic>> get onFriendRequestAccepted =>
+      _friendRequestAcceptedCtrl.stream;
+  Stream<Map<String, dynamic>> get onGroupAiStreamStart =>
+      _groupAiStreamStartCtrl.stream;
+  Stream<Map<String, dynamic>> get onGroupAiStreamChunk =>
+      _groupAiStreamChunkCtrl.stream;
+  Stream<Map<String, dynamic>> get onGroupAiStreamDone =>
+      _groupAiStreamDoneCtrl.stream;
+  Stream<Map<String, dynamic>> get onGroupAiStreamError =>
+      _groupAiStreamErrorCtrl.stream;
+  Stream<Map<String, dynamic>> get onConversationRenamed =>
+      _conversationRenamedCtrl.stream;
   Stream<void> get onConnect => _connectCtrl.stream;
   Stream<void> get onDisconnect => _disconnectCtrl.stream;
 
@@ -99,14 +121,28 @@ class SocketService {
       }
     });
 
-    _socket!.on('ai_stream', (data) {
+    _socket!.on('group_ai_stream_start', (data) {
       if (data is Map<String, dynamic>) {
-        _aiStreamCtrl.add(data);
+        _groupAiStreamStartCtrl.add(data);
       }
     });
 
-    _socket!.on('ai_stream_error', (data) {
-      _aiStreamErrorCtrl.add(data);
+    _socket!.on('group_ai_stream_chunk', (data) {
+      if (data is Map<String, dynamic>) {
+        _groupAiStreamChunkCtrl.add(data);
+      }
+    });
+
+    _socket!.on('group_ai_stream_done', (data) {
+      if (data is Map<String, dynamic>) {
+        _groupAiStreamDoneCtrl.add(data);
+      }
+    });
+
+    _socket!.on('group_ai_stream_error', (data) {
+      if (data is Map<String, dynamic>) {
+        _groupAiStreamErrorCtrl.add(data);
+      }
     });
 
     _socket!.on('conversation_renamed', (data) {
@@ -152,11 +188,6 @@ class SocketService {
     emit('leave_group_room', groupId);
   }
 
-  /// AI 流式聊天
-  void emitAIChatStream(Map<String, dynamic> data) {
-    emit('ai_chat_stream', data);
-  }
-
   /// 重连后重新加入所有群房间
   void _rejoinGroupRooms() {
     for (final groupId in _joinedGroups) {
@@ -181,8 +212,10 @@ class SocketService {
     _receiveGroupMessageCtrl.close();
     _scheduledTaskMessageCtrl.close();
     _friendRequestAcceptedCtrl.close();
-    _aiStreamCtrl.close();
-    _aiStreamErrorCtrl.close();
+    _groupAiStreamStartCtrl.close();
+    _groupAiStreamChunkCtrl.close();
+    _groupAiStreamDoneCtrl.close();
+    _groupAiStreamErrorCtrl.close();
     _conversationRenamedCtrl.close();
     _connectCtrl.close();
     _disconnectCtrl.close();

@@ -53,9 +53,43 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     _subscriptions.add(
       socketService.onReceiveGroupMessage.listen((data) {
+        if (!_isCurrentGroupPayload(data)) return;
         final message = Message.fromJson(data);
         ref.read(messagesProvider.notifier).addMessage(message);
       }),
+    );
+
+    _subscriptions.add(
+      socketService.onGroupAiStreamStart.listen((data) {
+        if (!_isCurrentGroupPayload(data)) return;
+        final message = data['message'];
+        if (message is Map<String, dynamic>) {
+          ref
+              .read(messagesProvider.notifier)
+              .addMessage(Message.fromJson(message));
+        }
+      }),
+    );
+
+    _subscriptions.add(
+      socketService.onGroupAiStreamChunk.listen((data) {
+        if (!_isCurrentGroupPayload(data)) return;
+        final tempMessageId = data['tempMessageId'] as String?;
+        final content = data['content'] as String? ?? '';
+        if (tempMessageId != null) {
+          ref
+              .read(messagesProvider.notifier)
+              .appendMessageContent(tempMessageId, content);
+        }
+      }),
+    );
+
+    _subscriptions.add(
+      socketService.onGroupAiStreamDone.listen(_replaceGroupAiStreamMessage),
+    );
+
+    _subscriptions.add(
+      socketService.onGroupAiStreamError.listen(_replaceGroupAiStreamMessage),
     );
 
     _subscriptions.add(
@@ -80,6 +114,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         }
       }),
     );
+  }
+
+  void _replaceGroupAiStreamMessage(Map<String, dynamic> data) {
+    if (!_isCurrentGroupPayload(data)) return;
+    final tempMessageId = data['tempMessageId'] as String?;
+    final message = data['message'];
+    if (tempMessageId != null && message is Map<String, dynamic>) {
+      ref
+          .read(messagesProvider.notifier)
+          .replaceTempMessage(tempMessageId, Message.fromJson(message));
+    }
+  }
+
+  bool _isCurrentGroupPayload(Map<String, dynamic> data) {
+    final selection = ref.read(chatSelectionProvider);
+    return selection.type == ChatType.group && data['groupId'] == selection.id;
   }
 
   void _logout() {

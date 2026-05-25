@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { io } from 'socket.io-client';
 import {
     Box,
     Typography,
@@ -32,7 +31,6 @@ import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import api from '../services/api';
 import AIProviderSelector from '../components/AIProviderSelector';
-import { useSocketStore } from '../store/socketStore';
 
 interface MessageSource {
     documentName: string;
@@ -40,6 +38,12 @@ interface MessageSource {
     content: string;
     similarity: number;
 }
+
+type AIStreamEvent =
+    | { type: 'ready'; conversationId: string; conversationName?: string }
+    | { type: 'chunk'; content: string }
+    | { type: 'done'; conversationId?: string; sources?: MessageSource[]; pendingTask?: boolean; taskCreated?: boolean }
+    | { type: 'error'; message: string };
 
 interface Message {
     id: string;
@@ -71,13 +75,22 @@ const DRAWER_WIDTH = 280;
 
 // Strip <think>...</think> tags and extract thinking content
 const parseAIResponse = (content: string): { main: string; thinking?: string } => {
-    const thinkMatch = content.match(/<think>([\s\S]*?)<\/think>/);
-    if (thinkMatch) {
-        const thinking = thinkMatch[1].trim();
-        const main = content.replace(/<think>[\s\S]*?<\/think>/, '').trim();
-        return { main, thinking };
+    const openIndex = content.indexOf('<think>');
+    if (openIndex === -1) {
+        return { main: content };
     }
-    return { main: content };
+
+    const closeIndex = content.indexOf('</think>', openIndex);
+    if (closeIndex === -1) {
+        return {
+            main: content.slice(0, openIndex).trim(),
+            thinking: content.slice(openIndex + '<think>'.length).trim(),
+        };
+    }
+
+    const thinking = content.slice(openIndex + '<think>'.length, closeIndex).trim();
+    const main = `${content.slice(0, openIndex)}${content.slice(closeIndex + '</think>'.length)}`.trim();
+    return { main, thinking };
 };
 
 const AI_ASSISTANT_ID = '000000000000000000000001';
@@ -109,11 +122,9 @@ const AIChat: React.FC = () => {
     const [pendingImages, setPendingImages] = useState<File[]>([]); // 待发送的图片
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const imageInputRef = useRef<HTMLInputElement>(null);
-    const socketRef = useRef<ReturnType<typeof io> | null>(null);
     const streamingMessageIdRef = useRef<string | null>(null);
-    const isStreamingRef = useRef(false);
     const streamingRawRef = useRef<string>(''); // 追踪流式接收的原始内容（含 <think> 标签）
-    const pendingThinkingRef = useRef<string>(''); // 追踪尚未闭合的 thinking 内容
+    const streamAbortRef = useRef<AbortController | null>(null);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -165,111 +176,9 @@ const AIChat: React.FC = () => {
         loadHistory();
     }, []);
 
-    // Socket 初始化和 AI 流式监听
     useEffect(() => {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-
-        const { socket: authSocket } = useSocketStore.getState();
-        let socket = authSocket;
-        if (!socket) {
-            socket = io('', { auth: { token }, reconnection: true });
-            socketRef.current = socket;
-        } else {
-            socketRef.current = socket;
-        }
-
-                socket.on('ai_stream', (data: { content: string; done: boolean; sources?: MessageSource[] }) => {
-            if (data.done) {
-                // 流式结束：用完整原始内容更新 message，确保 thinking 正确解析
-                if (streamingMessageIdRef.current && streamingRawRef.current) {
-                    const { main, thinking } = parseAIResponse(streamingRawRef.current);
-                    setMessages((prev) =>
-                        prev.map((msg) => {
-                            if (msg.id !== streamingMessageIdRef.current) return msg;
-                            return { ...msg, content: main, thinking, sources: data.sources || msg.sources };
-                        })
-                    );
-                }
-                // 流式结束，折叠思考过程
-                if (streamingMessageIdRef.current) {
-                    setExpandedThink((prev) => ({ ...prev, [streamingMessageIdRef.current!]: false }));
-                }
-                streamingRawRef.current = '';
-                pendingThinkingRef.current = '';
-                isStreamingRef.current = false;
-                setIsStreaming(false);
-                setLoading(false);
-                streamingMessageIdRef.current = null;
-            } else {
-                // 累积原始内容
-                streamingRawRef.current += data.content;
-
-                // 追加到 pending thinking（如果处于 thinking 块中）
-                pendingThinkingRef.current += data.content;
-
-                setMessages((prev) => {
-                    if (!streamingMessageIdRef.current) return prev;
-                    return prev.map((msg) => {
-                        if (msg.id !== streamingMessageIdRef.current) return msg;
-
-                        const newRaw = msg.content + data.content;
-                        const { main, thinking } = parseAIResponse(newRaw);
-
-                        // 如果当前没有 thinking，检查 pending 中是否已找到完整的 <think>...</think>
-                        let finalThinking = thinking;
-                        if (!finalThinking && pendingThinkingRef.current) {
-                            const completeMatch = pendingThinkingRef.current.match(/<think>([\s\S]*?)<\/think>/);
-                            if (completeMatch) {
-                                finalThinking = completeMatch[1].trim();
-                            }
-                        }
-
-                        // 如果本 chunk 包含 </think>，清空 pending 并折叠思考过程
-                        if (data.content.includes('</think>')) {
-                            pendingThinkingRef.current = '';
-                            if (streamingMessageIdRef.current) {
-                                setExpandedThink((prev) => ({ ...prev, [streamingMessageIdRef.current!]: false }));
-                            }
-                        }
-
-                        return { ...msg, content: main, thinking: finalThinking };
-                    });
-                });
-            }
-        });
-
-        socket.on('conversation_renamed', (data: { conversationId: string; name: string }) => {
-            setConversations((prev) =>
-                prev.map((c) =>
-                    c._id === data.conversationId ? { ...c, name: data.name } : c
-                )
-            );
-        });
-
-        socket.on('ai_stream_error', (data: { error: string }) => {
-            setMessages((prev) => {
-                const withoutStreaming = prev.filter((m) => m.id !== streamingMessageIdRef.current);
-                return [
-                    ...withoutStreaming,
-                    {
-                        id: (Date.now() + 1).toString(),
-                        role: 'assistant' as const,
-                        content: data.error,
-                    },
-                ];
-            });
-            isStreamingRef.current = false;
-            setIsStreaming(false);
-            setLoading(false);
-
-            streamingMessageIdRef.current = null;
-        });
-
         return () => {
-            socket!.off('ai_stream');
-            socket!.off('conversation_renamed');
-            socket!.off('ai_stream_error');
+            streamAbortRef.current?.abort();
         };
     }, []);
 
@@ -349,10 +258,11 @@ const AIChat: React.FC = () => {
     const handleSend = async () => {
         if ((!input.trim() && pendingImages.length === 0) || loading || isStreaming) return;
 
+        const messageText = input.trim();
         const userMessage: Message = {
             id: Date.now().toString(),
             role: 'user',
-            content: input.trim(),
+            content: messageText,
             createdAt: new Date().toISOString(),
         };
 
@@ -376,10 +286,11 @@ const AIChat: React.FC = () => {
                 });
                 const uploadRes = await api.post('/upload/images', formData);
                 uploadedImageUrls = uploadRes.data.images.map((img: { url: string }) => img.url);
-                uploadedImageBase64s = uploadRes.data.images.map((img: { base64: string }) => img.base64);
+                uploadedImageBase64s = uploadRes.data.images
+                    .map((img: { base64: string | null }) => img.base64)
+                    .filter((base64: string | null): base64 is string => Boolean(base64));
             } catch {
                 setError('图片上传失败');
-                isStreamingRef.current = false;
                 setIsStreaming(false);
                 setLoading(false);
                 return;
@@ -390,99 +301,160 @@ const AIChat: React.FC = () => {
         const finalUserMessage: Message = {
             id: userMessage.id + '-full',
             role: 'user',
-            content: input.trim(),
+            content: messageText,
             images: uploadedImageUrls,
             createdAt: userMessage.createdAt,
         };
 
-        setMessages((prev) => {
-            // 替换占位消息为完整消息
-            const filtered = prev.filter((m) => m.id !== userMessage.id);
-            return [...filtered, finalUserMessage, assistantMessage];
-        });
+        setMessages((prev) => [...prev, finalUserMessage, assistantMessage]);
         setPendingImages([]);
         setInput('');
         setLoading(true);
         setIsStreaming(true);
         
         streamingMessageIdRef.current = streamId;
-        isStreamingRef.current = true;
+        streamingRawRef.current = '';
         setExpandedThink((prev) => ({ ...prev, [streamId]: true }));
         setError('');
 
-        // 通过 Socket.IO 流式发送
-        const socket = socketRef.current || useSocketStore.getState().socket;
-        if (socket) {
-            socket.emit('ai_chat_stream', {
-                message: input.trim(),
-                images: uploadedImageBase64s,
-                timezone: getUserTimezone(),
-                conversationId: currentConversationId,
-            }, (response: { success: boolean; conversationId?: string; error?: string }) => {
-                if (!response.success) {
-                    setMessages((prev) => {
-                        const filtered = prev.filter((m) => m.id !== streamId);
-                        return [
-                            ...filtered,
-                            { id: (Date.now() + 1).toString(), role: 'assistant' as const, content: response.error || '发送失败' },
-                        ];
-                    });
-                    isStreamingRef.current = false;
-                    setIsStreaming(false);
+        const controller = new AbortController();
+        streamAbortRef.current = controller;
 
-                    streamingMessageIdRef.current = null;
-                } else if (response.conversationId && !currentConversationId) {
-                    setCurrentConversationId(response.conversationId);
-                }
-                // 注意：socket 路径的 reply 通过 ai_stream 事件和 done: true 来更新消息
-                // 这里只处理 conversationId 状态，消息内容由 done: true 处理
-                // setLoading(false) 也由 done: true 处理
-            });
-        } else {
-            // fallback 到 REST API
-            try {
-                const res = await api.post('/ai-chat', {
-                    message: userMessage.content,
-                    timezone: getUserTimezone(),
-                    conversationId: currentConversationId,
-                });
-                const { main, thinking } = parseAIResponse(res.data.reply);
-                setMessages((prev) => {
-                    const filtered = prev.filter((m) => m.id === streamId);
-                    return [
-                        ...filtered,
-                        {
-                            id: streamId,
-                            role: 'assistant',
-                            content: main,
+        const applyChunk = (content: string) => {
+            streamingRawRef.current += content;
+            const { main, thinking } = parseAIResponse(streamingRawRef.current);
+            setMessages((prev) =>
+                prev.map((msg) =>
+                    msg.id === streamId ? { ...msg, content: main, thinking } : msg
+                )
+            );
+        };
+
+        const applyDone = (event: Extract<AIStreamEvent, { type: 'done' }>) => {
+            const { main, thinking } = parseAIResponse(streamingRawRef.current);
+            setMessages((prev) =>
+                prev.map((msg) =>
+                    msg.id === streamId
+                        ? {
+                            ...msg,
+                            content: main || msg.content,
                             thinking,
-                            pendingTask: res.data.pendingTask,
-                            taskCreated: res.data.taskCreated,
-                            sources: res.data.sources || [],
-                            createdAt: new Date().toISOString(),
+                            sources: event.sources || [],
+                            pendingTask: event.pendingTask,
+                            taskCreated: event.taskCreated,
+                        }
+                        : msg
+                )
+            );
+            if (event.conversationId) {
+                setCurrentConversationId(event.conversationId);
+            }
+            setExpandedThink((prev) => ({ ...prev, [streamId]: false }));
+            void loadConversations();
+            window.setTimeout(() => void loadConversations(), 1500);
+        };
+
+        const handleStreamEvent = (event: AIStreamEvent) => {
+            if (event.type === 'ready') {
+                setCurrentConversationId(event.conversationId);
+                setConversations((prev) => {
+                    if (prev.some((conv) => conv._id === event.conversationId)) return prev;
+                    return [
+                        {
+                            _id: event.conversationId,
+                            name: event.conversationName || 'AI 助手',
+                            lastMessageAt: new Date().toISOString(),
                         },
+                        ...prev,
                     ];
                 });
-                if (res.data.taskCreated) {
-                    setTimeout(() => {
-                        setMessages((prev) => [
-                            ...prev,
-                            { id: (Date.now() + 2).toString(), role: 'assistant' as const, content: '💡 你可以在「定时任务设置」页面查看和管理所有任务。' },
-                        ]);
-                    }, 1000);
-                }
-            } catch {
-                setMessages((prev) => {
-                    const filtered = prev.filter((m) => m.id === streamId);
-                    return [...filtered, { id: (Date.now() + 1).toString(), role: 'assistant' as const, content: '发送失败，请重试' }];
-                });
-            } finally {
-                isStreamingRef.current = false;
-                setIsStreaming(false);
-                setLoading(false);
-
-                streamingMessageIdRef.current = null;
+                return;
             }
+
+            if (event.type === 'chunk') {
+                applyChunk(event.content);
+                return;
+            }
+
+            if (event.type === 'done') {
+                applyDone(event);
+                return;
+            }
+
+            throw new Error(event.message || 'AI 响应失败，请重试');
+        };
+
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch('/api/ai-chat/stream', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({
+                    message: messageText,
+                    modelImages: uploadedImageBase64s,
+                    displayImages: uploadedImageUrls,
+                    timezone: getUserTimezone(),
+                    conversationId: currentConversationId,
+                }),
+                signal: controller.signal,
+            });
+
+            if (!response.ok || !response.body) {
+                throw new Error('发送失败，请重试');
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const events = buffer.split('\n\n');
+                buffer = events.pop() || '';
+
+                for (const rawEvent of events) {
+                    const data = rawEvent
+                        .split('\n')
+                        .filter((line) => line.startsWith('data:'))
+                        .map((line) => line.slice(5).trimStart())
+                        .join('\n');
+
+                    if (!data) continue;
+                    handleStreamEvent(JSON.parse(data) as AIStreamEvent);
+                }
+            }
+
+            if (buffer.trim()) {
+                const data = buffer
+                    .split('\n')
+                    .filter((line) => line.startsWith('data:'))
+                    .map((line) => line.slice(5).trimStart())
+                    .join('\n');
+                if (data) {
+                    handleStreamEvent(JSON.parse(data) as AIStreamEvent);
+                }
+            }
+        } catch (err) {
+            if ((err as Error).name !== 'AbortError') {
+                const message = err instanceof Error ? err.message : '发送失败，请重试';
+                setMessages((prev) =>
+                    prev.map((msg) =>
+                        msg.id === streamId ? { ...msg, content: message } : msg
+                    )
+                );
+                setError(message);
+            }
+        } finally {
+            setIsStreaming(false);
+            setLoading(false);
+            streamingMessageIdRef.current = null;
+            streamAbortRef.current = null;
         }
     };
 

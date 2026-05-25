@@ -18,9 +18,35 @@ export interface UserMessageInput {
     images?: string[]; // 图片 URL 列表
 }
 
+export interface AgentResult {
+    content: string;
+    sources: Source[];
+}
+
+export interface AgentToolPolicy {
+    allowScheduledTaskTool: boolean;
+}
+
+export const AI_DIRECT_TOOL_POLICY: AgentToolPolicy = {
+    allowScheduledTaskTool: false,
+};
+
+export const GROUP_AI_TOOL_POLICY: AgentToolPolicy = {
+    allowScheduledTaskTool: false,
+};
+
+export const UNRESTRICTED_TOOL_POLICY: AgentToolPolicy = {
+    allowScheduledTaskTool: true,
+};
+
+function isModelImageUrl(imageUrl: string): boolean {
+    return /^(data:image\/|https?:\/\/)/i.test(imageUrl);
+}
+
 // 将用户消息转为 OpenAI 消息格式
 function buildUserMessage(input: UserMessageInput): OpenAI.Chat.ChatCompletionUserMessageParam {
-    if (!input.images || input.images.length === 0) {
+    const images = (input.images || []).filter(isModelImageUrl);
+    if (images.length === 0) {
         return { role: 'user', content: input.text };
     }
 
@@ -29,7 +55,7 @@ function buildUserMessage(input: UserMessageInput): OpenAI.Chat.ChatCompletionUs
         { type: 'text', text: input.text },
     ];
 
-    for (const imageUrl of input.images) {
+    for (const imageUrl of images) {
         content.push({
             type: 'image_url',
             image_url: { url: imageUrl, detail: 'auto' },
@@ -43,11 +69,16 @@ function buildUserMessage(input: UserMessageInput): OpenAI.Chat.ChatCompletionUs
 function buildHistoryMessages(history: ChatMessage[]): OpenAI.Chat.ChatCompletionMessageParam[] {
     return history.map((msg) => {
         if (msg.role === 'user' && 'images' in msg && Array.isArray(msg.images)) {
+            const images = msg.images.filter(isModelImageUrl);
+            if (images.length === 0) {
+                return { role: 'user' as const, content: msg.content };
+            }
+
             // 带图片的历史消息
             const content: OpenAI.Chat.ChatCompletionContentPart[] = [
                 { type: 'text', text: msg.content },
             ];
-            for (const imageUrl of msg.images as string[]) {
+            for (const imageUrl of images) {
                 content.push({ type: 'image_url', image_url: { url: imageUrl } });
             }
             return { role: 'user' as const, content };
@@ -110,8 +141,10 @@ const toolRegistry: Record<string, Tool> = {
 };
 
 // 获取工具描述列表
-export async function getTools(userId?: string) {
-    const localTools = Object.values(toolRegistry).map((t) => t.definition);
+export async function getTools(userId?: string, toolPolicy: AgentToolPolicy = AI_DIRECT_TOOL_POLICY) {
+    const localTools = Object.entries(toolRegistry)
+        .filter(([name]) => toolPolicy.allowScheduledTaskTool || name !== 'create_scheduled_task')
+        .map(([, tool]) => tool.definition);
     const mcpTools = userId ? await getMcpToolDefinitions(userId) : [];
     return [...localTools, ...mcpTools];
 }
@@ -143,11 +176,12 @@ export async function executeTool(name: string, args: Record<string, unknown>, u
 interface RunAgentOptions {
     userId?: string;
     knowledgeScope?: { type?: 'user' | 'group'; id?: string };
+    toolPolicy: AgentToolPolicy;
 }
 
 const MAX_ITERATIONS = 10;
 
-const SYSTEM_PROMPT = `你是一个友好、专业的 AI 助手。你可以帮助用户：
+const SYSTEM_PROMPT_WITH_TASK_TOOL = `你是一个友好、专业的 AI 助手。你可以帮助用户：
 1. 回答各种问题，包括图片内容理解和分析
 2. 查询天气（当用户询问天气时，必须使用 get_weather 工具获取真实数据，不要编造天气信息）
 3. 创建定时推送任务（当用户说"每天XX点推送/提醒我..."时，使用 create_scheduled_task 工具）
@@ -159,6 +193,21 @@ const SYSTEM_PROMPT = `你是一个友好、专业的 AI 助手。你可以帮�
 重要提醒：工具调用后会返回结果，请根据结果如实回答用户，不要添加虚假信息。
 重要提醒：如果用户发送了图片，请仔细分析图片内容并给出准确的回答。`;
 
+const SYSTEM_PROMPT_WITHOUT_TASK_TOOL = `你是一个友好、专业的 AI 助手。你可以帮助用户：
+1. 回答各种问题，包括图片内容理解和分析
+2. 查询天气（当用户询问天气时，必须使用 get_weather 工具获取真实数据，不要编造天气信息）
+3. 进行日常对话
+
+请用中文回复，保持友好和专业。
+重要提醒：当用户询问任何地点的天气时，必须调用 get_weather 工具获取实时数据。
+重要提醒：定时任务创建由外层确认流程处理；如果用户表达创建定时任务的意图，不要声称已创建任务，可以让用户按提示确认。
+重要提醒：工具调用后会返回结果，请根据结果如实回答用户，不要添加虚假信息。
+重要提醒：如果用户发送了图片，请仔细分析图片内容并给出准确的回答。`;
+
+function getSystemPrompt(toolPolicy: AgentToolPolicy): string {
+    return toolPolicy.allowScheduledTaskTool ? SYSTEM_PROMPT_WITH_TASK_TOOL : SYSTEM_PROMPT_WITHOUT_TASK_TOOL;
+}
+
 const getMessageText = (message: UserMessageInput | string): string => {
     return typeof message === 'string' ? message : message.text;
 };
@@ -166,22 +215,25 @@ const getMessageText = (message: UserMessageInput | string): string => {
 async function buildSystemPrompt(
     userId: string | undefined,
     query: string,
-    knowledgeScope: { type?: 'user' | 'group'; id?: string } = {}
+    knowledgeScope: { type?: 'user' | 'group'; id?: string } = {},
+    toolPolicy: AgentToolPolicy
 ): Promise<{ systemPrompt: string; sources: Source[] }> {
+    const basePrompt = getSystemPrompt(toolPolicy);
+
     if (!userId || !query.trim()) {
-        return { systemPrompt: SYSTEM_PROMPT, sources: [] };
+        return { systemPrompt: basePrompt, sources: [] };
     }
 
     try {
         // 优化：先检查用户是否有知识库文档，避免对无文档用户执行向量搜索
         const hasDocuments = await userHasDocumentsCached(userId, knowledgeScope);
         if (!hasDocuments) {
-            return { systemPrompt: SYSTEM_PROMPT, sources: [] };
+            return { systemPrompt: basePrompt, sources: [] };
         }
 
         const chunks = await retrieveRelevantChunks(query, userId, 5, knowledgeScope);
         if (chunks.length === 0) {
-            return { systemPrompt: SYSTEM_PROMPT, sources: [] };
+            return { systemPrompt: basePrompt, sources: [] };
         }
 
         const sources = buildSourcesFromChunks(chunks);
@@ -196,7 +248,7 @@ async function buildSystemPrompt(
             })
             .join('\n\n');
 
-        const systemPrompt = `${SYSTEM_PROMPT}
+        const systemPrompt = `${basePrompt}
 
 以下是从用户知识库中检索到的相关文档片段。回答时优先参考这些内容；如果片段与问题无关，请忽略片段并正常回答。不要编造知识库中不存在的信息。
 
@@ -205,7 +257,7 @@ ${context}`;
         return { systemPrompt, sources };
     } catch (err) {
         console.warn('Knowledge retrieval skipped:', err instanceof Error ? err.message : err);
-        return { systemPrompt: SYSTEM_PROMPT, sources: [] };
+        return { systemPrompt: basePrompt, sources: [] };
     }
 }
 
@@ -216,12 +268,18 @@ ${context}`;
 export async function runAgent(
     history: ChatMessage[],
     newMessage: UserMessageInput | string,
-    options: RunAgentOptions = {}
-): Promise<string> {
+    options: RunAgentOptions
+): Promise<AgentResult> {
     const { userId } = options;
+    const { toolPolicy } = options;
     const config = await getUserAIConfig(userId);
     const client = getClient(config);
-    const { systemPrompt } = await buildSystemPrompt(userId, getMessageText(newMessage), options.knowledgeScope);
+    const { systemPrompt, sources } = await buildSystemPrompt(
+        userId,
+        getMessageText(newMessage),
+        options.knowledgeScope,
+        toolPolicy
+    );
 
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
         { role: 'system', content: systemPrompt },
@@ -245,7 +303,7 @@ export async function runAgent(
         const response = await client.chat.completions.create({
             model: config.model,
             messages,
-            tools: await getTools(userId),
+            tools: await getTools(userId, toolPolicy),
         });
 
         const message = response.choices[0].message;
@@ -278,7 +336,7 @@ export async function runAgent(
             // 继续循环，AI 看结果决定下一步
         } else {
             // 不需要工具 → 直接回复
-            return message.content || '';
+            return { content: message.content || '', sources };
         }
     }
 
@@ -294,16 +352,22 @@ export async function runAgentStream(
     newMessage: UserMessageInput | string,
     options: RunAgentOptions & {
         onChunk?: (chunk: string) => void;
-        onDone?: (sources?: Source[]) => void;
-        onError?: (err: string) => void;
-    } = {}
+        onDone?: (sources?: Source[]) => void | Promise<void>;
+        onError?: (err: string) => void | Promise<void>;
+    }
 ) {
     const { userId, onChunk, onDone, onError } = options;
+    const { toolPolicy } = options;
 
     try {
         const config = await getUserAIConfig(userId);
         const client = getClient(config);
-        const { systemPrompt, sources } = await buildSystemPrompt(userId, getMessageText(newMessage), options.knowledgeScope);
+        const { systemPrompt, sources } = await buildSystemPrompt(
+            userId,
+            getMessageText(newMessage),
+            options.knowledgeScope,
+            toolPolicy
+        );
 
         const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
             { role: 'system', content: systemPrompt },
@@ -325,7 +389,7 @@ export async function runAgentStream(
             const stream = await client.chat.completions.create({
                 model: config.model,
                 messages,
-                tools: await getTools(userId),
+                tools: await getTools(userId, toolPolicy),
                 stream: true,
             });
 
@@ -387,14 +451,14 @@ export async function runAgentStream(
                     });
                 }
             } else {
-                if (onDone) onDone(sources);
+                if (onDone) await onDone(sources);
                 return;
             }
         }
 
-        if (onError) onError('Agent 执行超时');
+        if (onError) await onError('Agent 执行超时');
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        if (onError) onError(msg);
+        if (onError) await onError(msg);
     }
 }

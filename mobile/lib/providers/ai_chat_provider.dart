@@ -61,6 +61,7 @@ class AIChatMessage {
   final String? thinking;
   final bool pendingTask;
   final bool taskCreated;
+  final List<dynamic> sources;
   final String? createdAt;
 
   AIChatMessage({
@@ -71,6 +72,7 @@ class AIChatMessage {
     this.thinking,
     this.pendingTask = false,
     this.taskCreated = false,
+    this.sources = const [],
     this.createdAt,
   });
 
@@ -87,6 +89,7 @@ class AIChatMessage {
       thinking: parsed['thinking'],
       images:
           (json['images'] as List<dynamic>?)?.map((e) => e as String).toList(),
+      sources: json['sources'] as List<dynamic>? ?? const [],
       createdAt: json['createdAt'] as String?,
     );
   }
@@ -152,11 +155,18 @@ class AIMessagesNotifier extends StateNotifier<List<AIChatMessage>> {
       content: last.content + chunk,
       images: last.images,
       thinking: last.thinking,
+      pendingTask: last.pendingTask,
+      taskCreated: last.taskCreated,
+      sources: last.sources,
     );
     state = [...state.sublist(0, state.length - 1), updated];
   }
 
-  void markStreamDone() {
+  void markStreamDone({
+    bool pendingTask = false,
+    bool taskCreated = false,
+    List<dynamic> sources = const [],
+  }) {
     if (state.isEmpty) return;
     final last = state.last;
     final parsed = AIChatMessage._parseThinking(last.content);
@@ -165,6 +175,21 @@ class AIMessagesNotifier extends StateNotifier<List<AIChatMessage>> {
       role: last.role,
       content: parsed['content']!,
       thinking: parsed['thinking'],
+      images: last.images,
+      pendingTask: pendingTask,
+      taskCreated: taskCreated,
+      sources: sources,
+    );
+    state = [...state.sublist(0, state.length - 1), updated];
+  }
+
+  void replaceLastAssistantWithError(String message) {
+    if (state.isEmpty) return;
+    final last = state.last;
+    final updated = AIChatMessage(
+      id: last.id,
+      role: 'assistant',
+      content: message,
       images: last.images,
     );
     state = [...state.sublist(0, state.length - 1), updated];

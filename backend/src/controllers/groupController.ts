@@ -5,7 +5,7 @@ import GroupMember from '../models/GroupMember';
 import Conversation from '../models/Conversation';
 import Message from '../models/Message';
 import User from '../models/User';
-import { deleteDocumentInScope, listDocuments } from '../utils/kbDb';
+import { clearDocumentExistsCache, deleteDocumentInScope, listDocuments } from '../utils/kbDb';
 import { processUploadedFile, processUrlImport } from '../services/kbService';
 import { uploadKbFile } from '../services/kbFileService';
 
@@ -262,6 +262,7 @@ export const deleteGroupDocument = async (req: Request, res: Response) => {
         if (!deleted) {
             return res.status(404).json({ message: '文档不存在' });
         }
+        clearDocumentExistsCache('group', groupId);
 
         res.json({ message: '删除成功' });
     } catch (error) {

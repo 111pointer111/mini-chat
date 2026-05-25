@@ -1,10 +1,10 @@
 import { Server, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import Message from '../models/Message';
-import Conversation from '../models/Conversation';
 import mongoose from 'mongoose';
-import { ChatMessage, autoTitleConversation } from '../services/aiService';
-import { runAgentStream, UserMessageInput } from '../services/agentService';
+import { ChatMessage } from '../services/aiService';
+import { GROUP_AI_TOOL_POLICY, runAgentStream, UserMessageInput } from '../services/agentService';
+import { normalizeAiImages, streamAiChatTurn } from '../services/aiTurnService';
 import { AI_ASSISTANT_ID } from '../scripts/initAdmin';
 import GroupMember from '../models/GroupMember';
 import Group from '../models/Group';
@@ -17,36 +17,8 @@ interface DecodedToken {
 
 let ioInstance: Server | null = null;
 
-// 追踪用户正在进行的流式响应内容
-const streamContentMap = new Map<string, string>();
-
-const getOrCreateAIConversation = async (userId: string) => {
-    let conversation = await Conversation.findOne({
-        userId: new mongoose.Types.ObjectId(userId),
-        type: 'ai',
-    });
-    if (!conversation) {
-        conversation = await Conversation.create({
-            userId: new mongoose.Types.ObjectId(userId),
-            type: 'ai',
-            name: 'AI 助手',
-        });
-    }
-    return conversation;
-};
-
-const saveStreamMessage = async (userId: string, conversationId: mongoose.Types.ObjectId, content: string) => {
-    await Message.create({
-        sender: AI_ASSISTANT_ID,
-        receiver: new mongoose.Types.ObjectId(userId),
-        conversationId,
-        content,
-        type: 'text',
-    });
-    await Conversation.findByIdAndUpdate(conversationId, { lastMessageAt: new Date() });
-};
-
 const ASSISTANT_MENTION_RE = /@(?:小助手|AI|ai|助手)\b/;
+const assistantSender = { _id: AI_ASSISTANT_ID.toString(), username: '群聊小助手', avatar: '' };
 
 const isGroupMember = async (groupId: string, userId: string) => {
     return GroupMember.findOne({
@@ -200,7 +172,7 @@ export const setupSocket = (io: Server) => {
                 socket.to(`group:${groupId}`).emit('receive_group_message', populated || newMessage);
 
                 if (typeof callback === 'function') {
-                    callback({ success: true, messageId: newMessage._id.toString() });
+                    callback({ success: true, messageId: newMessage._id.toString(), message: populated || newMessage });
                 }
 
                 if (mentionAssistant) {
@@ -223,22 +195,49 @@ export const setupSocket = (io: Server) => {
                     const cleanContent = content.replace(ASSISTANT_MENTION_RE, '').trim() || content;
                     const userInput: UserMessageInput = { text: cleanContent };
                     let fullContent = '';
+                    const tempAssistantMessageId = `group-ai-${newMessage._id.toString()}`;
+                    const streamStartedAt = new Date().toISOString();
+
+                    io.to(`group:${groupId}`).emit('group_ai_stream_start', {
+                        groupId,
+                        tempMessageId: tempAssistantMessageId,
+                        userMessageId: newMessage._id.toString(),
+                        message: {
+                            _id: tempAssistantMessageId,
+                            sender: assistantSender,
+                            groupId,
+                            content: '',
+                            type: 'text',
+                            createdAt: streamStartedAt,
+                        },
+                    });
 
                     await runAgentStream(history, userInput, {
                         userId,
                         knowledgeScope: { type: 'group', id: groupId },
+                        toolPolicy: GROUP_AI_TOOL_POLICY,
                         onChunk: (chunk) => {
                             fullContent += chunk;
+                            io.to(`group:${groupId}`).emit('group_ai_stream_chunk', {
+                                groupId,
+                                tempMessageId: tempAssistantMessageId,
+                                content: chunk,
+                            });
                         },
-                        onDone: async (_sources) => {
-                            if (!fullContent.trim()) return;
+                        onDone: async (sources) => {
                             const assistantMessage = await Message.create({
                                 sender: AI_ASSISTANT_ID,
                                 groupId: new mongoose.Types.ObjectId(groupId),
-                                content: fullContent,
+                                content: fullContent || '（无回复）',
                                 type: 'text',
                             });
                             const populatedAssistant = await populateMessageSender(assistantMessage._id as mongoose.Types.ObjectId);
+                            io.to(`group:${groupId}`).emit('group_ai_stream_done', {
+                                groupId,
+                                tempMessageId: tempAssistantMessageId,
+                                message: populatedAssistant || assistantMessage,
+                                sources: sources || [],
+                            });
                             io.to(`group:${groupId}`).emit('receive_group_message', populatedAssistant || assistantMessage);
                         },
                         onError: async (err) => {
@@ -249,6 +248,12 @@ export const setupSocket = (io: Server) => {
                                 type: 'system',
                             });
                             const populatedError = await populateMessageSender(errorMessage._id as mongoose.Types.ObjectId);
+                            io.to(`group:${groupId}`).emit('group_ai_stream_error', {
+                                groupId,
+                                tempMessageId: tempAssistantMessageId,
+                                error: err,
+                                message: populatedError || errorMessage,
+                            });
                             io.to(`group:${groupId}`).emit('receive_group_message', populatedError || errorMessage);
                         },
                     });
@@ -263,108 +268,76 @@ export const setupSocket = (io: Server) => {
 
         // AI 流式对话
         socket.on('ai_chat_stream', async (data, callback) => {
-            const { message, images, timezone, conversationId } = data;
+            const { message = '', modelImages, displayImages, images, timezone, conversationId } = data || {};
+            const normalizedImages = normalizeAiImages({
+                modelImages,
+                displayImages,
+                legacyImages: images,
+            });
 
-            if (!message) {
+            if (!String(message).trim() && normalizedImages.modelImages.length === 0) {
                 if (typeof callback === 'function') {
                     callback({ success: false, error: 'Message is required' });
                 }
                 return;
             }
 
+            let acknowledged = false;
             try {
-                // 取消该用户之前的流（如果有）
-                streamContentMap.delete(userId);
-
-                // 获取或创建会话
-                let aiConversation;
-                if (conversationId) {
-                    aiConversation = await Conversation.findOne({
-                        _id: conversationId,
-                        userId: new mongoose.Types.ObjectId(userId),
-                        type: 'ai',
-                    });
-                }
-                if (!aiConversation) {
-                    aiConversation = await getOrCreateAIConversation(userId);
-                }
-
-                // 保存用户消息（支持图片）
-                const userObjectId = new mongoose.Types.ObjectId(userId);
-                await Message.create({
-                    sender: userObjectId,
-                    receiver: AI_ASSISTANT_ID,
-                    conversationId: aiConversation._id,
-                    content: message,
-                    type: 'text',
-                    images: images || [],
-                });
-                await Conversation.findByIdAndUpdate(aiConversation._id, { lastMessageAt: new Date() });
-
-                // 获取历史（最近10条，不含刚发的用户消息）
-                const historyMessages = await Message.find({
-                    conversationId: aiConversation._id,
-                })
-                    .sort({ createdAt: -1 })
-                    .limit(10)
-                    .lean();
-
-                const history: ChatMessage[] = historyMessages
-                    .reverse()
-                    .slice(0, -1)
-                    .map((msg: any) => ({
-                        role: msg.sender.toString() === AI_ASSISTANT_ID.toString() ? 'assistant' as const : 'user' as const,
-                        content: msg.content,
-                        images: msg.images,
-                    }));
-
-                // 先发送会话信息
-                if (typeof callback === 'function') {
-                    callback({ success: true, conversationId: aiConversation._id.toString() });
-                }
-
-                // 发送 "思考中" 状态
                 socket.emit('ai_stream_status', { status: 'thinking' });
 
-                // 构建消息输入（文本 + 可选图片）
-                const userInput: UserMessageInput = { text: message, images: images || [] };
-
-                // 使用 Agent 运行（支持工具调用 + 图片理解）
-                let fullContent = '';
-                await runAgentStream(history, userInput, {
+                await streamAiChatTurn({
                     userId,
-                    onChunk: (chunk) => {
-                        fullContent += chunk;
-                        socket.emit('ai_stream', { content: chunk, done: false });
-                    },
-                    onDone: async (sources) => {
-                        socket.emit('ai_stream', { content: '', done: true, sources: sources || [] });
-                        if (fullContent) {
-                            await saveStreamMessage(userId, aiConversation._id as mongoose.Types.ObjectId, fullContent);
-                            const convId = aiConversation._id.toString();
-                            const newTitle = await autoTitleConversation(convId, userId, message, fullContent);
-                            if (newTitle) {
-                                socket.emit('conversation_renamed', { conversationId: convId, name: newTitle });
-                            }
+                    message: String(message),
+                    timezone,
+                    conversationId,
+                    modelImages: normalizedImages.modelImages,
+                    displayImages: normalizedImages.displayImages,
+                }, (event) => {
+                    if (event.type === 'ready') {
+                        if (typeof callback === 'function' && !acknowledged) {
+                            acknowledged = true;
+                            callback({ success: true, conversationId: event.conversationId });
                         }
-                    },
-                    onError: (err) => {
-                        socket.emit('ai_stream_error', { error: err });
-                    },
+                        return;
+                    }
+
+                    if (event.type === 'chunk') {
+                        socket.emit('ai_stream', { content: event.content, done: false });
+                        return;
+                    }
+
+                    if (event.type === 'done') {
+                        socket.emit('ai_stream', {
+                            content: '',
+                            done: true,
+                            conversationId: event.conversationId,
+                            sources: event.sources || [],
+                            pendingTask: event.pendingTask,
+                            taskCreated: event.taskCreated,
+                            task: event.task,
+                            taskPreview: event.taskPreview,
+                        });
+                        return;
+                    }
+
+                    socket.emit('ai_stream_error', { error: event.message });
                 });
 
             } catch (error) {
                 console.error('AI stream error:', error);
+                if (typeof callback === 'function' && !acknowledged) {
+                    callback({ success: false, error: error instanceof Error ? error.message : 'AI 响应失败，请重试' });
+                }
                 socket.emit('ai_stream_error', { error: 'AI 响应失败，请重试' });
             }
         });
 
         socket.on('ai_cancel_stream', () => {
-            streamContentMap.delete(userId);
+            socket.emit('ai_stream_error', { error: '旧版 Socket AI 流不支持取消，请使用 /api/ai-chat/stream' });
         });
 
         socket.on('disconnect', () => {
-            streamContentMap.delete(userId);
             metrics.recordSocketConnections(io.engine.clientsCount);
             console.log('User disconnected:', userId);
         });
