@@ -56,6 +56,7 @@ export type AiChatStreamEvent =
     | {
         type: 'done';
         conversationId?: string;
+        reply?: string;
         sources?: Source[];
         pendingTask?: boolean;
         taskCreated?: boolean;
@@ -437,6 +438,7 @@ export async function streamAiChatTurn(
         emit({
             type: 'done',
             conversationId: pendingResult.conversationId,
+            reply: pendingResult.reply,
             taskCreated: pendingResult.taskCreated,
             task: pendingResult.task,
         });
@@ -448,6 +450,7 @@ export async function streamAiChatTurn(
         emit({
             type: 'done',
             conversationId: taskIntentResult.conversationId,
+            reply: taskIntentResult.reply,
             pendingTask: true,
             taskPreview: taskIntentResult.taskPreview,
         });
@@ -479,6 +482,7 @@ export async function streamAiChatTurn(
             emit({
                 type: 'done',
                 conversationId: turn.conversationId.toString(),
+                reply,
                 sources: sources || [],
             });
         },

@@ -240,13 +240,15 @@ class AIMessagesNotifier extends StateNotifier<List<AIChatMessage>> {
   }
 
   void markStreamDone({
+    String? finalContent,
     bool pendingTask = false,
     bool taskCreated = false,
     List<dynamic> sources = const [],
   }) {
     if (state.isEmpty) return;
     final last = state.last;
-    final parsed = AIChatMessage._parseThinking(last.content);
+    final rawContent = finalContent ?? last.content;
+    final parsed = AIChatMessage._parseThinking(rawContent);
     final updated = AIChatMessage(
       id: 'done_${DateTime.now().millisecondsSinceEpoch}',
       role: last.role,

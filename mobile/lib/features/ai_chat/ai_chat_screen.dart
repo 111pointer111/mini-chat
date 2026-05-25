@@ -173,6 +173,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
                   event.conversationId;
             }
             ref.read(aiMessagesProvider.notifier).markStreamDone(
+                  finalContent: event.reply,
                   pendingTask: event.pendingTask,
                   taskCreated: event.taskCreated,
                   sources: event.sources,
@@ -260,13 +261,17 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
   Future<void> _selectConversation(String convId) async {
     final currentId = ref.read(currentConversationIdProvider);
     if (currentId == convId) {
-      Navigator.pop(context);
+      if (_scaffoldKey.currentState?.isDrawerOpen ?? false) {
+        Navigator.pop(context);
+      }
       return;
     }
 
     ref.read(currentConversationIdProvider.notifier).state = convId;
     ref.read(aiMessagesProvider.notifier).clear();
-    Navigator.pop(context);
+    if (_scaffoldKey.currentState?.isDrawerOpen ?? false) {
+      Navigator.pop(context);
+    }
 
     try {
       final api = ref.read(aiChatApiProvider);

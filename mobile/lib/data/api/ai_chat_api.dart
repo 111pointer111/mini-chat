@@ -11,6 +11,7 @@ class AIChatStreamEvent {
   final String? stage;
   final String? conversationId;
   final String? conversationName;
+  final String? reply;
   final List<dynamic> sources;
   final bool pendingTask;
   final bool taskCreated;
@@ -22,6 +23,7 @@ class AIChatStreamEvent {
     this.stage,
     this.conversationId,
     this.conversationName,
+    this.reply,
     this.sources = const [],
     this.pendingTask = false,
     this.taskCreated = false,
@@ -35,6 +37,7 @@ class AIChatStreamEvent {
       stage: json['stage'] as String?,
       conversationId: json['conversationId'] as String?,
       conversationName: json['conversationName'] as String?,
+      reply: json['reply'] as String?,
       sources: json['sources'] as List<dynamic>? ?? const [],
       pendingTask: json['pendingTask'] as bool? ?? false,
       taskCreated: json['taskCreated'] as bool? ?? false,

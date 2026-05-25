@@ -43,7 +43,7 @@ type AIStreamEvent =
     | { type: 'status'; stage: 'preparing' | 'retrieving' | 'generating' | 'tool'; message: string }
     | { type: 'ready'; conversationId: string; conversationName?: string }
     | { type: 'chunk'; content: string }
-    | { type: 'done'; conversationId?: string; sources?: MessageSource[]; pendingTask?: boolean; taskCreated?: boolean }
+    | { type: 'done'; conversationId?: string; reply?: string; sources?: MessageSource[]; pendingTask?: boolean; taskCreated?: boolean }
     | { type: 'error'; message: string };
 
 interface Message {
@@ -332,7 +332,11 @@ const AIChat: React.FC = () => {
         };
 
         const applyDone = (event: Extract<AIStreamEvent, { type: 'done' }>) => {
-            const { main, thinking } = parseAIResponse(streamingRawRef.current);
+            const rawContent = event.reply ?? streamingRawRef.current;
+            if (event.reply) {
+                streamingRawRef.current = event.reply;
+            }
+            const { main, thinking } = parseAIResponse(rawContent);
             setMessages((prev) =>
                 prev.map((msg) =>
                     msg.id === streamId
