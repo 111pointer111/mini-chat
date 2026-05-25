@@ -9,6 +9,7 @@ import { createScheduledTask, scheduledTaskToolDefinition } from './createSchedu
 import { ChatMessage, getUserAIConfig, getClient } from './aiService';
 import { retrieveRelevantChunks, buildSourcesFromChunks, type Source } from './kbEmbeddingService';
 import { executeMcpTool, getMcpToolDefinitions } from './mcpService';
+import { userHasDocumentsCached } from '../utils/kbDb';
 import OpenAI from 'openai';
 
 // 用户消息输入：支持纯文本或文本+多张图片
@@ -172,6 +173,12 @@ async function buildSystemPrompt(
     }
 
     try {
+        // 优化：先检查用户是否有知识库文档，避免对无文档用户执行向量搜索
+        const hasDocuments = await userHasDocumentsCached(userId, knowledgeScope);
+        if (!hasDocuments) {
+            return { systemPrompt: SYSTEM_PROMPT, sources: [] };
+        }
+
         const chunks = await retrieveRelevantChunks(query, userId, 5, knowledgeScope);
         if (chunks.length === 0) {
             return { systemPrompt: SYSTEM_PROMPT, sources: [] };

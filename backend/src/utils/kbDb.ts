@@ -270,3 +270,65 @@ export async function textSearch(
 export async function closePool(): Promise<void> {
     await pool.end();
 }
+
+// ==================== 缓存优化 ====================
+
+/**
+ * 检查用户是否有知识库文档（用于优化 RAG 流程）
+ * 避免对没有文档的用户执行向量搜索
+ */
+export async function userHasDocuments(
+    userId: string,
+    scope: { type?: 'user' | 'group'; id?: string } = {}
+): Promise<boolean> {
+    const scopeType = scope.type || 'user';
+    const scopeId = scope.id || userId;
+
+    const result = await pool.query<{ exists: boolean }>(
+        `SELECT EXISTS(
+            SELECT 1 FROM kb_documents
+            WHERE scope_type = $1 AND scope_id = $2 AND status = 'ready'
+        ) AS exists`,
+        [scopeType, scopeId]
+    );
+
+    return result.rows[0]?.exists ?? false;
+}
+
+// 文档存在性缓存（避免频繁查询）
+const documentExistsCache = new Map<string, { exists: boolean; expiresAt: number }>();
+const DOC_EXISTS_CACHE_TTL = 60 * 1000; // 1 分钟
+
+/**
+ * 带缓存的文档存在性检查
+ */
+export async function userHasDocumentsCached(
+    userId: string,
+    scope: { type?: 'user' | 'group'; id?: string } = {}
+): Promise<boolean> {
+    const scopeType = scope.type || 'user';
+    const scopeId = scope.id || userId;
+    const cacheKey = `${scopeType}:${scopeId}`;
+
+    const cached = documentExistsCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+        return cached.exists;
+    }
+
+    const exists = await userHasDocuments(userId, scope);
+    documentExistsCache.set(cacheKey, { exists, expiresAt: Date.now() + DOC_EXISTS_CACHE_TTL });
+
+    return exists;
+}
+
+/**
+ * 清除文档存在性缓存
+ */
+export function clearDocumentExistsCache(scopeType?: string, scopeId?: string): void {
+    if (scopeType && scopeId) {
+        const cacheKey = `${scopeType}:${scopeId}`;
+        documentExistsCache.delete(cacheKey);
+    } else {
+        documentExistsCache.clear();
+    }
+}

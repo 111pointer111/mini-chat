@@ -2,12 +2,14 @@ import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import aiService, { ChatMessage, autoTitleConversation } from '../services/aiService';
 import { chatWithKnowledge } from '../services/kbService';
+import { runAgent, runAgentStream } from '../services/agentService';
 import ScheduledTask from '../models/ScheduledTask';
 import Conversation from '../models/Conversation';
 import Message from '../models/Message';
 import redis from '../utils/redis';
 import { AI_ASSISTANT_ID } from '../scripts/initAdmin';
 import { syncTaskScheduler, updateTaskNextRunAt } from '../services/taskScheduleService';
+import { getRecentMessages, invalidateMessageCache } from '../utils/messageCache';
 
 const PENDING_TASK_TTL = 300; // 5 minutes in seconds
 
@@ -16,6 +18,13 @@ interface PendingTask {
     pushTime: string;
     prompt: string;
     summary: string;
+}
+
+// 规则预筛选：只对疑似任务创建才调用 AI 解析
+const TASK_KEYWORDS = ['定时', '每天', '推送', '提醒', '创建任务', '设置任务', '定时任务'];
+
+function mightBeTaskCreation(message: string): boolean {
+    return TASK_KEYWORDS.some(kw => message.includes(kw));
 }
 
 const pendingTaskKey = (userId: string) => `pending_task:${userId}`;
@@ -98,11 +107,16 @@ export const chat = async (req: Request, res: Response) => {
             aiConversation = await getOrCreateAIConversation(userId);
         }
 
-        // Save user message
-        await saveMessage(aiConversation._id as mongoose.Types.ObjectId, userObjectId, AI_ASSISTANT_ID, message);
+        const convId = aiConversation._id as mongoose.Types.ObjectId;
+
+        // 并发执行：保存用户消息 + 获取历史 + 检查待处理任务
+        const [_, historyMessages, pendingTask] = await Promise.all([
+            saveMessage(convId, userObjectId, AI_ASSISTANT_ID, message),
+            getRecentMessages(convId, 10),
+            getPendingTask(userId),
+        ]);
 
         // Check if user is confirming a pending task
-        const pendingTask = await getPendingTask(userId);
         if (pendingTask) {
             const lowerMessage = message.toLowerCase().trim();
 
@@ -140,7 +154,7 @@ export const chat = async (req: Request, res: Response) => {
 任务已启用，你可以在「定时任务设置」页面管理所有任务。`;
 
                 // Save AI reply
-                await saveMessage(aiConversation._id as mongoose.Types.ObjectId, AI_ASSISTANT_ID, userObjectId, replyContent);
+                await saveMessage(convId, AI_ASSISTANT_ID, userObjectId, replyContent);
 
                 return res.json({
                     reply: replyContent,
@@ -155,7 +169,7 @@ export const chat = async (req: Request, res: Response) => {
             } else if (lowerMessage === '取消' || lowerMessage === 'cancel' || lowerMessage === 'no') {
                 await clearPendingTask(userId);
                 const cancelReply = '好的，已取消创建定时任务。有其他需要帮助的吗？';
-                await saveMessage(aiConversation._id as mongoose.Types.ObjectId, AI_ASSISTANT_ID, userObjectId, cancelReply);
+                await saveMessage(convId, AI_ASSISTANT_ID, userObjectId, cancelReply);
                 return res.json({
                     reply: cancelReply,
                     taskCreated: false,
@@ -166,31 +180,23 @@ export const chat = async (req: Request, res: Response) => {
             await clearPendingTask(userId);
         }
 
-        // Get conversation history for context (last 10 messages)
-        const historyMessages = await Message.find({
-            conversationId: aiConversation._id,
-        })
-            .sort({ createdAt: -1 })
-            .limit(10)
-            .lean();
-
         // Convert to ChatMessage format (reverse to chronological order, exclude current message)
         const history: ChatMessage[] = historyMessages
-            .reverse()
             .slice(0, -1) // Exclude the message we just saved
             .map((msg: any) => ({
                 role: msg.sender.equals(AI_ASSISTANT_ID) ? 'assistant' as const : 'user' as const,
                 content: msg.content,
             }));
 
-        // Parse user intent with context
-        const parseResult = await aiService.parseTaskIntent(message, userId);
+        // 规则预筛选：只对疑似任务创建才调用 AI 解析
+        if (mightBeTaskCreation(message)) {
+            const parseResult = await aiService.parseTaskIntent(message, userId);
 
-        if (parseResult.isTaskCreation && parseResult.task) {
-            // Store pending task for confirmation (TTL handled by Redis)
-            await setPendingTask(userId, parseResult.task);
+            if (parseResult.isTaskCreation && parseResult.task) {
+                // Store pending task for confirmation (TTL handled by Redis)
+                await setPendingTask(userId, parseResult.task);
 
-            const confirmReply = `我理解你想创建以下定时任务：
+                const confirmReply = `我理解你想创建以下定时任务：
 
 📌 **任务名称**：${parseResult.task.taskName}
 ⏰ **推送时间**：每天 ${parseResult.task.pushTime}
@@ -199,39 +205,197 @@ export const chat = async (req: Request, res: Response) => {
 确认创建吗？回复「**确认**」创建任务，或「**取消**」放弃。
 你也可以告诉我需要修改的地方。`;
 
-            await saveMessage(aiConversation._id as mongoose.Types.ObjectId, AI_ASSISTANT_ID, userObjectId, confirmReply);
+                await saveMessage(convId, AI_ASSISTANT_ID, userObjectId, confirmReply);
 
-            return res.json({
-                reply: confirmReply,
-                pendingTask: true,
-                taskPreview: parseResult.task,
-            });
+                return res.json({
+                    reply: confirmReply,
+                    pendingTask: true,
+                    taskPreview: parseResult.task,
+                });
+            }
         }
 
-        // Normal chat response with history context and knowledge-base augmentation.
-        let normalReply: string;
-        let sources: import('../services/kbEmbeddingService').Source[] = [];
-        try {
-            const ragResult = await chatWithKnowledge(userId, message, history);
-            normalReply = ragResult.answer;
-            sources = ragResult.sources;
-        } catch (err) {
-            console.warn('RAG chat fallback to normal chat:', err instanceof Error ? err.message : err);
-            normalReply = await aiService.chatWithHistory(history, message, userId);
-        }
-        await saveMessage(aiConversation._id as mongoose.Types.ObjectId, AI_ASSISTANT_ID, userObjectId, normalReply);
+        // Normal chat response using Agent (supports tools + MCP)
+        const normalReply = await runAgent(history, message, { userId });
+        await saveMessage(convId, AI_ASSISTANT_ID, userObjectId, normalReply);
 
-        autoTitleConversation(aiConversation._id.toString(), userId, message, normalReply)
+        // 自动生成标题（异步，不阻塞响应）
+        autoTitleConversation(convId.toString(), userId, message, normalReply)
             .catch(err => console.error('Auto-title failed:', err));
 
         return res.json({
             reply: normalReply,
             taskCreated: false,
-            sources,
         });
     } catch (error) {
         console.error('AI chat error:', error);
         res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// 流式聊天端点
+export const chatStream = async (req: Request, res: Response) => {
+    try {
+        const userId = req.user!.id;
+        const userObjectId = new mongoose.Types.ObjectId(userId);
+        const { message, timezone, conversationId } = req.body;
+
+        if (!message) {
+            return res.status(400).json({ message: 'Message is required' });
+        }
+
+        // 设置 SSE 头
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no'); // 禁用 Nginx 缓冲
+        res.flushHeaders();
+
+        // Get specific conversation or create default one
+        let aiConversation;
+        if (conversationId) {
+            aiConversation = await Conversation.findOne({
+                _id: conversationId,
+                userId: new mongoose.Types.ObjectId(userId),
+                type: 'ai',
+            });
+            if (!aiConversation) {
+                res.write(`data: ${JSON.stringify({ type: 'error', message: 'Conversation not found' })}\n\n`);
+                res.end();
+                return;
+            }
+        } else {
+            aiConversation = await getOrCreateAIConversation(userId);
+        }
+
+        const convId = aiConversation._id as mongoose.Types.ObjectId;
+
+        // 并发执行：保存用户消息 + 获取历史 + 检查待处理任务
+        const [_, historyMessages, pendingTask] = await Promise.all([
+            saveMessage(convId, userObjectId, AI_ASSISTANT_ID, message),
+            getRecentMessages(convId, 10),
+            getPendingTask(userId),
+        ]);
+
+        // Check if user is confirming a pending task
+        if (pendingTask) {
+            const lowerMessage = message.toLowerCase().trim();
+
+            if (lowerMessage === '确认' || lowerMessage === '确定' || lowerMessage === 'yes' || lowerMessage === 'ok') {
+                // Create the task
+                const conversation = await Conversation.create({
+                    userId: new mongoose.Types.ObjectId(userId),
+                    type: 'scheduled_task',
+                    name: pendingTask.taskName,
+                    taskType: 'custom',
+                });
+
+                const task = new ScheduledTask({
+                    userId,
+                    taskType: 'custom',
+                    taskName: pendingTask.taskName,
+                    prompt: pendingTask.prompt,
+                    enabled: true,
+                    pushTime: pendingTask.pushTime,
+                    timezone: timezone || 'Asia/Shanghai',
+                    conversationId: conversation._id,
+                });
+                updateTaskNextRunAt(task);
+
+                await task.save();
+                await syncTaskScheduler(task);
+                await clearPendingTask(userId);
+
+                const replyContent = `✅ 定时任务创建成功！
+
+📌 **任务名称**：${pendingTask.taskName}
+⏰ **推送时间**：每天 ${pendingTask.pushTime}
+📝 **推送内容**：${pendingTask.summary}
+
+任务已启用，你可以在「定时任务设置」页面管理所有任务。`;
+
+                await saveMessage(convId, AI_ASSISTANT_ID, userObjectId, replyContent);
+
+                res.write(`data: ${JSON.stringify({ type: 'chunk', content: replyContent })}\n\n`);
+                res.write(`data: ${JSON.stringify({ type: 'done', taskCreated: true, task: { _id: task._id, taskName: task.taskName, pushTime: task.pushTime, enabled: task.enabled } })}\n\n`);
+                res.end();
+                return;
+            } else if (lowerMessage === '取消' || lowerMessage === 'cancel' || lowerMessage === 'no') {
+                await clearPendingTask(userId);
+                const cancelReply = '好的，已取消创建定时任务。有其他需要帮助的吗？';
+                await saveMessage(convId, AI_ASSISTANT_ID, userObjectId, cancelReply);
+
+                res.write(`data: ${JSON.stringify({ type: 'chunk', content: cancelReply })}\n\n`);
+                res.write(`data: ${JSON.stringify({ type: 'done', taskCreated: false })}\n\n`);
+                res.end();
+                return;
+            }
+            // If not confirming/canceling, continue to process as normal message
+            // but clear the pending task
+            await clearPendingTask(userId);
+        }
+
+        // Convert to ChatMessage format
+        const history: ChatMessage[] = historyMessages
+            .slice(0, -1)
+            .map((msg: any) => ({
+                role: msg.sender.equals(AI_ASSISTANT_ID) ? 'assistant' as const : 'user' as const,
+                content: msg.content,
+            }));
+
+        // 规则预筛选：只对疑似任务创建才调用 AI 解析
+        if (mightBeTaskCreation(message)) {
+            const parseResult = await aiService.parseTaskIntent(message, userId);
+
+            if (parseResult.isTaskCreation && parseResult.task) {
+                await setPendingTask(userId, parseResult.task);
+
+                const confirmReply = `我理解你想创建以下定时任务：
+
+📌 **任务名称**：${parseResult.task.taskName}
+⏰ **推送时间**：每天 ${parseResult.task.pushTime}
+📝 **推送内容**：${parseResult.task.summary}
+
+确认创建吗？回复「**确认**」创建任务，或「**取消**」放弃。
+你也可以告诉我需要修改的地方。`;
+
+                await saveMessage(convId, AI_ASSISTANT_ID, userObjectId, confirmReply);
+
+                res.write(`data: ${JSON.stringify({ type: 'chunk', content: confirmReply })}\n\n`);
+                res.write(`data: ${JSON.stringify({ type: 'done', pendingTask: true, taskPreview: parseResult.task })}\n\n`);
+                res.end();
+                return;
+            }
+        }
+
+        // 流式调用 Agent
+        let fullContent = '';
+        await runAgentStream(history, message, {
+            userId,
+            onChunk: (chunk) => {
+                fullContent += chunk;
+                res.write(`data: ${JSON.stringify({ type: 'chunk', content: chunk })}\n\n`);
+            },
+            onDone: async (sources) => {
+                // 保存完整回复
+                await saveMessage(convId, AI_ASSISTANT_ID, userObjectId, fullContent);
+
+                // 自动生成标题（异步）
+                autoTitleConversation(convId.toString(), userId, message, fullContent)
+                    .catch(err => console.error('Auto-title failed:', err));
+
+                res.write(`data: ${JSON.stringify({ type: 'done', sources })}\n\n`);
+                res.end();
+            },
+            onError: (err) => {
+                res.write(`data: ${JSON.stringify({ type: 'error', message: err })}\n\n`);
+                res.end();
+            },
+        });
+    } catch (error) {
+        console.error('AI chat stream error:', error);
+        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Server error' })}\n\n`);
+        res.end();
     }
 };
 
