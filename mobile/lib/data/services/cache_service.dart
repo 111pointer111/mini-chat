@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'database_service.dart';
 import '../models/group.dart';
 import '../models/message.dart';
@@ -390,6 +393,35 @@ class CacheService {
       debugPrint('[CacheService] Cleared all cache');
     } catch (e) {
       debugPrint('[CacheService] clearAll error: $e');
+    }
+  }
+
+  // ============================================================
+  // 定时任务缓存（SharedPreferences）
+  // ============================================================
+
+  static const _tasksCacheKey = 'cached_tasks_json';
+
+  /// 缓存定时任务 JSON
+  Future<void> cacheTasksJson(Map<String, dynamic> json) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_tasksCacheKey, jsonEncode(json));
+    } catch (e) {
+      debugPrint('[CacheService] cacheTasksJson error: $e');
+    }
+  }
+
+  /// 获取缓存的定时任务 JSON
+  Future<Map<String, dynamic>?> getTasksJson() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_tasksCacheKey);
+      if (raw == null) return null;
+      return jsonDecode(raw) as Map<String, dynamic>;
+    } catch (e) {
+      debugPrint('[CacheService] getTasksJson error: $e');
+      return null;
     }
   }
 }

@@ -94,7 +94,7 @@ class AIChatApi {
   }
 
   Future<Response> createConversation() {
-    return _client.dio.post('/ai-chat/conversations');
+    return _client.dio.post('/ai-chat/conversations', data: {});
   }
 
   Future<Response> renameConversation(String id, String name) {

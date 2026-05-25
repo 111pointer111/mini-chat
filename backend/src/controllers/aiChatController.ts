@@ -175,7 +175,7 @@ export const getConversations = async (req: Request, res: Response) => {
 export const createConversation = async (req: Request, res: Response) => {
     try {
         const userId = req.user!.id;
-        const { name } = req.body;
+        const { name } = req.body || {};
 
         const conversation = await Conversation.create({
             userId: new mongoose.Types.ObjectId(userId),

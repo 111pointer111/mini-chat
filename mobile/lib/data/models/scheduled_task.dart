@@ -25,6 +25,15 @@ class PresetTask {
       conversationId: json['conversationId'] as String?,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    if (id != null) '_id': id,
+    'taskType': taskType,
+    'taskName': taskName,
+    'enabled': enabled,
+    'pushTime': pushTime,
+    if (conversationId != null) 'conversationId': conversationId,
+  };
 }
 
 class CustomTask {
@@ -57,6 +66,16 @@ class CustomTask {
       conversationId: json['conversationId'] as String?,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    '_id': id,
+    'taskType': taskType,
+    'taskName': taskName,
+    if (prompt != null) 'prompt': prompt,
+    'enabled': enabled,
+    'pushTime': pushTime,
+    if (conversationId != null) 'conversationId': conversationId,
+  };
 }
 
 class TasksResponse {
@@ -80,4 +99,9 @@ class TasksResponse {
           [],
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'presetTasks': presetTasks.map((e) => e.toJson()).toList(),
+    'customTasks': customTasks.map((e) => e.toJson()).toList(),
+  };
 }

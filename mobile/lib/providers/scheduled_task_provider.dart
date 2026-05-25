@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/api/scheduled_task_api.dart';
 import '../data/models/scheduled_task.dart';
+import '../data/services/cache_service.dart';
 import 'auth_provider.dart';
 
 final scheduledTaskApiRefProvider = Provider<ScheduledTaskApi>((ref) {
@@ -15,10 +16,32 @@ final tasksProvider =
 });
 
 class TasksNotifier extends AutoDisposeAsyncNotifier<TasksResponse> {
+  final CacheService _cache = CacheService();
+
   @override
   Future<TasksResponse> build() async {
-    final res = await ref.read(scheduledTaskApiRefProvider).getTasks();
-    return TasksResponse.fromJson(res.data as Map<String, dynamic>);
+    try {
+      final cached = await _cache.getTasksJson();
+      if (cached != null) {
+        _fetchAndCache();
+        return TasksResponse.fromJson(cached);
+      }
+    } catch (_) {}
+    return await _fetchAndCache();
+  }
+
+  Future<TasksResponse> _fetchAndCache() async {
+    try {
+      final res = await ref.read(scheduledTaskApiRefProvider).getTasks();
+      final data = res.data as Map<String, dynamic>;
+      final tasks = TasksResponse.fromJson(data);
+      await _cache.cacheTasksJson(data);
+      return tasks;
+    } catch (e) {
+      final cached = await _cache.getTasksJson();
+      if (cached != null) return TasksResponse.fromJson(cached);
+      rethrow;
+    }
   }
 
   Future<void> refresh() async {

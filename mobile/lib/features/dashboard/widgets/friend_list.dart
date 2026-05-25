@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme.dart';
 import '../../../data/models/user.dart';
 import '../../../data/models/group.dart';
+import '../../../data/models/scheduled_task.dart';
 import '../../../providers/chat_provider.dart';
 import '../../../providers/group_provider.dart';
 import '../../../providers/scheduled_task_provider.dart';
@@ -19,54 +20,36 @@ class FriendList extends ConsumerStatefulWidget {
 }
 
 class _FriendListState extends ConsumerState<FriendList> {
-  List<EnabledTask> _enabledTasks = [];
-
-  @override
-  void initState() {
-    super.initState();
-    // 只加载定时任务，friends/groups/providers 会自动构建
-    _loadEnabledTasks();
-  }
-
   Future<void> _refreshData() async {
     await ref.read(friendsProvider.notifier).refresh();
     await ref.read(pendingRequestsProvider.notifier).refresh();
     await ref.read(groupsProvider.notifier).refresh();
-    await _loadEnabledTasks();
+    await ref.read(tasksProvider.notifier).refresh();
   }
 
-  Future<void> _loadEnabledTasks() async {
-    try {
-      final api = ref.read(scheduledTaskApiRefProvider);
-      final res = await api.getTasks();
-      final data = res.data as Map<String, dynamic>;
-      final presetTasks = (data['presetTasks'] as List<dynamic>? ?? []);
-      final customTasks = (data['customTasks'] as List<dynamic>? ?? []);
-      final result = <EnabledTask>[];
-      for (final t in presetTasks) {
-        final map = t as Map<String, dynamic>;
-        if (map['enabled'] == true && map['conversationId'] != null) {
-          result.add(EnabledTask(
-            id: map['taskType'] as String? ?? '',
-            name: map['taskName'] as String? ?? '',
-            icon: _taskIcon(map['taskType'] as String? ?? ''),
-            isCustom: false,
-          ));
-        }
+  List<EnabledTask> _extractEnabledTasks(TasksResponse tasks) {
+    final result = <EnabledTask>[];
+    for (final t in tasks.presetTasks) {
+      if (t.enabled && t.conversationId != null) {
+        result.add(EnabledTask(
+          id: t.taskType,
+          name: t.taskName,
+          icon: _taskIcon(t.taskType),
+          isCustom: false,
+        ));
       }
-      for (final t in customTasks) {
-        final map = t as Map<String, dynamic>;
-        if (map['enabled'] == true && map['conversationId'] != null) {
-          result.add(EnabledTask(
-            id: map['_id'] as String? ?? '',
-            name: map['taskName'] as String? ?? '',
-            icon: Icons.auto_awesome,
-            isCustom: true,
-          ));
-        }
+    }
+    for (final t in tasks.customTasks) {
+      if (t.enabled && t.conversationId != null) {
+        result.add(EnabledTask(
+          id: t.id,
+          name: t.taskName,
+          icon: Icons.auto_awesome,
+          isCustom: true,
+        ));
       }
-      if (mounted) setState(() => _enabledTasks = result);
-    } catch (_) {}
+    }
+    return result;
   }
 
   IconData _taskIcon(String taskType) {
@@ -87,6 +70,7 @@ class _FriendListState extends ConsumerState<FriendList> {
     final friendsAsync = ref.watch(friendsProvider);
     final requestsAsync = ref.watch(pendingRequestsProvider);
     final groupsAsync = ref.watch(groupsProvider);
+    final tasksAsync = ref.watch(tasksProvider);
     final selection = ref.watch(chatSelectionProvider);
 
     return Column(
@@ -105,7 +89,10 @@ class _FriendListState extends ConsumerState<FriendList> {
             data: (friends) {
               return groupsAsync.when(
                 data: (groups) {
-                  if (friends.isEmpty && groups.isEmpty && _enabledTasks.isEmpty) {
+                  final enabledTasks = tasksAsync.whenOrNull(
+                    data: (tasks) => _extractEnabledTasks(tasks),
+                  ) ?? [];
+                  if (friends.isEmpty && groups.isEmpty && enabledTasks.isEmpty) {
                     return _buildEmptyState();
                   }
                   return RefreshIndicator(
@@ -115,9 +102,9 @@ class _FriendListState extends ConsumerState<FriendList> {
                       padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
                       children: [
                         // 定时任务
-                        if (_enabledTasks.isNotEmpty) ...[
+                        if (enabledTasks.isNotEmpty) ...[
                           _buildSectionHeader('定时任务', Icons.schedule_outlined),
-                          ..._enabledTasks.map((t) => _buildTaskTile(t, selection)),
+                          ...enabledTasks.map((t) => _buildTaskTile(t, selection)),
                           if (friends.isNotEmpty || groups.isNotEmpty)
                             const Padding(
                               padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
