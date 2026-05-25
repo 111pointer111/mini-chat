@@ -12,6 +12,7 @@ import '../../data/api/upload_api.dart';
 import '../../data/models/user.dart';
 import '../../features/dashboard/widgets/app_update_prompt.dart';
 import '../../providers/auth_provider.dart';
+import '../../shared/utils/error_utils.dart';
 
 class ProfileSettingsScreen extends ConsumerStatefulWidget {
   const ProfileSettingsScreen({super.key});
@@ -76,23 +77,25 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
         filename: image.name,
       );
       final uploadApi = UploadApi(ref.read(apiClientProvider));
-      final response = await uploadApi.uploadImage(file);
-      final data = response.data as Map<String, dynamic>;
-      final avatarUrl = data['url'] as String? ?? '';
-      if (avatarUrl.isEmpty) {
-        throw Exception('empty avatar url');
-      }
+      final uploadedImage = await uploadApi.uploadImageFile(file);
 
       if (!mounted) return;
       setState(() {
-        _avatar = avatarUrl;
+        _avatar = uploadedImage.url;
       });
       _showMessage('头像已上传，保存后生效');
     } catch (error) {
       if (mounted) {
-        _showMessage('头像上传失败，请稍后重试');
+        _showMessage(extractErrorMessage(error, fallback: '头像上传失败，请稍后重试'));
       }
-      debugPrint('[Profile] avatar upload failed: $error');
+      final statusCode =
+          error is DioException ? error.response?.statusCode : null;
+      final responseBody = error is DioException ? error.response?.data : null;
+      debugPrint(
+        '[Profile] avatar upload failed: '
+        'statusCode=$statusCode response=$responseBody '
+        'path=${image.path} name=${image.name} error=$error',
+      );
     } finally {
       if (mounted) {
         setState(() {

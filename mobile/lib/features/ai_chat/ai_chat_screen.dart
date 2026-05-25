@@ -134,23 +134,26 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
     });
   }
 
-  Future<List<String>> _uploadImages() async {
+  Future<List<String>?> _uploadImages() async {
     if (_pendingImages.isEmpty) return [];
     setState(() => _isUploading = true);
     try {
       final uploadApi = ref.read(uploadApiProvider);
-      final files = _pendingImages
-          .map((x) => MultipartFile.fromFileSync(x.path, filename: x.name))
-          .toList();
-      final res = await uploadApi.uploadImages(files);
-      final urls =
-          (res.data['urls'] as List<dynamic>).map((e) => e as String).toList();
-      return urls;
+      final files = <MultipartFile>[];
+      for (final image in _pendingImages) {
+        files.add(
+          await MultipartFile.fromFile(image.path, filename: image.name),
+        );
+      }
+
+      final uploadedImages = await uploadApi.uploadImageFiles(files);
+      return uploadedImages.map((image) => image.url).toList();
     } catch (e) {
       if (mounted) {
         showErrorToast(context, extractErrorMessage(e, fallback: '图片上传失败'));
       }
-      return [];
+      debugPrint('[AIChat] image upload failed: $e');
+      return null;
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }
@@ -162,6 +165,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
     if (ref.read(isStreamingProvider)) return;
 
     final imageUrls = await _uploadImages();
+    if (imageUrls == null) return;
 
     ref.read(aiMessagesProvider.notifier).addUserMessage(
           content,
