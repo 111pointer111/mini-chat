@@ -79,6 +79,9 @@ services:
       - AI_EMBEDDING_API_KEY=
       - AI_EMBEDDING_MODEL=
       - AI_EMBEDDING_DIMENSIONS=
+      - ALERT_MIN_SEVERITY=info
+      - ENABLE_MONITORING_TEST_ROUTES=true
+      - MONITORING_TEST_TOKEN=dev-monitoring-test
     depends_on:
       mongodb:
         condition: service_healthy

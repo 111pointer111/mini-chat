@@ -51,6 +51,9 @@ export class WebSocketChannel implements NotificationChannel {
                 severity: event.alert.rule.severity,
                 name: event.alert.rule.name,
                 message,
+                currentValue: event.alert.rule.getValue(event.snapshot),
+                threshold: event.alert.rule.threshold,
+                window: event.alert.rule.window,
                 timestamp: event.timestamp,
             });
         } catch (err) {
@@ -179,7 +182,10 @@ export class AlertNotifier {
     };
 
     constructor(options: { minSeverity?: AlertSeverity } = {}) {
-        this.minSeverity = options.minSeverity || 'warning';
+        this.minSeverity = options.minSeverity &&
+            options.minSeverity in AlertNotifier.severityWeight
+            ? options.minSeverity
+            : 'warning';
     }
 
     /**
@@ -245,16 +251,24 @@ export class AlertNotifier {
         desc = desc.replace('{{p95}}', String(snapshot.latency.p95));
         desc = desc.replace('{{memory}}', String(snapshot.system.memoryUsageMB));
         desc = desc.replace('{{sockets}}', String(snapshot.system.socketConnections));
+        desc = desc.replace('{{dependency}}', String(alert.rule.getValue(snapshot)));
+        desc = desc.replace('{{eventLoopLag}}', String(snapshot.system.eventLoopLagMs));
         msg += `详情: ${desc}\n`;
+        msg += `当前值: ${alert.rule.getValue(snapshot)}\n`;
+        msg += `阈值: ${alert.rule.threshold}\n`;
+        msg += `窗口: ${alert.rule.window}\n`;
+        msg += `建议: ${alert.rule.suggestion}\n`;
 
         msg += `时间: ${time}\n`;
 
         if (type === 'firing') {
             msg += `\n---\n`;
             msg += `请求总数: ${snapshot.requests.total}\n`;
-            msg += `5xx 错误: ${snapshot.errors.server5xx}\n`;
-            msg += `P95 延迟: ${snapshot.latency.p95}ms\n`;
-            msg += `内存使用: ${snapshot.system.memoryUsageMB}MB`;
+            msg += `1m 请求数: ${snapshot.windows.oneMinute.requests}\n`;
+            msg += `1m 5xx 错误: ${snapshot.windows.oneMinute.server5xx}\n`;
+            msg += `1m P95 延迟: ${snapshot.windows.oneMinute.latency.p95}ms\n`;
+            msg += `内存使用: ${snapshot.system.memoryUsageMB}MB\n`;
+            msg += `Event loop lag: ${snapshot.system.eventLoopLagMs}ms`;
         }
 
         return msg;

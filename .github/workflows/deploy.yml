@@ -84,6 +84,9 @@ jobs:
             sed -i '/^ALIYUN_SMTP_PASS=/d' .env.production 2>/dev/null || true
             sed -i '/^ALIYUN_SMTP_SENDER_NAME=/d' .env.production 2>/dev/null || true
             sed -i '/^ALERT_EMAIL=/d' .env.production 2>/dev/null || true
+            sed -i '/^ALERT_MIN_SEVERITY=/d' .env.production 2>/dev/null || true
+            sed -i '/^ENABLE_MONITORING_TEST_ROUTES=/d' .env.production 2>/dev/null || true
+            sed -i '/^MONITORING_TEST_TOKEN=/d' .env.production 2>/dev/null || true
             echo "DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}" >> .env.production
             echo "MONGO_USER=${{ secrets.MONGO_USER || 'admin' }}" >> .env.production
             echo "MONGO_PASSWORD=${{ secrets.MONGO_PASSWORD }}" >> .env.production
@@ -101,6 +104,9 @@ jobs:
             echo "ALIYUN_SMTP_PASS=${{ secrets.ALIYUN_SMTP_PASS }}" >> .env.production
             echo "ALIYUN_SMTP_SENDER_NAME=微聊天智能助手" >> .env.production
             echo "ALERT_EMAIL=${{ secrets.ALERT_EMAIL }}" >> .env.production
+            echo "ALERT_MIN_SEVERITY=${{ vars.ALERT_MIN_SEVERITY || 'warning' }}" >> .env.production
+            echo "ENABLE_MONITORING_TEST_ROUTES=${{ vars.ENABLE_MONITORING_TEST_ROUTES || 'false' }}" >> .env.production
+            echo "MONITORING_TEST_TOKEN=${{ secrets.MONITORING_TEST_TOKEN }}" >> .env.production
             docker compose -f docker-compose.prod.yml --env-file .env.production pull
             docker compose -f docker-compose.prod.yml --env-file .env.production up -d --force-recreate
             docker image prune -f

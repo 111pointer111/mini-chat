@@ -268,6 +268,12 @@ CORS_ORIGINS=http://localhost:5173,http://localhost:5174,http://localhost:5175
 
 # 告警邮件接收人（通过 GitHub Secrets 注入，不写在文件里）
 # ALERT_EMAIL=admin@example.com
+ALERT_MIN_SEVERITY=warning
+ALERT_ERROR_RATE_PERCENT=2
+ALERT_LATENCY_P95_MS=800
+ALERT_MEMORY_MB=350
+ENABLE_MONITORING_TEST_ROUTES=false
+MONITORING_TEST_TOKEN=
 
 # 运行环境（production 时强制要求 JWT_SECRET）
 NODE_ENV=development
@@ -476,13 +482,22 @@ docker compose -f docker-compose.prod.yml --env-file .env.production up -d
 - `GET /api/ready` — 就绪检查（无认证，检查 MongoDB、Redis、PostgreSQL）
 - `GET /api/metrics` — 指标快照（admin）
 - `GET /api/alerts` — 告警规则状态（admin）
+- `GET /api/test/ok|slow|error` — 监控测试端点（默认关闭，需 `ENABLE_MONITORING_TEST_ROUTES=true` 和 `X-Monitoring-Test-Token`）
+
+生产环境告警测试建议只打 `/api/test/*`，不要压登录、短信、AI 等真实业务接口：
+
+```bash
+wrk -t1 -c5 -d30s -H "X-Monitoring-Test-Token: <token>" https://mini-chat.cn/api/test/ok
+wrk -t1 -c5 -d60s -H "X-Monitoring-Test-Token: <token>" "https://mini-chat.cn/api/test/slow?ms=1000"
+wrk -t1 -c5 -d40s -H "X-Monitoring-Test-Token: <token>" "https://mini-chat.cn/api/test/error?status=500"
+```
 
 ## 当前已知情况
 
 - 没有配置测试框架（`test: echo "Error: no test specified"`），验证方式为 `npm run build` + `npm run lint` + CI
 - 后端 Dockerfile 安装了系统依赖用于文档解析（antiword, catdoc, poppler-utils, unrtf），这些是知识库功能所需的
 - 生产环境必须设置 `JWT_SECRET`，否则服务启动失败
-- 告警阈值（错误率、延迟、内存）目前硬编码在代码中，暂不支持通过环境变量配置
+- 告警阈值支持通过环境变量配置；测试端点默认关闭，生产测试后应及时关闭
 
 ## 开发建议
 

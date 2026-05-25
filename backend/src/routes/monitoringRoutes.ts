@@ -32,8 +32,10 @@ export function createMonitoringRoutes(deps: MonitoringDeps) {
             if (!mongoose.connection.db) throw new Error('MongoDB not connected');
             await mongoose.connection.db.admin().ping();
             checks.mongodb = { status: 'up', latencyMs: Date.now() - start };
+            deps.monitoring.metrics.recordDependency('mongodb', 'up', checks.mongodb.latencyMs);
         } catch (err: any) {
             checks.mongodb = { status: 'down', error: err.message };
+            deps.monitoring.metrics.recordDependency('mongodb', 'down', undefined, err.message);
             allHealthy = false;
         }
 
@@ -42,8 +44,10 @@ export function createMonitoringRoutes(deps: MonitoringDeps) {
             const start = Date.now();
             await deps.redis.ping();
             checks.redis = { status: 'up', latencyMs: Date.now() - start };
+            deps.monitoring.metrics.recordDependency('redis', 'up', checks.redis.latencyMs);
         } catch (err: any) {
             checks.redis = { status: 'down', error: err.message };
+            deps.monitoring.metrics.recordDependency('redis', 'down', undefined, err.message);
             allHealthy = false;
         }
 
@@ -55,8 +59,10 @@ export function createMonitoringRoutes(deps: MonitoringDeps) {
                 new Promise((_, reject) => setTimeout(() => reject(new Error('PG query timeout')), 5000)),
             ]);
             checks.postgres = { status: 'up', latencyMs: Date.now() - start };
+            deps.monitoring.metrics.recordDependency('postgres', 'up', checks.postgres.latencyMs);
         } catch (err: any) {
             checks.postgres = { status: 'down', error: err.message };
+            deps.monitoring.metrics.recordDependency('postgres', 'down', undefined, err.message);
             allHealthy = false;
         }
 
@@ -75,7 +81,7 @@ export function createMonitoringRoutes(deps: MonitoringDeps) {
 
     // /alerts — admin only
     router.get('/alerts', protect, adminOnly, (_req, res) => {
-        res.json(deps.monitoring.alertManager.getStatus());
+        res.json(deps.monitoring.alertManager.getStatus(deps.monitoring.getSnapshot()));
     });
 
     return router;

@@ -14,7 +14,28 @@ interface MetricsData {
     requests: { total: number; windowed: number; byStatus: Record<string, number> };
     latency: { p50: number; p95: number; p99: number; max: number; count: number };
     errors: { server5xx: number; client4xx: number; ratePercent: number };
-    system: { memoryUsageMB: number; socketConnections: number; uptimeSeconds: number };
+    windows?: {
+        oneMinute: WindowMetrics;
+        fiveMinutes: WindowMetrics;
+    };
+    system: {
+        memoryUsageMB: number;
+        socketConnections: number;
+        uptimeSeconds: number;
+        eventLoopLagMs?: number;
+        dependencies?: Record<string, { status: string; latencyMs?: number; error?: string; checkedAt?: string }>;
+    };
+}
+
+interface WindowMetrics {
+    durationSeconds: number;
+    requests: number;
+    rps: number;
+    byStatus: Record<string, number>;
+    latency: { p50: number; p95: number; p99: number; max: number; count: number };
+    server5xx: number;
+    client4xx: number;
+    errorRatePercent: number;
 }
 
 interface AlertStatus {
@@ -22,6 +43,15 @@ interface AlertStatus {
     status: string;
     severity: string;
     description: string;
+    currentValue?: string | number;
+    threshold?: string | number;
+    window?: string;
+    suggestion?: string;
+    pendingPeriods?: number;
+    pendingElapsedPeriods?: number;
+    pendingRemainingPeriods?: number;
+    lastFiredAt?: string | null;
+    lastResolvedAt?: string | null;
 }
 
 const MetricCard: React.FC<{ title: string; value: string | number; unit?: string; color?: string }> = ({
@@ -62,7 +92,9 @@ const renderDescription = (desc: string, metrics?: MetricsData) => {
         .replace(/\{\{rate\}\}/g, String(metrics.errors.ratePercent))
         .replace(/\{\{p95\}\}/g, String(metrics.latency.p95))
         .replace(/\{\{memory\}\}/g, String(metrics.system.memoryUsageMB))
-        .replace(/\{\{sockets\}\}/g, String(metrics.system.socketConnections));
+        .replace(/\{\{sockets\}\}/g, String(metrics.system.socketConnections))
+        .replace(/\{\{eventLoopLag\}\}/g, String(metrics.system.eventLoopLagMs ?? 0))
+        .replace(/\{\{dependency\}\}/g, '见当前值');
 };
 
 const MonitoringDashboard: React.FC = () => {
@@ -106,6 +138,8 @@ const MonitoringDashboard: React.FC = () => {
         const m = Math.floor((seconds % 3600) / 60);
         return `${h}h ${m}m`;
     };
+    const oneMinute = metrics?.windows?.oneMinute;
+    const fiveMinutes = metrics?.windows?.fiveMinutes;
 
     return (
         <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -129,25 +163,25 @@ const MonitoringDashboard: React.FC = () => {
                 <Grid container spacing={2} sx={{ mb: 3 }}>
                     <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                         <MetricCard
-                            title="窗口请求数 (5min)"
-                            value={metrics?.requests.windowed ?? 0}
+                            title="1m 请求数"
+                            value={oneMinute?.requests ?? metrics?.requests.windowed ?? 0}
                             unit="次"
                         />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                         <MetricCard
-                            title="错误率 (5xx)"
-                            value={metrics?.errors.ratePercent ?? 0}
+                            title="1m 错误率 (5xx)"
+                            value={oneMinute?.errorRatePercent ?? metrics?.errors.ratePercent ?? 0}
                             unit="%"
-                            color={(metrics?.errors.ratePercent ?? 0) > 5 ? 'error' : 'success'}
+                            color={(oneMinute?.errorRatePercent ?? metrics?.errors.ratePercent ?? 0) >= 2 ? 'error' : 'success'}
                         />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                         <MetricCard
-                            title="P95 延迟"
-                            value={metrics?.latency.p95 ?? 0}
+                            title="1m P95 延迟"
+                            value={oneMinute?.latency.p95 ?? metrics?.latency.p95 ?? 0}
                             unit="ms"
-                            color={(metrics?.latency.p95 ?? 0) > 2000 ? 'warning' : 'primary'}
+                            color={(oneMinute?.latency.p95 ?? metrics?.latency.p95 ?? 0) >= 800 ? 'warning' : 'primary'}
                         />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -175,14 +209,20 @@ const MonitoringDashboard: React.FC = () => {
                             <CardContent>
                                 <Typography color="text.secondary" variant="body2">累计请求</Typography>
                                 <Typography variant="h5">{metrics?.requests.total ?? 0}</Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    5m RPS: {fiveMinutes?.rps ?? 0}
+                                </Typography>
                             </CardContent>
                         </Card>
                     </Grid>
                     <Grid size={{ xs: 12, sm: 4 }}>
                         <Card>
                             <CardContent>
-                                <Typography color="text.secondary" variant="body2">运行时间</Typography>
-                                <Typography variant="h5">{formatUptime(metrics?.system.uptimeSeconds ?? 0)}</Typography>
+                                <Typography color="text.secondary" variant="body2">Event loop lag</Typography>
+                                <Typography variant="h5">{metrics?.system.eventLoopLagMs ?? 0} ms</Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    Uptime: {formatUptime(metrics?.system.uptimeSeconds ?? 0)}
+                                </Typography>
                             </CardContent>
                         </Card>
                     </Grid>
@@ -198,6 +238,8 @@ const MonitoringDashboard: React.FC = () => {
                                     <Box component="th" sx={{ textAlign: 'left', p: 1 }}>规则</Box>
                                     <Box component="th" sx={{ textAlign: 'left', p: 1 }}>级别</Box>
                                     <Box component="th" sx={{ textAlign: 'left', p: 1 }}>状态</Box>
+                                    <Box component="th" sx={{ textAlign: 'left', p: 1 }}>当前值 / 阈值</Box>
+                                    <Box component="th" sx={{ textAlign: 'left', p: 1 }}>窗口</Box>
                                     <Box component="th" sx={{ textAlign: 'left', p: 1 }}>描述</Box>
                                 </Box>
                             </Box>
@@ -210,8 +252,29 @@ const MonitoringDashboard: React.FC = () => {
                                         </Box>
                                         <Box component="td" sx={{ p: 1 }}>
                                             <Chip label={alert.status} size="small" color={statusColor(alert.status) as 'error' | 'warning' | 'success' | 'default'} />
+                                            {alert.status === 'pending' && (
+                                                <Typography variant="caption" display="block" color="text.secondary">
+                                                    剩余 {alert.pendingRemainingPeriods ?? 0} 周期
+                                                </Typography>
+                                            )}
                                         </Box>
-                                        <Box component="td" sx={{ p: 1 }}>{renderDescription(alert.description, metrics)}</Box>
+                                        <Box component="td" sx={{ p: 1 }}>
+                                            <Typography variant="body2">{alert.currentValue ?? '-'}</Typography>
+                                            <Typography variant="caption" color="text.secondary">
+                                                阈值: {alert.threshold ?? '-'}
+                                            </Typography>
+                                        </Box>
+                                        <Box component="td" sx={{ p: 1 }}>
+                                            {alert.window ?? '-'}
+                                        </Box>
+                                        <Box component="td" sx={{ p: 1 }}>
+                                            <Typography variant="body2">{renderDescription(alert.description, metrics)}</Typography>
+                                            {alert.suggestion && (
+                                                <Typography variant="caption" color="text.secondary">
+                                                    {alert.suggestion}
+                                                </Typography>
+                                            )}
+                                        </Box>
                                     </Box>
                                 ))}
                             </Box>

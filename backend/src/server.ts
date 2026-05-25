@@ -19,6 +19,7 @@ import kbRoutes from './routes/kbRoutes';
 import groupRoutes from './routes/groupRoutes';
 import mcpRoutes from './routes/mcpRoutes';
 import { createMonitoringRoutes } from './routes/monitoringRoutes';
+import { createMonitoringTestRoutes } from './routes/monitoringTestRoutes';
 import path from 'path';
 import { setupSocket, getIO } from './socket/socketHandler';
 import { initAdmin } from './scripts/initAdmin';
@@ -62,7 +63,7 @@ app.use(morgan('dev'));
 
 // 初始化监控系统 — 必须在 rate limiter 之前，否则 429 响应不会被记录
 const monitoring = setupMonitoring(app, {
-    minSeverity: 'warning',
+    minSeverity: process.env.ALERT_MIN_SEVERITY as 'info' | 'warning' | 'critical' | undefined,
     alertEmail: process.env.ALERT_EMAIL,
     smtpHost: process.env.ALIYUN_SMTP_HOST,
     smtpPort: process.env.ALIYUN_SMTP_PORT,
@@ -97,6 +98,12 @@ const globalLimiter = rateLimit({
 
 app.use('/api/auth/send-code', authLimiter);
 app.use('/api/auth', authLimiter); // Apply to all auth endpoints
+
+if (process.env.ENABLE_MONITORING_TEST_ROUTES === 'true') {
+    app.use('/api/test', createMonitoringTestRoutes());
+    console.warn('⚠️  Monitoring test routes are enabled');
+}
+
 app.use('/api', globalLimiter);
 
 // PostgreSQL 连接池（/ready 健康检查和关闭时使用）
