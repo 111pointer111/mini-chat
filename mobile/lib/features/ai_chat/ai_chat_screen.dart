@@ -120,26 +120,39 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
     setState(() => _pendingImages = []);
     _scrollToBottom();
 
-    ref.read(aiMessagesProvider.notifier).startAssistantMessage();
+    ref
+        .read(aiMessagesProvider.notifier)
+        .startAssistantMessage(status: '正在连接 AI...');
     ref.read(isStreamingProvider.notifier).state = true;
     _scrollToBottom();
 
-    final conversationId = ref.read(currentConversationIdProvider);
+    final initialConversationId = ref.read(currentConversationIdProvider);
+    var resolvedConversationId = initialConversationId;
 
     var streamDone = false;
+    var receivedChunk = false;
     try {
       final api = ref.read(aiChatApiProvider);
       final stream = await api.streamMessage(
         content,
         modelImages: modelImagePayloads.isNotEmpty ? modelImagePayloads : null,
         displayImages: displayImageUrls.isNotEmpty ? displayImageUrls : null,
-        conversationId: conversationId,
+        conversationId: initialConversationId,
       );
 
       await for (final event in stream) {
         switch (event.type) {
+          case 'status':
+            final statusMessage = event.message;
+            if (statusMessage != null && statusMessage.isNotEmpty) {
+              ref
+                  .read(aiMessagesProvider.notifier)
+                  .setLastAssistantStatus(statusMessage);
+            }
+            break;
           case 'ready':
             if (event.conversationId != null) {
+              resolvedConversationId = event.conversationId;
               ref.read(currentConversationIdProvider.notifier).state =
                   event.conversationId;
             }
@@ -147,6 +160,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
           case 'chunk':
             final chunk = event.content ?? '';
             if (chunk.isNotEmpty) {
+              receivedChunk = true;
               ref.read(aiMessagesProvider.notifier).appendToLastMessage(chunk);
               _scrollToBottom();
             }
@@ -154,6 +168,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
           case 'done':
             streamDone = true;
             if (event.conversationId != null) {
+              resolvedConversationId = event.conversationId;
               ref.read(currentConversationIdProvider.notifier).state =
                   event.conversationId;
             }
@@ -172,14 +187,24 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
       }
 
       if (!streamDone) {
-        ref.read(aiMessagesProvider.notifier).markStreamDone();
-        _loadConversations();
+        final recovered = await _tryRecoverFromServer(resolvedConversationId);
+        if (!recovered) {
+          if (receivedChunk) {
+            ref.read(aiMessagesProvider.notifier).markStreamDone();
+            _loadConversations();
+          } else {
+            ref
+                .read(aiMessagesProvider.notifier)
+                .replaceLastAssistantWithError('❌ 连接已中断，请重试');
+          }
+        }
       }
     } catch (e) {
       // 流因网络问题断开时，AI 回复可能已在服务端生成，尝试恢复
-      final recovered = await _tryRecoverFromServer(conversationId);
+      final recovered = await _tryRecoverFromServer(resolvedConversationId);
       if (!recovered) {
-        final errorMessage = extractErrorMessage(e, fallback: '发送失败，请检查网络连接后重试');
+        final errorMessage =
+            extractErrorMessage(e, fallback: '发送失败，请检查网络连接后重试');
         ref
             .read(aiMessagesProvider.notifier)
             .replaceLastAssistantWithError('❌ $errorMessage');
@@ -788,7 +813,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
                   else
                     AIMessageContent(
                       content: message.content.isEmpty && isCurrentlyStreaming
-                          ? '▋'
+                          ? (message.streamStatus ?? '▋')
                           : message.content,
                       thinking: message.thinking,
                       textColor: AppTheme.textPrimary,

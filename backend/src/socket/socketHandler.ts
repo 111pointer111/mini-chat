@@ -4,7 +4,6 @@ import Message from '../models/Message';
 import mongoose from 'mongoose';
 import { ChatMessage } from '../services/aiService';
 import { GROUP_AI_TOOL_POLICY, runAgentStream, UserMessageInput } from '../services/agentService';
-import { normalizeAiImages, streamAiChatTurn } from '../services/aiTurnService';
 import { AI_ASSISTANT_ID } from '../scripts/initAdmin';
 import GroupMember from '../models/GroupMember';
 import Group from '../models/Group';
@@ -264,77 +263,6 @@ export const setupSocket = (io: Server) => {
                     callback({ success: false, error: 'Failed to send group message' });
                 }
             }
-        });
-
-        // AI 流式对话
-        socket.on('ai_chat_stream', async (data, callback) => {
-            const { message = '', modelImages, displayImages, images, timezone, conversationId } = data || {};
-            const normalizedImages = normalizeAiImages({
-                modelImages,
-                displayImages,
-                legacyImages: images,
-            });
-
-            if (!String(message).trim() && normalizedImages.modelImages.length === 0) {
-                if (typeof callback === 'function') {
-                    callback({ success: false, error: 'Message is required' });
-                }
-                return;
-            }
-
-            let acknowledged = false;
-            try {
-                socket.emit('ai_stream_status', { status: 'thinking' });
-
-                await streamAiChatTurn({
-                    userId,
-                    message: String(message),
-                    timezone,
-                    conversationId,
-                    modelImages: normalizedImages.modelImages,
-                    displayImages: normalizedImages.displayImages,
-                }, (event) => {
-                    if (event.type === 'ready') {
-                        if (typeof callback === 'function' && !acknowledged) {
-                            acknowledged = true;
-                            callback({ success: true, conversationId: event.conversationId });
-                        }
-                        return;
-                    }
-
-                    if (event.type === 'chunk') {
-                        socket.emit('ai_stream', { content: event.content, done: false });
-                        return;
-                    }
-
-                    if (event.type === 'done') {
-                        socket.emit('ai_stream', {
-                            content: '',
-                            done: true,
-                            conversationId: event.conversationId,
-                            sources: event.sources || [],
-                            pendingTask: event.pendingTask,
-                            taskCreated: event.taskCreated,
-                            task: event.task,
-                            taskPreview: event.taskPreview,
-                        });
-                        return;
-                    }
-
-                    socket.emit('ai_stream_error', { error: event.message });
-                });
-
-            } catch (error) {
-                console.error('AI stream error:', error);
-                if (typeof callback === 'function' && !acknowledged) {
-                    callback({ success: false, error: error instanceof Error ? error.message : 'AI 响应失败，请重试' });
-                }
-                socket.emit('ai_stream_error', { error: 'AI 响应失败，请重试' });
-            }
-        });
-
-        socket.on('ai_cancel_stream', () => {
-            socket.emit('ai_stream_error', { error: '旧版 Socket AI 流不支持取消，请使用 /api/ai-chat/stream' });
         });
 
         socket.on('disconnect', () => {

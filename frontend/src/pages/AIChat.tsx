@@ -40,6 +40,7 @@ interface MessageSource {
 }
 
 type AIStreamEvent =
+    | { type: 'status'; stage: 'preparing' | 'retrieving' | 'generating' | 'tool'; message: string }
     | { type: 'ready'; conversationId: string; conversationName?: string }
     | { type: 'chunk'; content: string }
     | { type: 'done'; conversationId?: string; sources?: MessageSource[]; pendingTask?: boolean; taskCreated?: boolean }
@@ -378,6 +379,10 @@ const AIChat: React.FC = () => {
 
             if (event.type === 'done') {
                 applyDone(event);
+                return;
+            }
+
+            if (event.type === 'status') {
                 return;
             }
 

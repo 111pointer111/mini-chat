@@ -50,6 +50,7 @@ export interface AiChatTurnResult {
 }
 
 export type AiChatStreamEvent =
+    | { type: 'status'; stage: 'preparing' | 'retrieving' | 'generating' | 'tool'; message: string }
     | { type: 'ready'; conversationId: string; conversationName?: string }
     | { type: 'chunk'; content: string }
     | {
@@ -157,7 +158,7 @@ async function getOrCreateAIConversation(userId: string) {
     let conversation = await Conversation.findOne({
         userId: new mongoose.Types.ObjectId(userId),
         type: 'ai',
-    });
+    }).sort({ lastMessageAt: -1, createdAt: -1 });
 
     if (!conversation) {
         conversation = await Conversation.create({
@@ -422,6 +423,7 @@ export async function streamAiChatTurn(
     input: AiChatTurnInput,
     emit: (event: AiChatStreamEvent) => void
 ): Promise<void> {
+    emit({ type: 'status', stage: 'preparing', message: '正在准备对话...' });
     const turn = await prepareTurn(input);
 
     emit({
@@ -458,6 +460,9 @@ export async function streamAiChatTurn(
     await runAgentStream(turn.history, buildUserInput(turn), {
         userId: input.userId,
         toolPolicy: AI_DIRECT_TOOL_POLICY,
+        onStatus: (status) => {
+            emit({ type: 'status', ...status });
+        },
         onChunk: (chunk) => {
             if (finished) return;
             fullContent += chunk;

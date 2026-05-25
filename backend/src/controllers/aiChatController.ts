@@ -5,10 +5,18 @@ import Message from '../models/Message';
 import { AiTurnError, normalizeAiImages, runAiChatTurn, streamAiChatTurn } from '../services/aiTurnService';
 import { invalidateMessageCache } from '../utils/messageCache';
 
-function writeSse(res: Response, payload: Record<string, unknown>) {
-    if (!res.writableEnded) {
-        res.write(`data: ${JSON.stringify(payload)}\n\n`);
+function writeRawSse(res: Response, payload: string) {
+    if (res.writableEnded || res.destroyed) return;
+
+    try {
+        res.write(payload);
+    } catch (error) {
+        console.warn('SSE write skipped:', error instanceof Error ? error.message : error);
     }
+}
+
+function writeSse(res: Response, payload: Record<string, unknown>) {
+    writeRawSse(res, `data: ${JSON.stringify(payload)}\n\n`);
 }
 
 export const chat = async (req: Request, res: Response) => {
@@ -114,9 +122,7 @@ export const chatStream = async (req: Request, res: Response) => {
 
         // 心跳：每 15 秒发送 SSE 注释防止移动网络断开空闲连接
         keepaliveTimer = setInterval(() => {
-            if (!res.writableEnded) {
-                res.write(': keepalive\n\n');
-            }
+            writeRawSse(res, ': keepalive\n\n');
         }, 15_000);
 
         // 客户端断开时清理
@@ -134,7 +140,7 @@ export const chatStream = async (req: Request, res: Response) => {
         });
 
         cleanup();
-        if (!res.writableEnded) {
+        if (!res.writableEnded && !res.destroyed) {
             res.end();
         }
     } catch (error) {
@@ -143,7 +149,7 @@ export const chatStream = async (req: Request, res: Response) => {
         if (headersSent || res.headersSent) {
             const message = error instanceof AiTurnError ? error.message : 'Server error';
             writeSse(res, { type: 'error', message });
-            if (!res.writableEnded) res.end();
+            if (!res.writableEnded && !res.destroyed) res.end();
         } else {
             const status = error instanceof AiTurnError ? error.statusCode : 500;
             const message = error instanceof AiTurnError ? error.message : 'Server error';

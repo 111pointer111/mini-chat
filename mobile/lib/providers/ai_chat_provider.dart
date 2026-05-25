@@ -32,11 +32,13 @@ class ConversationsNotifier
       try {
         final cached = await _cache.getConversations(userId);
         if (cached.isNotEmpty) {
-          final convs = cached.map((m) => Conversation(
-            id: m['id'] as String,
-            name: m['name'] as String? ?? '',
-            lastMessageAt: m['last_message_at'] as String? ?? '',
-          )).toList();
+          final convs = cached
+              .map((m) => Conversation(
+                    id: m['id'] as String,
+                    name: m['name'] as String? ?? '',
+                    lastMessageAt: m['last_message_at'] as String? ?? '',
+                  ))
+              .toList();
           _fetchAndCache(userId);
           return convs;
         }
@@ -68,11 +70,13 @@ class ConversationsNotifier
       if (userId2 != null) {
         final cached = await _cache.getConversations(userId2);
         if (cached.isNotEmpty) {
-          return cached.map((m) => Conversation(
-            id: m['id'] as String,
-            name: m['name'] as String? ?? '',
-            lastMessageAt: m['last_message_at'] as String? ?? '',
-          )).toList();
+          return cached
+              .map((m) => Conversation(
+                    id: m['id'] as String,
+                    name: m['name'] as String? ?? '',
+                    lastMessageAt: m['last_message_at'] as String? ?? '',
+                  ))
+              .toList();
         }
       }
       rethrow;
@@ -112,6 +116,7 @@ class AIChatMessage {
   final bool taskCreated;
   final List<dynamic> sources;
   final String? createdAt;
+  final String? streamStatus;
 
   AIChatMessage({
     required this.id,
@@ -123,6 +128,7 @@ class AIChatMessage {
     this.taskCreated = false,
     this.sources = const [],
     this.createdAt,
+    this.streamStatus,
   });
 
   factory AIChatMessage.fromBackend(Map<String, dynamic> json) {
@@ -184,15 +190,35 @@ class AIMessagesNotifier extends StateNotifier<List<AIChatMessage>> {
     ];
   }
 
-  void startAssistantMessage() {
+  void startAssistantMessage({String? status}) {
     state = [
       ...state,
       AIChatMessage(
         id: 'streaming_${DateTime.now().millisecondsSinceEpoch}',
         role: 'assistant',
         content: '',
+        streamStatus: status,
       ),
     ];
+  }
+
+  void setLastAssistantStatus(String status) {
+    if (state.isEmpty || status.trim().isEmpty) return;
+    final last = state.last;
+    if (last.role != 'assistant' || last.content.isNotEmpty) return;
+    final updated = AIChatMessage(
+      id: last.id,
+      role: last.role,
+      content: last.content,
+      images: last.images,
+      thinking: last.thinking,
+      pendingTask: last.pendingTask,
+      taskCreated: last.taskCreated,
+      sources: last.sources,
+      createdAt: last.createdAt,
+      streamStatus: status,
+    );
+    state = [...state.sublist(0, state.length - 1), updated];
   }
 
   void appendToLastMessage(String chunk) {
@@ -207,6 +233,8 @@ class AIMessagesNotifier extends StateNotifier<List<AIChatMessage>> {
       pendingTask: last.pendingTask,
       taskCreated: last.taskCreated,
       sources: last.sources,
+      createdAt: last.createdAt,
+      streamStatus: last.streamStatus,
     );
     state = [...state.sublist(0, state.length - 1), updated];
   }
@@ -228,6 +256,7 @@ class AIMessagesNotifier extends StateNotifier<List<AIChatMessage>> {
       pendingTask: pendingTask,
       taskCreated: taskCreated,
       sources: sources,
+      createdAt: last.createdAt,
     );
     state = [...state.sublist(0, state.length - 1), updated];
   }
@@ -240,6 +269,7 @@ class AIMessagesNotifier extends StateNotifier<List<AIChatMessage>> {
       role: 'assistant',
       content: message,
       images: last.images,
+      createdAt: last.createdAt,
     );
     state = [...state.sublist(0, state.length - 1), updated];
   }

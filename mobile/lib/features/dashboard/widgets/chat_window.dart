@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../../core/constants.dart';
 import '../../../core/theme.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/chat_provider.dart';
@@ -467,8 +466,8 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
     final selection = ref.read(chatSelectionProvider);
     final isMe = message.senderId == currentUser?.id;
     final isSystem = message.type == 'system';
-    final isAIMessage = message.senderId == AppConstants.aiAssistantId ||
-        selection.type == ChatType.task;
+    final isAIMessage =
+        message.isAiAssistant || selection.type == ChatType.task;
 
     if (isSystem && !isAIMessage) {
       return Center(

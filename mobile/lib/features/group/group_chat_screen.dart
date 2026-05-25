@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/theme.dart';
-import '../../core/constants.dart';
 import '../../data/models/message.dart';
 import '../../providers/group_provider.dart';
 import '../../providers/auth_provider.dart';
@@ -305,10 +304,10 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
   }
 
   Widget _buildMessageBubble(Message message, dynamic currentUser) {
-    final senderId = message.senderId;
     final senderName = message.senderUser?.username ?? '成员';
+    final senderId = message.senderId;
     final isMe = senderId == currentUser?.id;
-    final isAssistant = senderId == AppConstants.aiAssistantId;
+    final isAssistant = message.isAiAssistant;
     final content = message.content;
     final createdAt = message.createdAt;
 

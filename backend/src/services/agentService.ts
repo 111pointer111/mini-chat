@@ -179,6 +179,11 @@ interface RunAgentOptions {
     toolPolicy: AgentToolPolicy;
 }
 
+export interface AgentStreamStatus {
+    stage: 'retrieving' | 'generating' | 'tool';
+    message: string;
+}
+
 const MAX_ITERATIONS = 10;
 
 const SYSTEM_PROMPT_WITH_TASK_TOOL = `你是一个友好、专业的 AI 助手。你可以帮助用户：
@@ -354,14 +359,18 @@ export async function runAgentStream(
         onChunk?: (chunk: string) => void;
         onDone?: (sources?: Source[]) => void | Promise<void>;
         onError?: (err: string) => void | Promise<void>;
+        onStatus?: (status: AgentStreamStatus) => void | Promise<void>;
     }
 ) {
-    const { userId, onChunk, onDone, onError } = options;
+    const { userId, onChunk, onDone, onError, onStatus } = options;
     const { toolPolicy } = options;
 
     try {
         const config = await getUserAIConfig(userId);
         const client = getClient(config);
+        if (onStatus) {
+            await onStatus({ stage: 'retrieving', message: '正在检索上下文...' });
+        }
         const { systemPrompt, sources } = await buildSystemPrompt(
             userId,
             getMessageText(newMessage),
@@ -386,6 +395,12 @@ export async function runAgentStream(
         while (iterations < MAX_ITERATIONS) {
             iterations++;
 
+            if (onStatus) {
+                await onStatus({
+                    stage: 'generating',
+                    message: iterations === 1 ? '正在生成回复...' : '正在整理工具结果...',
+                });
+            }
             const stream = await client.chat.completions.create({
                 model: config.model,
                 messages,
@@ -443,6 +458,9 @@ export async function runAgentStream(
                 for (const tc of validToolCalls) {
                     let args: Record<string, unknown> = {};
                     try { args = JSON.parse(tc.function.arguments); } catch { args = {}; }
+                    if (onStatus) {
+                        await onStatus({ stage: 'tool', message: `正在调用工具 ${tc.function.name}...` });
+                    }
                     const result = await executeTool(tc.function.name, args, userId);
                     messages.push({
                         role: 'tool',

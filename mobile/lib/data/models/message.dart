@@ -1,3 +1,4 @@
+import '../../core/constants.dart';
 import 'user.dart';
 
 class Message {
@@ -25,10 +26,16 @@ class Message {
 
   String get senderId {
     if (sender is User) return (sender as User).id;
-    return sender as String;
+    if (sender is Map<String, dynamic>) {
+      return (sender['_id'] ?? sender['id'] ?? '').toString();
+    }
+    return sender?.toString() ?? '';
   }
 
   User? get senderUser => sender is User ? sender as User : null;
+
+  bool get isAiAssistant =>
+      senderId == AppConstants.aiAssistantId || senderId == 'ai';
 
   factory Message.fromJson(Map<String, dynamic> json) {
     final senderData = json['sender'];
@@ -43,9 +50,8 @@ class Message {
       type: json['type'] as String? ?? 'text',
       createdAt: json['createdAt'] as String? ?? '',
       mentionAssistant: json['mentionAssistant'] as bool? ?? false,
-      images: (json['images'] as List<dynamic>?)
-          ?.map((e) => e as String)
-          .toList(),
+      images:
+          (json['images'] as List<dynamic>?)?.map((e) => e as String).toList(),
     );
   }
 

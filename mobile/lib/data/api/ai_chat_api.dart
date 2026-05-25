@@ -8,6 +8,7 @@ class AIChatStreamEvent {
   final String type;
   final String? content;
   final String? message;
+  final String? stage;
   final String? conversationId;
   final String? conversationName;
   final List<dynamic> sources;
@@ -18,6 +19,7 @@ class AIChatStreamEvent {
     required this.type,
     this.content,
     this.message,
+    this.stage,
     this.conversationId,
     this.conversationName,
     this.sources = const [],
@@ -30,6 +32,7 @@ class AIChatStreamEvent {
       type: json['type'] as String? ?? '',
       content: json['content'] as String?,
       message: json['message'] as String?,
+      stage: json['stage'] as String?,
       conversationId: json['conversationId'] as String?,
       conversationName: json['conversationName'] as String?,
       sources: json['sources'] as List<dynamic>? ?? const [],
@@ -115,7 +118,7 @@ class AIChatApi {
     var buffer = '';
 
     await for (final chunk in stream.transform(utf8.decoder)) {
-      buffer += chunk;
+      buffer += chunk.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
 
       while (true) {
         final delimiterIndex = buffer.indexOf('\n\n');
@@ -131,9 +134,11 @@ class AIChatApi {
       }
     }
 
-    final event = _parseSseEvent(buffer);
-    if (event != null) {
-      yield event;
+    if (buffer.trim().isNotEmpty) {
+      final event = _parseSseEvent(buffer);
+      if (event != null) {
+        yield event;
+      }
     }
   }
 
@@ -147,11 +152,15 @@ class AIChatApi {
 
     if (data.isEmpty) return null;
 
-    final decoded = jsonDecode(data);
-    if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('Invalid stream event');
-    }
+    try {
+      final decoded = jsonDecode(data);
+      if (decoded is! Map<String, dynamic>) {
+        return null;
+      }
 
-    return AIChatStreamEvent.fromJson(decoded);
+      return AIChatStreamEvent.fromJson(decoded);
+    } on FormatException {
+      return null;
+    }
   }
 }
