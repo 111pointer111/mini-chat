@@ -67,6 +67,15 @@ export const chat = async (req: Request, res: Response) => {
 // 流式聊天端点
 export const chatStream = async (req: Request, res: Response) => {
     let headersSent = false;
+    let keepaliveTimer: ReturnType<typeof setInterval> | null = null;
+
+    const cleanup = () => {
+        if (keepaliveTimer) {
+            clearInterval(keepaliveTimer);
+            keepaliveTimer = null;
+        }
+    };
+
     try {
         const userId = req.user!.id;
         const {
@@ -103,6 +112,16 @@ export const chatStream = async (req: Request, res: Response) => {
         res.flushHeaders();
         headersSent = true;
 
+        // 心跳：每 15 秒发送 SSE 注释防止移动网络断开空闲连接
+        keepaliveTimer = setInterval(() => {
+            if (!res.writableEnded) {
+                res.write(': keepalive\n\n');
+            }
+        }, 15_000);
+
+        // 客户端断开时清理
+        req.on('close', cleanup);
+
         await streamAiChatTurn({
             userId,
             message,
@@ -114,15 +133,17 @@ export const chatStream = async (req: Request, res: Response) => {
             writeSse(res, event);
         });
 
+        cleanup();
         if (!res.writableEnded) {
             res.end();
         }
     } catch (error) {
+        cleanup();
         console.error('AI chat stream error:', error);
         if (headersSent || res.headersSent) {
             const message = error instanceof AiTurnError ? error.message : 'Server error';
             writeSse(res, { type: 'error', message });
-            res.end();
+            if (!res.writableEnded) res.end();
         } else {
             const status = error instanceof AiTurnError ? error.statusCode : 500;
             const message = error instanceof AiTurnError ? error.message : 'Server error';

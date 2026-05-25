@@ -1,5 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import '../models/group.dart';
 import '../models/message.dart';
 import '../models/user.dart';
 
@@ -193,7 +194,7 @@ class DatabaseService {
       whereArgs: [userId],
     );
     if (maps.isEmpty) return null;
-    return _mapToUser(maps.first);
+    return mapToUser(maps.first);
   }
 
   Future<void> insertUsers(List<User> users) async {
@@ -217,7 +218,7 @@ class DatabaseService {
     await batch.commit(noResult: true);
   }
 
-  User _mapToUser(Map<String, dynamic> map) {
+  static User mapToUser(Map<String, dynamic> map) {
     return User(
       id: map['id'] as String,
       username: map['username'] as String,
@@ -258,6 +259,32 @@ class DatabaseService {
       WHERE f.status = 'accepted'
       ORDER BY u.username
     ''', [userId, userId]);
+  }
+
+  /// 批量写入好友关系（users + friendships）
+  Future<void> insertFriendsWithUsers(List<User> users, String userId) async {
+    final db = await database;
+    final batch = db.batch();
+    final now = DateTime.now().toIso8601String();
+    for (final user in users) {
+      batch.insert('users', {
+        'id': user.id,
+        'username': user.username,
+        'email': user.email,
+        'phone': user.phone,
+        'avatar': user.avatar,
+        'role': user.role,
+        'cached_at': now,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+      batch.insert('friendships', {
+        'id': '${userId}_${user.id}',
+        'requester_id': userId,
+        'recipient_id': user.id,
+        'status': 'accepted',
+        'cached_at': now,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
   }
 
   // ============================================================
@@ -305,6 +332,33 @@ class DatabaseService {
       WHERE gm.user_id = ?
       ORDER BY g.name
     ''', [userId]);
+  }
+
+  /// 批量写入群组和当前用户的群成员关系
+  Future<void> insertGroupsWithMembership(List<Group> groups, String userId) async {
+    final db = await database;
+    final batch = db.batch();
+    final now = DateTime.now().toIso8601String();
+    for (final group in groups) {
+      batch.insert('groups', {
+        'id': group.id,
+        'name': group.name,
+        'description': group.description,
+        'owner_id': userId,
+        'avatar': group.avatar ?? '',
+        'assistant_enabled': group.assistantEnabled ? 1 : 0,
+        'cached_at': now,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+      batch.insert('group_members', {
+        'id': '${group.id}_$userId',
+        'group_id': group.id,
+        'user_id': userId,
+        'role': group.role ?? 'member',
+        'joined_at': group.createdAt,
+        'cached_at': now,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
   }
 
   // ============================================================

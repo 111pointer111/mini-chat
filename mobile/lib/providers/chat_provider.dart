@@ -34,12 +34,43 @@ final friendsProvider =
 });
 
 class FriendsNotifier extends AutoDisposeAsyncNotifier<List<User>> {
+  final CacheService _cache = CacheService();
+
   @override
   Future<List<User>> build() async {
-    final res = await ref.read(friendApiProvider).getFriends();
-    return (res.data as List<dynamic>)
-        .map((e) => User.fromJson(e as Map<String, dynamic>))
-        .toList();
+    final userId = ref.read(authStateProvider).valueOrNull?.id;
+    if (userId != null) {
+      try {
+        final cached = await _cache.getFriendUsers(userId);
+        if (cached.isNotEmpty) {
+          // 异步拉取网络更新，不阻塞返回
+          _fetchAndCache(userId);
+          return cached;
+        }
+      } catch (_) {}
+    }
+    return await _fetchAndCache(userId);
+  }
+
+  Future<List<User>> _fetchAndCache(String? userId) async {
+    try {
+      final res = await ref.read(friendApiProvider).getFriends();
+      final users = (res.data as List<dynamic>)
+          .map((e) => User.fromJson(e as Map<String, dynamic>))
+          .toList();
+      if (userId != null) {
+        await _cache.cacheFriends(users, userId);
+      }
+      return users;
+    } catch (e) {
+      // 网络失败时如果有缓存数据则保持，否则抛出
+      final userId2 = ref.read(authStateProvider).valueOrNull?.id;
+      if (userId2 != null) {
+        final cached = await _cache.getFriendUsers(userId2);
+        if (cached.isNotEmpty) return cached;
+      }
+      rethrow;
+    }
   }
 
   Future<void> refresh() async {

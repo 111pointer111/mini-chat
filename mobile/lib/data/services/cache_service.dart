@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'database_service.dart';
+import '../models/group.dart';
 import '../models/message.dart';
 import '../models/user.dart';
 
@@ -215,6 +216,26 @@ class CacheService {
     }
   }
 
+  /// 获取好友列表（返回 User 模型）
+  Future<List<User>> getFriendUsers(String userId) async {
+    try {
+      final maps = await _db.getFriends(userId);
+      return maps.map((m) => DatabaseService.mapToUser(m)).toList();
+    } catch (e) {
+      debugPrint('[CacheService] getFriendUsers error: $e');
+      return [];
+    }
+  }
+
+  /// 批量缓存好友（users + friendships）
+  Future<void> cacheFriends(List<User> users, String userId) async {
+    try {
+      await _db.insertFriendsWithUsers(users, userId);
+    } catch (e) {
+      debugPrint('[CacheService] cacheFriends error: $e');
+    }
+  }
+
   // ============================================================
   // 群组缓存
   // ============================================================
@@ -244,6 +265,34 @@ class CacheService {
     } catch (e) {
       debugPrint('[CacheService] getUserGroups error: $e');
       return [];
+    }
+  }
+
+  /// 获取用户的群组列表（返回 Group 模型）
+  Future<List<Group>> getUserGroupModels(String userId) async {
+    try {
+      final maps = await _db.getUserGroups(userId);
+      return maps.map((m) => Group(
+        id: m['id'] as String,
+        name: m['name'] as String? ?? '',
+        description: m['description'] as String?,
+        avatar: m['avatar'] as String?,
+        assistantEnabled: (m['assistant_enabled'] as int?) == 1,
+        role: m['role'] as String?,
+        createdAt: m['cached_at'] as String? ?? '',
+      )).toList();
+    } catch (e) {
+      debugPrint('[CacheService] getUserGroupModels error: $e');
+      return [];
+    }
+  }
+
+  /// 批量缓存群组（groups + group_members）
+  Future<void> cacheGroups(List<Group> groups, String userId) async {
+    try {
+      await _db.insertGroupsWithMembership(groups, userId);
+    } catch (e) {
+      debugPrint('[CacheService] cacheGroups error: $e');
     }
   }
 

@@ -4,6 +4,7 @@ import '../core/constants.dart';
 import '../data/api/ai_chat_api.dart';
 import '../data/api/upload_api.dart';
 import '../data/models/conversation.dart';
+import '../data/services/cache_service.dart';
 import '../shared/utils/ai_message_parser.dart';
 import 'auth_provider.dart';
 
@@ -22,12 +23,60 @@ final conversationsProvider = AsyncNotifierProvider.autoDispose<
 
 class ConversationsNotifier
     extends AutoDisposeAsyncNotifier<List<Conversation>> {
+  final CacheService _cache = CacheService();
+
   @override
   Future<List<Conversation>> build() async {
-    final res = await ref.read(aiChatApiProvider).getConversations();
-    return (res.data as List<dynamic>)
-        .map((e) => Conversation.fromJson(e as Map<String, dynamic>))
-        .toList();
+    final userId = ref.read(authStateProvider).valueOrNull?.id;
+    if (userId != null) {
+      try {
+        final cached = await _cache.getConversations(userId);
+        if (cached.isNotEmpty) {
+          final convs = cached.map((m) => Conversation(
+            id: m['id'] as String,
+            name: m['name'] as String? ?? '',
+            lastMessageAt: m['last_message_at'] as String? ?? '',
+          )).toList();
+          _fetchAndCache(userId);
+          return convs;
+        }
+      } catch (_) {}
+    }
+    return await _fetchAndCache(userId);
+  }
+
+  Future<List<Conversation>> _fetchAndCache(String? userId) async {
+    try {
+      final res = await ref.read(aiChatApiProvider).getConversations();
+      final convs = (res.data as List<dynamic>)
+          .map((e) => Conversation.fromJson(e as Map<String, dynamic>))
+          .toList();
+      if (userId != null) {
+        for (final conv in convs) {
+          await _cache.cacheConversation(
+            id: conv.id,
+            userId: userId,
+            type: 'ai',
+            name: conv.name,
+            lastMessageAt: conv.lastMessageAt,
+          );
+        }
+      }
+      return convs;
+    } catch (e) {
+      final userId2 = ref.read(authStateProvider).valueOrNull?.id;
+      if (userId2 != null) {
+        final cached = await _cache.getConversations(userId2);
+        if (cached.isNotEmpty) {
+          return cached.map((m) => Conversation(
+            id: m['id'] as String,
+            name: m['name'] as String? ?? '',
+            lastMessageAt: m['last_message_at'] as String? ?? '',
+          )).toList();
+        }
+      }
+      rethrow;
+    }
   }
 
   Future<void> refresh() async {

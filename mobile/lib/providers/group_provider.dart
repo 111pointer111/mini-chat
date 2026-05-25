@@ -4,6 +4,8 @@ import '../data/models/group.dart';
 import '../data/models/message.dart';
 import '../data/models/user.dart';
 import '../data/models/kb_document.dart';
+import '../data/services/cache_service.dart';
+import 'auth_provider.dart';
 import 'chat_provider.dart';
 
 // 群组列表
@@ -13,12 +15,41 @@ final groupsProvider =
 });
 
 class GroupsNotifier extends AutoDisposeAsyncNotifier<List<Group>> {
+  final CacheService _cache = CacheService();
+
   @override
   Future<List<Group>> build() async {
-    final res = await ref.read(groupApiProvider).getGroups();
-    return (res.data as List<dynamic>)
-        .map((e) => Group.fromJson(e as Map<String, dynamic>))
-        .toList();
+    final userId = ref.read(authStateProvider).valueOrNull?.id;
+    if (userId != null) {
+      try {
+        final cached = await _cache.getUserGroupModels(userId);
+        if (cached.isNotEmpty) {
+          _fetchAndCache(userId);
+          return cached;
+        }
+      } catch (_) {}
+    }
+    return await _fetchAndCache(userId);
+  }
+
+  Future<List<Group>> _fetchAndCache(String? userId) async {
+    try {
+      final res = await ref.read(groupApiProvider).getGroups();
+      final groups = (res.data as List<dynamic>)
+          .map((e) => Group.fromJson(e as Map<String, dynamic>))
+          .toList();
+      if (userId != null) {
+        await _cache.cacheGroups(groups, userId);
+      }
+      return groups;
+    } catch (e) {
+      final userId2 = ref.read(authStateProvider).valueOrNull?.id;
+      if (userId2 != null) {
+        final cached = await _cache.getUserGroupModels(userId2);
+        if (cached.isNotEmpty) return cached;
+      }
+      rethrow;
+    }
   }
 
   Future<void> refresh() async {

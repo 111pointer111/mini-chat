@@ -176,12 +176,16 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
         _loadConversations();
       }
     } catch (e) {
-      final errorMessage = extractErrorMessage(e, fallback: '发送失败，请检查网络连接后重试');
-      ref
-          .read(aiMessagesProvider.notifier)
-          .replaceLastAssistantWithError('❌ $errorMessage');
-      if (mounted) {
-        showErrorToast(context, errorMessage);
+      // 流因网络问题断开时，AI 回复可能已在服务端生成，尝试恢复
+      final recovered = await _tryRecoverFromServer(conversationId);
+      if (!recovered) {
+        final errorMessage = extractErrorMessage(e, fallback: '发送失败，请检查网络连接后重试');
+        ref
+            .read(aiMessagesProvider.notifier)
+            .replaceLastAssistantWithError('❌ $errorMessage');
+        if (mounted) {
+          showErrorToast(context, errorMessage);
+        }
       }
     } finally {
       if (!streamDone) {
@@ -189,6 +193,43 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
       }
       _scrollToBottom();
     }
+  }
+
+  /// SSE 流因网络问题断开时，尝试从服务端恢复 AI 回复。
+  /// 用户消息已在 prepareTurn 阶段保存，AI 回复可能也已生成。
+  Future<bool> _tryRecoverFromServer(String? conversationId) async {
+    if (conversationId == null) return false;
+    try {
+      // 等待一段时间让 AI 完成回复
+      await Future.delayed(const Duration(seconds: 3));
+      if (!mounted) return false;
+
+      final api = ref.read(aiChatApiProvider);
+      final res = await api.getHistory(convId: conversationId);
+      final data = res.data;
+      final messagesList = data is Map<String, dynamic>
+          ? (data['messages'] as List<dynamic>? ?? [])
+          : (data as List<dynamic>);
+      final messages = messagesList
+          .map((e) => AIChatMessage.fromBackend(e as Map<String, dynamic>))
+          .toList();
+
+      // 找到最后一条 assistant 消息
+      final lastAssistant = messages.lastWhere(
+        (m) => m.role == 'assistant',
+        orElse: () => AIChatMessage(id: '', role: 'assistant', content: ''),
+      );
+
+      if (lastAssistant.content.isNotEmpty) {
+        // 恢复成功：用服务端数据替换本地消息
+        ref.read(aiMessagesProvider.notifier).setMessages(messages);
+        _loadConversations();
+        return true;
+      }
+    } catch (_) {
+      // 恢复失败，交给调用方处理
+    }
+    return false;
   }
 
   Future<void> _selectConversation(String convId) async {
