@@ -4,7 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../core/constants.dart';
 import '../../core/theme.dart';
+import '../../data/models/user.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/chat_provider.dart';
 import '../../data/models/message.dart';
@@ -21,7 +23,6 @@ class DashboardScreen extends ConsumerStatefulWidget {
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   final List<StreamSubscription> _subscriptions = [];
-  bool _didCheckForUpdate = false;
 
   @override
   void initState() {
@@ -87,8 +88,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   Future<void> _checkForUpdate() async {
-    if (_didCheckForUpdate) return;
-    _didCheckForUpdate = true;
     await AppUpdatePrompt.check(context, ref);
   }
 
@@ -114,7 +113,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  PreferredSizeWidget _buildMainAppBar(dynamic user) {
+  PreferredSizeWidget _buildMainAppBar(User? user) {
     return AppBar(
       title: Text(
         'Mini-Chat',
@@ -146,7 +145,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  PreferredSizeWidget _buildChatAppBar(dynamic user, ChatSelection selection) {
+  PreferredSizeWidget _buildChatAppBar(User? user, ChatSelection selection) {
     return AppBar(
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new, size: 20),
@@ -186,7 +185,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  Widget _buildUserMenu(dynamic user) {
+  Widget _buildUserMenu(User? user) {
+    final avatarImage = _avatarImage(user?.avatar);
+
     return PopupMenuButton<String>(
       offset: const Offset(0, 48),
       shape: RoundedRectangleBorder(
@@ -210,18 +211,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         child: CircleAvatar(
           radius: 16,
           backgroundColor: Colors.white,
-          child: Text(
-            (user?.username ?? 'U')[0].toUpperCase(),
-            style: GoogleFonts.inter(
-              color: AppColors.primary,
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
-          ),
+          backgroundImage: avatarImage,
+          child: avatarImage == null
+              ? Text(
+                  _avatarInitial(user),
+                  style: GoogleFonts.inter(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                )
+              : null,
         ),
       ),
       onSelected: (value) {
         switch (value) {
+          case 'profile':
+            context.push('/settings/profile');
+            break;
           case 'ai':
             context.push('/ai-chat');
             break;
@@ -248,7 +255,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       itemBuilder: (context) => [
         PopupMenuItem(
           value: 'profile',
-          enabled: false,
           child: Row(
             children: [
               Container(
@@ -259,7 +265,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ),
                   borderRadius: AppRadius.smAll,
                 ),
-                child: const Icon(Icons.person, color: Colors.white, size: 20),
+                child: avatarImage == null
+                    ? const Icon(Icons.person, color: Colors.white, size: 20)
+                    : CircleAvatar(
+                        radius: 10,
+                        backgroundImage: avatarImage,
+                        backgroundColor: Colors.white,
+                      ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -283,6 +295,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ],
                 ),
               ),
+              const Icon(Icons.chevron_right, size: 18),
             ],
           ),
         ),
@@ -336,6 +349,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ),
       ],
     );
+  }
+
+  ImageProvider? _avatarImage(String? avatar) {
+    final url = AppConstants.resolveFileUrl(avatar ?? '');
+    if (url.isEmpty) return null;
+    return NetworkImage(url);
+  }
+
+  String _avatarInitial(User? user) {
+    final username = user?.username.trim() ?? '';
+    if (username.isEmpty) return 'U';
+    return username.substring(0, 1).toUpperCase();
   }
 
   PopupMenuItem<String> _buildMenuItem({

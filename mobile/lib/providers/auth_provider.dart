@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../core/constants.dart';
 import '../data/api/api_client.dart';
 import '../data/api/auth_api.dart';
+import '../data/api/user_api.dart';
 import '../data/models/user.dart';
 import '../data/services/socket_service.dart';
 
@@ -19,6 +20,10 @@ final apiClientProvider = Provider<ApiClient>((ref) {
 
 final authApiProvider = Provider<AuthApi>((ref) {
   return AuthApi(ref.watch(apiClientProvider));
+});
+
+final userApiProvider = Provider<UserApi>((ref) {
+  return UserApi(ref.watch(apiClientProvider));
 });
 
 final socketServiceProvider = Provider<SocketService>((ref) {
@@ -76,6 +81,11 @@ class AuthNotifier extends AsyncNotifier<User?> {
     ref.read(socketServiceProvider).disconnect();
     _cachedUser = null;
     state = const AsyncValue.data(null);
+  }
+
+  void setCurrentUser(User user) {
+    _cachedUser = user;
+    state = AsyncValue.data(user);
   }
 
   /// 静默刷新用户数据（不显示加载状态）

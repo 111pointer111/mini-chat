@@ -10,4 +10,9 @@ class UploadApi {
     final formData = FormData.fromMap({'images': files});
     return _client.dio.post('/upload/images', data: formData);
   }
+
+  Future<Response> uploadImage(MultipartFile file) {
+    final formData = FormData.fromMap({'image': file});
+    return _client.dio.post('/upload/image', data: formData);
+  }
 }

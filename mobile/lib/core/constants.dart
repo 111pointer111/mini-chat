@@ -23,6 +23,13 @@ class AppConstants {
       ? _androidDownloadBaseUrl
       : '$uploadsBaseUrl/downloads';
 
+  static String resolveFileUrl(String url) {
+    if (url.isEmpty) return '';
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    if (url.startsWith('/')) return '$uploadsBaseUrl$url';
+    return '$uploadsBaseUrl/$url';
+  }
+
   // AI assistant fixed ObjectId
   static const String aiAssistantId = '000000000000000000000001';
 

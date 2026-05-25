@@ -1,17 +1,20 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/theme.dart';
 import 'core/router.dart';
 import 'data/services/database_service.dart';
+import 'features/dashboard/widgets/app_update_prompt.dart';
 import 'providers/auth_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // 初始化 SQLite 数据库
   await DatabaseService().database;
-  
+
   runApp(const ProviderScope(child: BoltChatApp()));
 }
 
@@ -53,6 +56,11 @@ class _BoltChatAppState extends ConsumerState<BoltChatApp>
     final token = ref.read(tokenProvider);
     if (token != null) {
       socketService.reconnect();
+
+      final context = rootNavigatorKey.currentContext;
+      if (context != null) {
+        unawaited(AppUpdatePrompt.check(context, ref));
+      }
     }
   }
 

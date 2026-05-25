@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
@@ -61,8 +62,9 @@ class AppUpdateService {
   Future<AppUpdateInfo?> checkForUpdate() async {
     if (!Platform.isAndroid) return null;
 
+    final versionUrl = '${AppConstants.androidDownloadBaseUrl}/version.json';
     final response = await _dio.get<Map<String, dynamic>>(
-      '${AppConstants.androidDownloadBaseUrl}/version.json',
+      versionUrl,
       queryParameters: {'t': DateTime.now().millisecondsSinceEpoch},
     );
     final data = response.data;
@@ -72,6 +74,11 @@ class AppUpdateService {
     if (update.latestVersionCode <= 0 || update.apkUrl.isEmpty) return null;
 
     final currentVersionCode = await _readCurrentVersionCode();
+    debugPrint(
+      '[AppUpdate] currentVersionCode=$currentVersionCode '
+      'latestVersionCode=${update.latestVersionCode} '
+      'versionUrl=$versionUrl apkUrl=${update.apkUrl}',
+    );
 
     return update.latestVersionCode > currentVersionCode ? update : null;
   }

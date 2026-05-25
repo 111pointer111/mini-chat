@@ -40,6 +40,7 @@ dependencies:
   uuid: ^4.2.1
 
   cupertino_icons: ^1.0.8
+  package_info_plus: ^8.3.0
   path_provider: ^2.1.5
 
 dev_dependencies:

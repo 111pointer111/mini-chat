@@ -17,6 +17,9 @@ import '../features/group/create_group_screen.dart';
 import '../features/group/group_chat_screen.dart';
 import '../features/group/group_settings_screen.dart';
 import '../features/group/group_kb_screen.dart';
+import '../features/settings/profile_settings_screen.dart';
+
+final rootNavigatorKey = GlobalKey<NavigatorState>();
 
 class LoadingScreen extends StatelessWidget {
   const LoadingScreen({super.key});
@@ -33,6 +36,7 @@ class LoadingScreen extends StatelessWidget {
 
 final routerProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: '/',
     errorBuilder: (context, state) {
       // 自动恢复：延迟后跳转到首页，避免用户看到错误页面
@@ -107,6 +111,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/mcp-tools',
         builder: (context, state) => const MCPToolsScreen(),
+      ),
+      GoRoute(
+        path: '/settings/profile',
+        builder: (context, state) => const ProfileSettingsScreen(),
       ),
       GoRoute(
         path: '/admin/ai-providers',
