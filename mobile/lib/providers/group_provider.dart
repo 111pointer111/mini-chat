@@ -171,6 +171,22 @@ class GroupMessagesNotifier
     final current = state.valueOrNull ?? [];
     final message = Message.fromJson(json);
     if (current.any((item) => item.id == message.id)) return;
+
+    if (message.isAiAssistant) {
+      final pendingIndex = current.lastIndexWhere(
+        (item) =>
+            item.isTemporaryGroupAiMessage &&
+            item.isAiAssistant &&
+            item.groupId == message.groupId,
+      );
+      if (pendingIndex >= 0) {
+        final updated = [...current];
+        updated[pendingIndex] = message;
+        state = AsyncValue.data(updated);
+        return;
+      }
+    }
+
     state = AsyncValue.data([...current, message]);
   }
 

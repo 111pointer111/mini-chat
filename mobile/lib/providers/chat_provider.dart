@@ -356,9 +356,29 @@ class MessagesNotifier extends AsyncNotifier<List<Message>> {
   void addMessage(Message message) {
     final current = state.valueOrNull ?? [];
     if (current.any((item) => item.id == message.id)) return;
+
+    if (message.isAiAssistant) {
+      final pendingIndex = current.lastIndexWhere(
+        (item) =>
+            item.isTemporaryGroupAiMessage &&
+            item.isAiAssistant &&
+            item.groupId == message.groupId,
+      );
+      if (pendingIndex >= 0) {
+        final updated = [...current];
+        updated[pendingIndex] = message;
+        state = AsyncValue.data(updated);
+        _cacheMessageIfPossible(message);
+        return;
+      }
+    }
+
     state = AsyncValue.data([...current, message]);
 
-    // 同时保存到 SQLite
+    _cacheMessageIfPossible(message);
+  }
+
+  void _cacheMessageIfPossible(Message message) {
     if (_currentConversationId != null) {
       _cache.cacheMessage(
         id: message.id,
