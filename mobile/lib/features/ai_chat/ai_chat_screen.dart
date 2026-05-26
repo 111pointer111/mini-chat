@@ -817,23 +817,12 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
                     )
                   else
                     AIMessageContent(
-                      content: message.content.isEmpty && isCurrentlyStreaming
-                          ? (message.streamStatus ?? '▋')
-                          : message.content,
+                      content: message.content,
                       thinking: message.thinking,
+                      isStreaming: isCurrentlyStreaming,
+                      emptyFallback: message.streamStatus ?? '正在思考...',
                       textColor: AppTheme.textPrimary,
                       accentColor: AppTheme.primary,
-                    ),
-                  if (!isUser &&
-                      message.content.isEmpty &&
-                      !isCurrentlyStreaming)
-                    const Text(
-                      '(空回复)',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: AppTheme.textSecondary,
-                        fontStyle: FontStyle.italic,
-                      ),
                     ),
                 ],
               ),

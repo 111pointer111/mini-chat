@@ -9,6 +9,8 @@ class AIMessageContent extends StatelessWidget {
   final String? thinking;
   final Color? textColor;
   final Color? accentColor;
+  final bool isStreaming;
+  final String? emptyFallback;
 
   const AIMessageContent({
     super.key,
@@ -16,6 +18,8 @@ class AIMessageContent extends StatelessWidget {
     this.thinking,
     this.textColor,
     this.accentColor,
+    this.isStreaming = false,
+    this.emptyFallback,
   });
 
   @override
@@ -25,6 +29,8 @@ class AIMessageContent extends StatelessWidget {
     final resolvedContent = parsed.content;
     final effectiveTextColor = textColor ?? AppThemeHelper.textPrimary(context);
     final effectiveAccentColor = accentColor ?? AppColors.primary;
+    final fallbackText = _nonEmpty(emptyFallback) ??
+        (isStreaming ? '正在思考...' : '（AI 未返回内容，请重试）');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -33,6 +39,7 @@ class AIMessageContent extends StatelessWidget {
           AIThinkingBlock(
             thinking: resolvedThinking,
             accentColor: effectiveAccentColor,
+            initiallyExpanded: isStreaming,
           ),
           if (resolvedContent.isNotEmpty) const SizedBox(height: 8),
         ],
@@ -44,6 +51,16 @@ class AIMessageContent extends StatelessWidget {
               textColor: effectiveTextColor,
               accentColor: effectiveAccentColor,
             ),
+          )
+        else if (resolvedThinking == null || isStreaming)
+          Text(
+            fallbackText,
+            style: TextStyle(
+              fontSize: 14,
+              color: AppThemeHelper.textSecondary(context),
+              fontStyle: FontStyle.italic,
+              height: 1.45,
+            ),
           ),
       ],
     );
@@ -53,11 +70,13 @@ class AIMessageContent extends StatelessWidget {
 class AIThinkingBlock extends StatefulWidget {
   final String thinking;
   final Color accentColor;
+  final bool initiallyExpanded;
 
   const AIThinkingBlock({
     super.key,
     required this.thinking,
     required this.accentColor,
+    this.initiallyExpanded = false,
   });
 
   @override
@@ -65,7 +84,13 @@ class AIThinkingBlock extends StatefulWidget {
 }
 
 class _AIThinkingBlockState extends State<AIThinkingBlock> {
-  bool _expanded = false;
+  late bool _expanded;
+
+  @override
+  void initState() {
+    super.initState();
+    _expanded = widget.initiallyExpanded;
+  }
 
   @override
   Widget build(BuildContext context) {

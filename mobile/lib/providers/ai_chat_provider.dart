@@ -247,13 +247,20 @@ class AIMessagesNotifier extends StateNotifier<List<AIChatMessage>> {
   }) {
     if (state.isEmpty) return;
     final last = state.last;
-    final rawContent = finalContent ?? last.content;
+    final rawContent =
+        finalContent?.trim().isNotEmpty == true ? finalContent! : last.content;
     final parsed = AIChatMessage._parseThinking(rawContent);
+    final parsedContent = parsed['content']!;
+    final parsedThinking = parsed['thinking'];
+    final content = parsedContent.trim().isEmpty &&
+            (parsedThinking == null || parsedThinking.trim().isEmpty)
+        ? '（AI 未返回内容，请重试）'
+        : parsedContent;
     final updated = AIChatMessage(
       id: 'done_${DateTime.now().millisecondsSinceEpoch}',
       role: last.role,
-      content: parsed['content']!,
-      thinking: parsed['thinking'],
+      content: content,
+      thinking: parsedThinking,
       images: last.images,
       pendingTask: pendingTask,
       taskCreated: taskCreated,

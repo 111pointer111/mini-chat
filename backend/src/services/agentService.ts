@@ -411,20 +411,37 @@ export async function runAgentStream(
             let content = '';
             const toolCalls: { index: number; id: string; type: string; function: { name: string; arguments: string } }[] = [];
             let finishReason: string | null = null;
+            let reasoningOpen = false;
 
             for await (const chunk of stream) {
                 const choice = chunk.choices[0];
                 if (!choice) continue;
 
                 finishReason = choice.finish_reason;
+                const delta = choice.delta as typeof choice.delta & { reasoning_content?: string };
 
-                if (choice.delta?.content) {
-                    content += choice.delta.content;
-                    if (onChunk) onChunk(choice.delta.content);
+                if (delta?.reasoning_content) {
+                    if (!reasoningOpen) {
+                        reasoningOpen = true;
+                        content += '<think>';
+                        if (onChunk) onChunk('<think>');
+                    }
+                    content += delta.reasoning_content;
+                    if (onChunk) onChunk(delta.reasoning_content);
                 }
 
-                if (choice.delta?.tool_calls) {
-                    for (const tc of choice.delta.tool_calls) {
+                if (delta?.content) {
+                    if (reasoningOpen) {
+                        reasoningOpen = false;
+                        content += '</think>\n\n';
+                        if (onChunk) onChunk('</think>\n\n');
+                    }
+                    content += delta.content;
+                    if (onChunk) onChunk(delta.content);
+                }
+
+                if (delta?.tool_calls) {
+                    for (const tc of delta.tool_calls) {
                         const idx = tc.index;
                         if (!toolCalls[idx]) {
                             toolCalls[idx] = { index: idx, id: '', type: 'function', function: { name: '', arguments: '' } };
@@ -437,6 +454,11 @@ export async function runAgentStream(
                         }
                     }
                 }
+            }
+
+            if (reasoningOpen) {
+                content += '</think>';
+                if (onChunk) onChunk('</think>');
             }
 
             const validToolCalls = finishReason === 'tool_calls'
