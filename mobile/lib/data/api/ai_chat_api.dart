@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'api_client.dart';
 
 class AIChatStreamEvent {
@@ -47,8 +49,9 @@ class AIChatStreamEvent {
 
 class AIChatApi {
   final ApiClient _client;
+  final String? _token;
 
-  AIChatApi(this._client);
+  AIChatApi(this._client, {String? token}) : _token = token;
 
   Future<Response> sendMessage(String message,
       {List<String>? modelImages,
@@ -70,29 +73,48 @@ class AIChatApi {
     List<String>? displayImages,
     String? conversationId,
   }) async {
-    final response = await _client.dio.post<ResponseBody>(
-      '/ai-chat/stream',
-      data: {
+    final uri = Uri.parse(
+      '${_client.dio.options.baseUrl.replaceFirst(RegExp(r'/$'), '')}/ai-chat/stream',
+    );
+    final request = http.Request('POST', uri)
+      ..headers.addAll({
+        'Accept': 'text/event-stream',
+        'Accept-Encoding': 'identity',
+        'Cache-Control': 'no-cache',
+        'Content-Type': 'application/json',
+        if (_token != null && _token.isNotEmpty)
+          'Authorization': 'Bearer $_token',
+      })
+      ..body = jsonEncode({
         'message': message,
         if (modelImages != null && modelImages.isNotEmpty)
           'modelImages': modelImages,
         if (displayImages != null && displayImages.isNotEmpty)
           'displayImages': displayImages,
         if (conversationId != null) 'conversationId': conversationId,
-      },
-      options: Options(
-        responseType: ResponseType.stream,
-        headers: {'Accept': 'text/event-stream'},
-        receiveTimeout: const Duration(minutes: 5),
-      ),
-    );
+      });
 
-    final body = response.data;
-    if (body == null) {
-      throw const FormatException('Invalid stream response');
+    final httpClient = http.Client();
+    try {
+      final response =
+          await httpClient.send(request).timeout(const Duration(seconds: 10));
+      _debugLog(
+          'connected status=${response.statusCode} headers=${response.headers}');
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final body = await response.stream.bytesToString();
+        httpClient.close();
+        throw _badStreamResponse(uri, response.statusCode, body);
+      }
+
+      return _parseSse(
+        response.stream,
+        onDone: httpClient.close,
+      );
+    } catch (_) {
+      httpClient.close();
+      rethrow;
     }
-
-    return _parseSse(body.stream);
   }
 
   Future<Response> getConversations() {
@@ -117,31 +139,51 @@ class AIChatApi {
     return _client.dio.get(path);
   }
 
-  Stream<AIChatStreamEvent> _parseSse(Stream<List<int>> stream) async* {
+  Stream<AIChatStreamEvent> _parseSse(
+    Stream<List<int>> stream, {
+    void Function()? onDone,
+  }) async* {
     var buffer = '';
+    final startedAt = DateTime.now();
 
-    await for (final chunk in stream.transform(utf8.decoder)) {
-      buffer += chunk.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+    try {
+      final decodedStream =
+          stream.transform(StreamTransformer<List<int>, List<int>>.fromHandlers(
+        handleData: (bytes, sink) {
+          _debugLog(
+            'raw bytes=${bytes.length} elapsed=${DateTime.now().difference(startedAt).inMilliseconds}ms',
+          );
+          sink.add(bytes);
+        },
+      )).transform(utf8.decoder);
 
-      while (true) {
-        final delimiterIndex = buffer.indexOf('\n\n');
-        if (delimiterIndex == -1) break;
+      await for (final chunk in decodedStream) {
+        buffer += chunk.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
 
-        final rawEvent = buffer.substring(0, delimiterIndex);
-        buffer = buffer.substring(delimiterIndex + 2);
+        while (true) {
+          final delimiterIndex = buffer.indexOf('\n\n');
+          if (delimiterIndex == -1) break;
 
-        final event = _parseSseEvent(rawEvent);
+          final rawEvent = buffer.substring(0, delimiterIndex);
+          buffer = buffer.substring(delimiterIndex + 2);
+
+          final event = _parseSseEvent(rawEvent);
+          if (event != null) {
+            yield event;
+          }
+        }
+      }
+
+      if (buffer.trim().isNotEmpty) {
+        final event = _parseSseEvent(buffer);
         if (event != null) {
           yield event;
         }
       }
-    }
-
-    if (buffer.trim().isNotEmpty) {
-      final event = _parseSseEvent(buffer);
-      if (event != null) {
-        yield event;
-      }
+    } finally {
+      _debugLog(
+          'stream closed elapsed=${DateTime.now().difference(startedAt).inMilliseconds}ms');
+      onDone?.call();
     }
   }
 
@@ -161,9 +203,44 @@ class AIChatApi {
         return null;
       }
 
-      return AIChatStreamEvent.fromJson(decoded);
+      final event = AIChatStreamEvent.fromJson(decoded);
+      _debugLog('event type=${event.type}');
+      return event;
     } on FormatException {
+      _debugLog('ignored malformed event length=${rawEvent.length}');
       return null;
+    }
+  }
+
+  DioException _badStreamResponse(Uri uri, int statusCode, String body) {
+    dynamic data = body;
+    try {
+      data = jsonDecode(body);
+    } on FormatException {
+      // Keep the raw body.
+    }
+
+    final requestOptions = RequestOptions(
+      path: uri.toString(),
+      method: 'POST',
+    );
+    return DioException(
+      requestOptions: requestOptions,
+      response: Response(
+        requestOptions: requestOptions,
+        statusCode: statusCode,
+        data: data,
+      ),
+      type: DioExceptionType.badResponse,
+      message: data is Map<String, dynamic>
+          ? data['message'] as String?
+          : 'AI stream request failed',
+    );
+  }
+
+  void _debugLog(String message) {
+    if (kDebugMode) {
+      debugPrint('[AIChatSSE] $message');
     }
   }
 }

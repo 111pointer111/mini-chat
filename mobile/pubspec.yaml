@@ -15,6 +15,7 @@ dependencies:
 
   # HTTP client
   dio: ^5.4.0
+  http: ^1.6.0
 
   # Socket.IO
   socket_io_client: ^2.0.3+1

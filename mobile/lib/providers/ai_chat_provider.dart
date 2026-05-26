@@ -9,7 +9,10 @@ import '../shared/utils/ai_message_parser.dart';
 import 'auth_provider.dart';
 
 final aiChatApiProvider = Provider<AIChatApi>((ref) {
-  return AIChatApi(ref.watch(apiClientProvider));
+  return AIChatApi(
+    ref.watch(apiClientProvider),
+    token: ref.watch(tokenProvider),
+  );
 });
 
 final uploadApiProvider = Provider<UploadApi>((ref) {

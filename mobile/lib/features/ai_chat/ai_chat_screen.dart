@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,6 +13,7 @@ import 'package:dio/dio.dart';
 
 import '../../core/theme.dart';
 import '../../core/constants.dart';
+import '../../data/api/ai_chat_api.dart';
 import '../../data/api/upload_api.dart';
 import '../../data/models/conversation.dart';
 import '../../providers/ai_chat_provider.dart';
@@ -34,9 +37,14 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   List<XFile> _pendingImages = [];
   bool _isUploading = false;
+  StreamSubscription<AIChatStreamEvent>? _activeAiStreamSubscription;
+  Timer? _aiFallbackStartTimer;
+  Timer? _aiFallbackPollTimer;
 
   @override
   void dispose() {
+    _activeAiStreamSubscription?.cancel();
+    _cancelAiFallbackTimers();
     _messageController.dispose();
     _scrollController.dispose();
     _renameController.dispose();
@@ -57,6 +65,19 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
         );
       }
     });
+  }
+
+  void _cancelAiFallbackTimers() {
+    _aiFallbackStartTimer?.cancel();
+    _aiFallbackStartTimer = null;
+    _aiFallbackPollTimer?.cancel();
+    _aiFallbackPollTimer = null;
+  }
+
+  void _debugAiStream(String message) {
+    if (kDebugMode) {
+      debugPrint('[AIChatMobile] $message');
+    }
   }
 
   Future<void> _pickImages() async {
@@ -131,6 +152,64 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
 
     var streamDone = false;
     var receivedChunk = false;
+    var recoveredFromHistory = false;
+    var recoveryInFlight = false;
+    final streamCompleter = Completer<void>();
+
+    Future<void> recoverFromHistory(String reason) async {
+      if (streamDone ||
+          receivedChunk ||
+          recoveredFromHistory ||
+          recoveryInFlight) {
+        return;
+      }
+      final conversationId = resolvedConversationId;
+      if (conversationId == null) return;
+
+      recoveryInFlight = true;
+      try {
+        _debugAiStream('history fallback start reason=$reason');
+        final recovered = await _tryRecoverFromServer(
+          conversationId,
+          delay: Duration.zero,
+        );
+        if (!recovered) return;
+
+        recoveredFromHistory = true;
+        streamDone = true;
+        _cancelAiFallbackTimers();
+        ref.read(isStreamingProvider.notifier).state = false;
+        _debugAiStream(
+            'history fallback recovered conversation=$conversationId');
+        await _activeAiStreamSubscription?.cancel();
+        _activeAiStreamSubscription = null;
+        if (!streamCompleter.isCompleted) {
+          streamCompleter.complete();
+        }
+      } finally {
+        recoveryInFlight = false;
+      }
+    }
+
+    void scheduleHistoryFallback() {
+      _cancelAiFallbackTimers();
+      _aiFallbackStartTimer = Timer(const Duration(seconds: 6), () {
+        unawaited(recoverFromHistory('no-event-after-ready'));
+        _aiFallbackPollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+          unawaited(recoverFromHistory('poll'));
+        });
+      });
+    }
+
+    void completeStreamWithError(Object error, [StackTrace? stackTrace]) {
+      _cancelAiFallbackTimers();
+      unawaited(_activeAiStreamSubscription?.cancel());
+      _activeAiStreamSubscription = null;
+      if (!streamCompleter.isCompleted) {
+        streamCompleter.completeError(error, stackTrace);
+      }
+    }
+
     try {
       final api = ref.read(aiChatApiProvider);
       final stream = await api.streamMessage(
@@ -140,7 +219,9 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
         conversationId: initialConversationId,
       );
 
-      await for (final event in stream) {
+      _activeAiStreamSubscription = stream.listen((event) {
+        _debugAiStream('event=${event.type}');
+        if (recoveredFromHistory || streamCompleter.isCompleted) return;
         switch (event.type) {
           case 'status':
             final statusMessage = event.message;
@@ -156,17 +237,20 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
               ref.read(currentConversationIdProvider.notifier).state =
                   event.conversationId;
             }
+            scheduleHistoryFallback();
             break;
           case 'chunk':
             final chunk = event.content ?? '';
             if (chunk.isNotEmpty) {
               receivedChunk = true;
+              _cancelAiFallbackTimers();
               ref.read(aiMessagesProvider.notifier).appendToLastMessage(chunk);
               _scrollToBottom();
             }
             break;
           case 'done':
             streamDone = true;
+            _cancelAiFallbackTimers();
             if (event.conversationId != null) {
               resolvedConversationId = event.conversationId;
               ref.read(currentConversationIdProvider.notifier).state =
@@ -181,13 +265,29 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
             ref.read(isStreamingProvider.notifier).state = false;
             _loadConversations();
             _scrollToBottom();
+            unawaited(_activeAiStreamSubscription?.cancel());
+            _activeAiStreamSubscription = null;
+            if (!streamCompleter.isCompleted) {
+              streamCompleter.complete();
+            }
             break;
           case 'error':
-            throw Exception(event.message ?? 'AI 响应失败');
+            completeStreamWithError(Exception(event.message ?? 'AI 响应失败'));
         }
-      }
+      }, onError: (Object error, StackTrace stackTrace) {
+        _debugAiStream('stream error=$error');
+        completeStreamWithError(error, stackTrace);
+      }, onDone: () {
+        _debugAiStream('stream done');
+        _activeAiStreamSubscription = null;
+        if (!streamCompleter.isCompleted) {
+          streamCompleter.complete();
+        }
+      });
 
-      if (!streamDone) {
+      await streamCompleter.future;
+
+      if (!streamDone && !recoveredFromHistory) {
         final recovered = await _tryRecoverFromServer(resolvedConversationId);
         if (!recovered) {
           if (receivedChunk) {
@@ -202,8 +302,10 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
       }
     } catch (e) {
       // 流因网络问题断开时，AI 回复可能已在服务端生成，尝试恢复
-      final recovered = await _tryRecoverFromServer(resolvedConversationId);
-      if (!recovered) {
+      final recovered = recoveredFromHistory
+          ? true
+          : await _tryRecoverFromServer(resolvedConversationId);
+      if (!recovered && !recoveredFromHistory) {
         final errorMessage =
             extractErrorMessage(e, fallback: '发送失败，请检查网络连接后重试');
         ref
@@ -214,7 +316,10 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
         }
       }
     } finally {
-      if (!streamDone) {
+      _cancelAiFallbackTimers();
+      await _activeAiStreamSubscription?.cancel();
+      _activeAiStreamSubscription = null;
+      if (!streamDone && !recoveredFromHistory) {
         ref.read(isStreamingProvider.notifier).state = false;
       }
       _scrollToBottom();
@@ -223,11 +328,16 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
 
   /// SSE 流因网络问题断开时，尝试从服务端恢复 AI 回复。
   /// 用户消息已在 prepareTurn 阶段保存，AI 回复可能也已生成。
-  Future<bool> _tryRecoverFromServer(String? conversationId) async {
+  Future<bool> _tryRecoverFromServer(
+    String? conversationId, {
+    Duration delay = const Duration(seconds: 3),
+  }) async {
     if (conversationId == null) return false;
     try {
       // 等待一段时间让 AI 完成回复
-      await Future.delayed(const Duration(seconds: 3));
+      if (delay > Duration.zero) {
+        await Future.delayed(delay);
+      }
       if (!mounted) return false;
 
       final api = ref.read(aiChatApiProvider);
@@ -240,13 +350,10 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
           .map((e) => AIChatMessage.fromBackend(e as Map<String, dynamic>))
           .toList();
 
-      // 找到最后一条 assistant 消息
-      final lastAssistant = messages.lastWhere(
-        (m) => m.role == 'assistant',
-        orElse: () => AIChatMessage(id: '', role: 'assistant', content: ''),
-      );
-
-      if (lastAssistant.content.isNotEmpty) {
+      // 只有服务端历史最后一条是 assistant，才说明本轮回复已经保存完成。
+      final lastMessage = messages.isNotEmpty ? messages.last : null;
+      if (lastMessage?.role == 'assistant' &&
+          lastMessage!.content.trim().isNotEmpty) {
         // 恢复成功：用服务端数据替换本地消息
         ref.read(aiMessagesProvider.notifier).setMessages(messages);
         _loadConversations();
