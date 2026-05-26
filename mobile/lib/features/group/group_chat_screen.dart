@@ -386,7 +386,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                           textColor: Colors.indigo.shade900,
                           accentColor: Colors.indigo.shade600,
                         )
-                      : Text(
+                      : SelectableText(
                           content,
                           style: TextStyle(
                             color: isMe ? Colors.white : AppTheme.textPrimary,

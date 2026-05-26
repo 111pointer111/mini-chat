@@ -94,18 +94,30 @@ class ConversationsNotifier
   Future<Conversation> create() async {
     final res = await ref.read(aiChatApiProvider).createConversation();
     final conv = Conversation.fromJson(res.data as Map<String, dynamic>);
-    refresh();
+    final current = state.valueOrNull ?? [];
+    state = AsyncValue.data([conv, ...current]);
     return conv;
   }
 
   Future<void> rename(String id, String name) async {
     await ref.read(aiChatApiProvider).renameConversation(id, name);
-    refresh();
+    final current = state.valueOrNull ?? [];
+    state = AsyncValue.data(current.map((conv) {
+      if (conv.id == id) {
+        return Conversation(
+          id: conv.id,
+          name: name,
+          lastMessageAt: conv.lastMessageAt,
+        );
+      }
+      return conv;
+    }).toList());
   }
 
   Future<void> delete(String id) async {
     await ref.read(aiChatApiProvider).deleteConversation(id);
-    refresh();
+    final current = state.valueOrNull ?? [];
+    state = AsyncValue.data(current.where((conv) => conv.id != id).toList());
   }
 }
 

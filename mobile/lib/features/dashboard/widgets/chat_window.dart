@@ -553,7 +553,7 @@ class _ChatWindowState extends ConsumerState<ChatWindow> {
                       accentColor: AppColors.primary,
                     )
                   else
-                    Text(
+                    SelectableText(
                       message.content,
                       style: GoogleFonts.inter(
                         color: isMe

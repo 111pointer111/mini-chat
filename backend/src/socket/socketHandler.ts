@@ -27,7 +27,11 @@ const isGroupMember = async (groupId: string, userId: string) => {
 };
 
 const populateMessageSender = async (messageId: mongoose.Types.ObjectId) => {
-    return Message.findById(messageId).populate('sender', 'username avatar').lean();
+    const message = await Message.findById(messageId).populate('sender', 'username avatar').lean();
+    if (message?.sender && typeof message.sender === 'object' && '_id' in message.sender) {
+        (message.sender as any)._id = String((message.sender as any)._id);
+    }
+    return message;
 };
 
 export const getIO = (): Server => {

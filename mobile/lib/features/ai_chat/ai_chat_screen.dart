@@ -918,7 +918,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen> {
                     const SizedBox(height: 8),
                   ],
                   if (isUser)
-                    Text(
+                    SelectableText(
                       message.content,
                       style: const TextStyle(color: Colors.white, fontSize: 14),
                     )

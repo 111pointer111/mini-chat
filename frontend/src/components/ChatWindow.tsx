@@ -390,7 +390,7 @@ const ChatWindow: React.FC = () => {
                 <Box sx={{ flex: 1, overflowY: 'auto', p: 2, bgcolor: '#f0f2f5', display: 'flex', flexDirection: 'column', gap: 1 }}>
                     {messages.map((msg, index) => {
                         const sender = typeof msg.sender === 'string' ? null : msg.sender;
-                        const senderId = typeof msg.sender === 'string' ? msg.sender : msg.sender._id;
+                        const senderId = typeof msg.sender === 'string' ? msg.sender : String(msg.sender._id || '');
                         const isMe = senderId === user?._id;
                         const isAssistant = senderId === '000000000000000000000001';
                         return (

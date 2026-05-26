@@ -46,6 +46,7 @@ class AIMessageContent extends StatelessWidget {
         if (resolvedContent.isNotEmpty)
           MarkdownBody(
             data: resolvedContent,
+            selectable: true,
             styleSheet: buildAIMessageMarkdownStyleSheet(
               context,
               textColor: effectiveTextColor,
