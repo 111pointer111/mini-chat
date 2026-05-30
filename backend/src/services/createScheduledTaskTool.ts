@@ -5,6 +5,7 @@
 
 import mongoose from 'mongoose';
 import ScheduledTask from '../models/ScheduledTask';
+import type { TaskType } from '../models/ScheduledTask';
 import Conversation from '../models/Conversation';
 import { syncTaskScheduler, updateTaskNextRunAt } from './taskScheduleService';
 
@@ -17,7 +18,7 @@ export interface ToolResult {
 }
 
 // 预设任务类型映射
-const PRESET_TASK_MAP: Record<string, { taskType: string; taskName: string }> = {
+const PRESET_TASK_MAP: Record<string, { taskType: TaskType; taskName: string }> = {
     'github': { taskType: 'github_trending', taskName: 'GitHub 热点' },
     'github_trending': { taskType: 'github_trending', taskName: 'GitHub 热点' },
     '每日诗句': { taskType: 'daily_poem', taskName: '每日诗句' },

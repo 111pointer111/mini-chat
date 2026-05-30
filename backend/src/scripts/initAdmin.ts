@@ -13,8 +13,8 @@ export const SYSTEM_USER_ID = new mongoose.Types.ObjectId('000000000000000000000
 
 const initSystemUsers = async () => {
     const systemUsers = [
-        { _id: AI_ASSISTANT_ID, username: 'ai_assistant', role: 'user', provider: 'local' as const },
-        { _id: SYSTEM_USER_ID, username: 'system', role: 'user', provider: 'local' as const },
+        { _id: AI_ASSISTANT_ID, username: 'ai_assistant', role: 'user' as const, provider: 'local' as const },
+        { _id: SYSTEM_USER_ID, username: 'system', role: 'user' as const, provider: 'local' as const },
     ];
 
     for (const userData of systemUsers) {
