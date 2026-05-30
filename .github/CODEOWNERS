@@ -1,0 +1,16 @@
+# Default reviewers for the entire repo
+*       @111pointer111
+
+# Backend
+backend/ @111pointer111
+
+# Frontend
+frontend/ @111pointer111
+
+# Mobile
+mobile/ @111pointer111
+
+# CI/CD and Docker
+.github/    @111pointer111
+docker-compose*.yml @111pointer111
+Dockerfile* @111pointer111

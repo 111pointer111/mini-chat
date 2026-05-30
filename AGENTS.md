@@ -32,7 +32,11 @@ npm --prefix frontend install && npm --prefix frontend run dev  # port 5173
 | Docker | `docker compose -f docker-compose.yml up -d` | dev deps only (MongoDB, Redis, PostgreSQL+pgvector) |
 | Docker | `docker compose -f docker-compose.prod.yml --env-file .env.production up -d` | full prod stack |
 
-No test framework configured (`test: echo "Error: no test specified"`). Verification = `npm run build` + `npm run lint`.
+Tests use Node's built-in `node:test` runner:
+- `node --test tests/*.test.js` — unit tests
+- `node --test evals/*.eval.js` — eval fixtures
+
+CI runs tests on every PR. Verification = `npm run build` + `npm run lint` + `node --test`.
 
 ## Architecture
 

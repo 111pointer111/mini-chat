@@ -30,8 +30,12 @@ docker compose -f docker-compose.yml up    # Local dev (MongoDB + Redis + Postgr
 docker compose -f docker-compose.prod.yml --env-file .env.production up  # Full production stack
 ```
 
-### No test framework
-Tests are not configured. Validation is done via `npm run build` + `npm run lint` + CI.
+### Tests
+```bash
+node --test tests/*.test.js   # Run unit tests (Node built-in test runner)
+node --test evals/*.eval.js   # Run eval fixtures
+```
+Tests use Node's built-in `node:test` runner — no additional dependencies. CI runs both on every PR.
 
 ## Architecture
 

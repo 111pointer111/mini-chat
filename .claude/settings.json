@@ -1,0 +1,25 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'PreToolUse guardrail active'"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "mcp__MiniMax__understand_image",
+      "mcp__MiniMax__web_search",
+      "mcp__github__*"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "github"
+  ]
+}

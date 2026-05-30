@@ -56,7 +56,8 @@ coverage/
 .mcp.json
 
 # Local assistant/tooling state
-.claude/
+.claude/settings.local.json
+.claude/projects/
 .codex/
 
 # Runtime uploads and generated files
@@ -70,3 +71,7 @@ mobile/android/app/*.keystore
 
 # Dev logs and docs (personal notes)
 docs/
+
+# 软著申请资料
+软件著作权申请资料/
+软件著作权申请资料.zip
