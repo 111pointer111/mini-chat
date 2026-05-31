@@ -8,9 +8,11 @@ export interface User {
     avatar: string;
 }
 
+export const AI_ASSISTANT_ID = '000000000000000000000001';
+
 export interface Message {
     _id: string;
-    sender: string | User;
+    sender: string | User | null;
     receiver?: string;
     groupId?: string;
     content: string;
@@ -18,6 +20,11 @@ export interface Message {
     createdAt: string;
     mentionAssistant?: boolean;
 }
+
+export const getMessageSenderId = (sender: Message['sender']): string => {
+    if (!sender) return '';
+    return typeof sender === 'string' ? sender : sender._id;
+};
 
 export interface Group {
     _id: string;
@@ -166,7 +173,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         if (!selectedFriend) return;
 
         const friendId = selectedFriend._id;
-        const senderId = typeof message.sender === 'string' ? message.sender : message.sender._id;
+        const senderId = getMessageSenderId(message.sender);
         if (senderId === friendId || message.receiver === friendId) {
             set(appendIfMissing);
         }

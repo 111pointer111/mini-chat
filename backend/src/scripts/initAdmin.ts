@@ -27,15 +27,15 @@ const initSystemUsers = async () => {
 };
 
 export const initAdmin = async () => {
-    // In production, require explicit env vars — no default credentials
-    if (isProduction && !process.env.ADMIN_USERNAME && !process.env.ADMIN_PASSWORD) {
-        console.error('❌ ADMIN_USERNAME and ADMIN_PASSWORD environment variables are required in production');
-        return;
-    }
-
     try {
         // Always initialize system users first
         await initSystemUsers();
+
+        // In production, require explicit env vars — no default credentials
+        if (isProduction && !process.env.ADMIN_USERNAME && !process.env.ADMIN_PASSWORD) {
+            console.error('❌ ADMIN_USERNAME and ADMIN_PASSWORD environment variables are required in production');
+            return;
+        }
 
         const existingAdmin = await User.findOne({ role: 'admin' });
         if (existingAdmin) {

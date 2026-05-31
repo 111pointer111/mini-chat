@@ -3,7 +3,7 @@ import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, Dial
 import SendIcon from '@mui/icons-material/Send';
 import { GitHub, MenuBook, Translate, AutoAwesome, ChatBubbleOutline, Groups, LibraryBooks, Upload, Link as LinkIcon, Delete, Refresh } from '@mui/icons-material';
 import ReactMarkdown from 'react-markdown';
-import { useChatStore } from '../store/chatStore';
+import { AI_ASSISTANT_ID, getMessageSenderId, useChatStore } from '../store/chatStore';
 import type { Message } from '../store/chatStore';
 import { useAuthStore } from '../store/authStore';
 import { useSocketStore } from '../store/socketStore';
@@ -389,10 +389,10 @@ const ChatWindow: React.FC = () => {
 
                 <Box sx={{ flex: 1, overflowY: 'auto', p: 2, bgcolor: '#f0f2f5', display: 'flex', flexDirection: 'column', gap: 1 }}>
                     {messages.map((msg, index) => {
-                        const sender = typeof msg.sender === 'string' ? null : msg.sender;
-                        const senderId = typeof msg.sender === 'string' ? msg.sender : String(msg.sender._id || '');
+                        const sender = !msg.sender || typeof msg.sender === 'string' ? null : msg.sender;
+                        const senderId = getMessageSenderId(msg.sender);
                         const isMe = senderId === user?._id;
-                        const isAssistant = senderId === '000000000000000000000001';
+                        const isAssistant = senderId === AI_ASSISTANT_ID;
                         return (
                             <Box
                                 key={index}
@@ -678,7 +678,7 @@ const ChatWindow: React.FC = () => {
             {/* Messages Area */}
             <Box sx={{ flex: 1, overflowY: 'auto', p: 2, bgcolor: '#f0f2f5', display: 'flex', flexDirection: 'column', gap: 1 }}>
                 {messages.map((msg, index) => {
-                    const senderId = typeof msg.sender === 'string' ? msg.sender : msg.sender._id;
+                    const senderId = getMessageSenderId(msg.sender);
                     const isMe = senderId === user?._id;
                     return (
                         <Box

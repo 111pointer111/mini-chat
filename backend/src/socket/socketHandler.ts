@@ -8,6 +8,7 @@ import { AI_ASSISTANT_ID } from '../scripts/initAdmin';
 import GroupMember from '../models/GroupMember';
 import Group from '../models/Group';
 import { metrics } from '../monitoring/metrics';
+import { AI_ASSISTANT_SENDER, normalizeMessageSender } from '../utils/messageSender';
 
 interface DecodedToken {
     id: string;
@@ -17,7 +18,6 @@ interface DecodedToken {
 let ioInstance: Server | null = null;
 
 const ASSISTANT_MENTION_RE = /@(?:小助手|AI|ai|助手)\b/;
-const assistantSender = { _id: AI_ASSISTANT_ID.toString(), username: '群聊小助手', avatar: '' };
 
 const isGroupMember = async (groupId: string, userId: string) => {
     return GroupMember.findOne({
@@ -27,11 +27,11 @@ const isGroupMember = async (groupId: string, userId: string) => {
 };
 
 const populateMessageSender = async (messageId: mongoose.Types.ObjectId) => {
+    const rawMessage = await Message.findById(messageId).lean();
+    if (!rawMessage) return null;
+
     const message = await Message.findById(messageId).populate('sender', 'username avatar').lean();
-    if (message?.sender && typeof message.sender === 'object' && '_id' in message.sender) {
-        (message.sender as any)._id = String((message.sender as any)._id);
-    }
-    return message;
+    return normalizeMessageSender((message || rawMessage) as any, rawMessage.sender as any);
 };
 
 export const getIO = (): Server => {
@@ -207,7 +207,7 @@ export const setupSocket = (io: Server) => {
                         userMessageId: newMessage._id.toString(),
                         message: {
                             _id: tempAssistantMessageId,
-                            sender: assistantSender,
+                            sender: AI_ASSISTANT_SENDER,
                             groupId,
                             content: '',
                             type: 'text',

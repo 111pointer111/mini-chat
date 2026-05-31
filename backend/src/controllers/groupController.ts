@@ -6,6 +6,7 @@ import Conversation from '../models/Conversation';
 import Message from '../models/Message';
 import User from '../models/User';
 import { clearDocumentExistsCache, deleteDocumentInScope, listDocuments } from '../utils/kbDb';
+import { normalizeMessageSender } from '../utils/messageSender';
 import { processUploadedFile, processUrlImport } from '../services/kbService';
 import { uploadKbFile } from '../services/kbFileService';
 
@@ -153,16 +154,19 @@ export const getGroupMessages = async (req: Request, res: Response) => {
         }
 
         const messages = await Message.find(query)
-            .populate('sender', 'username avatar')
             .sort({ createdAt: -1 })
             .limit(limit)
             .lean();
+        const originalSenders = new Map(messages.map((message) => [String(message._id), message.sender]));
 
-        messages.reverse();
+        await Message.populate(messages, { path: 'sender', select: 'username avatar' });
+        const normalizedMessages = messages
+            .map((message) => normalizeMessageSender(message as any, originalSenders.get(String(message._id)) as any))
+            .reverse();
 
         res.json({
-            messages,
-            hasMore: messages.length === limit,
+            messages: normalizedMessages,
+            hasMore: normalizedMessages.length === limit,
         });
     } catch (error) {
         console.error('Get group messages error:', error);
