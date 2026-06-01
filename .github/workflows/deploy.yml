@@ -186,7 +186,7 @@ jobs:
 
       - name: Setup Android SDK
         if: steps.mobile-version.outputs.should_build == 'true'
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
           accept-android-sdk-licenses: true
           cmdline-tools-version: 'latest'
